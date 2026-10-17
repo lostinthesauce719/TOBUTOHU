@@ -8,7 +8,7 @@ function play(seed, board = 'free', o = {}) { const sim = createSim({ seed, boar
 const clone = x => JSON.parse(JSON.stringify(x));
 
 // 1) honest runs pass, height reproduced exactly
-for (const s of [1, 3, 4, 6, 8]) { const sim = play(s, 'free', { miss: 0.1 }); const h = Math.round(sim.P.maxH * 10) / 10;
+for (const s of [1, 2, 4, 6, 8]) { const sim = play(s, 'free', { miss: 0.1 }); const h = Math.round(sim.P.maxH * 10) / 10;
   const r = verifyRun({ log: sim.log, claim: { height: h } }); expect(`honest free run seed ${s} (${h} m)`, r.ok, JSON.stringify(r)); }
 const dseed = seedFor('daily', periodKey('daily', now)); const D = play(dseed, 'daily', { miss: 0.35 }); const dh = Math.round(D.P.maxH * 10) / 10;
 expect(`honest daily run (${dh} m, Catch used: ${D.P.stats.catch > 0})`, verifyRun({ log: D.log, claim: { height: dh } }).ok);
