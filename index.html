@@ -12,6 +12,7 @@
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
+import {createHero} from './hero.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
@@ -63,13 +64,8 @@ for(let i=0;i<9;i++){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({co
 const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here; forced 1 on daily/weekly */,nobrk:Q.has('nobrk'),nomist:Q.has('nomist'),miss:MISS,hooks});
 const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
 
-// ---------- player (placeholder grasshopper) ----------
-const body=new THREE.Group(),gm=new THREE.MeshLambertMaterial({color:0x6e9a3c}),dm=new THREE.MeshLambertMaterial({color:0x3f5e22});
-const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.22,0.7,4,8),gm);torso.rotation.x=Math.PI/2;torso.castShadow=true;body.add(torso);
-const headM=new THREE.Mesh(new THREE.SphereGeometry(0.2,10,8),gm);headM.position.set(0,0.1,0.55);body.add(headM);
-const legs=[];for(const s of[-1,1]){const l=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.8),dm);l.position.set(s*0.22,0.15,-0.25);l.rotation.x=-0.7;body.add(l);legs.push(l);
- const a=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.02,0.6),dm);a.position.set(s*0.08,0.35,0.8);a.rotation.x=-0.6;a.rotation.y=s*0.25;body.add(a);}
-S.add(body);
+// ---------- player: style D grasshopper, contact-driven poses (visual only, hero.js) ----------
+const hero=createHero(S,P,sim.boxes);
 const mist=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.82,depthWrite:false}));mist.rotation.x=-Math.PI/2;S.add(mist);
 const mist2=mist.clone();mist2.material=mist.material.clone();mist2.material.opacity=0.35;S.add(mist2);
 
@@ -94,9 +90,6 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
  const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-6*dt));cam.rotation.z=roll;
  cam.fov=THREE.MathUtils.lerp(cam.fov,T.fovBase+(T.fovMax-T.fovBase)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
- body.position.set(P.pos.x,P.pos.y-0.1,P.pos.z);body.rotation.y=Math.atan2(P.vel.x,P.vel.z);
- const lean=P.state==='wall'?P.wallSide*0.6:0;body.rotation.z+=(lean-body.rotation.z)*(1-Math.exp(-10*dt));
- const kick=P.state==='ground'?Math.sin(P.t*18)*0.5:-1.2;legs.forEach((l,i)=>l.rotation.x=-0.7+(i?kick:-kick)*0.4);
  sun.position.set(P.pos.x+25,P.pos.y+50,P.pos.z+15);sun.target.position.set(P.pos.x,P.pos.y,P.pos.z);
  mist.position.set(P.pos.x,mistY.v,P.pos.z-60);mist2.position.set(P.pos.x,mistY.v+1.2+Math.sin(P.t)*0.3,P.pos.z-60);mtns.position.set(0,P.pos.y*0.85,P.pos.z);
  birdG.children.forEach(b=>{const u=b.userData,a=P.t*u.sp+u.ph;b.position.set(Math.sin(a)*u.r,P.pos.y+u.h,P.pos.z-30+Math.cos(a)*u.r);b.rotation.y=a+Math.PI/2;b.children.forEach(w=>w.rotation.z=w.userData.s*Math.sin(P.t*9+u.ph)*0.6);});
@@ -118,7 +111,10 @@ function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best
  else if(P.mode==='dead'){onDeath();ov.style.display='flex';document.getElementById('ovT').textContent=(P.maxH|0)+' m';document.getElementById('ovS').textContent=(verdict?verdict+'\n':'')+'tap to climb again';if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
  else ov.style.display='none';R.render(S,cam);}
 
-function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);updateCam(DT);}
+const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
+function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;
+ _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
+function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);updateCam(DT);hero.update(DT,R.domElement.width/1080);if(CLOSE)closeCam(DT);}
 if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
