@@ -12,26 +12,18 @@
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
+import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
-const SEED=(+(Q.get('seed')||1))>>>0;
-function mul(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const rC=mul(SEED^0xA11CE), rD=mul(SEED^0xDEC0), rB=mul(SEED^0xB4EA), rM=mul(SEED^0x3155); // course stream, decor stream (decor never affects the course)
-
-// ---------- TUNING ----------
-const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.12,
- wallRayLen:1.0,wallMinSpeed:5,wallMaxNormalY:0.3,wallEntryVy:4.5,wallGravStart:0.12,wallGravEnd:1.0,wallMaxTime:1.4,wallStick:4,
- wallJumpOut:7.5,wallJumpUp:11,wallJumpKeep:1.0,sameWallCooldown:0.35,
- camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.08,camWallOff:0.6};
-// rising bottom (mist): m/s by 100 m band, start delay + ease-in like the 2D build. adapt() reads skill only.
-const MIST={start:-10,delay:3,ease:2,zoneFrom:[0,120,250,400],mps:[0.8,0.8,0.85,0.85]}; // SEASONS 2026-10-17, <=75% rule, no cap
-const BRK={share:[0.10,0.20,0.30,0.40],noneBelow:50,wall:0.75,shelf:0.8}; // breakables: crack on first touch, break after delay, never come back
-function adapt(skill){return 1.0/* greybox stub: skill-only (recent heights, deaths, near misses), clamp 0.85..1.15 */}
-const ZONES=[ // name, from height (m), sky, fog, shelf, wall
- {n:'Spring cedar',h:0,sky:0xbfd3c9,fog:0xd8e2da,shelf:0x5f7a4a,wall:0x4a3a2e},
- {n:'Summer cliffs',h:120,sky:0xa9c6d8,fog:0xdce8ee,shelf:0x6f7d5a,wall:0x6b6f78},
- {n:'Autumn steam',h:250,sky:0xd9cfc4,fog:0xefe7dd,shelf:0x7a6f5c,wall:0x5c5650},
- {n:'Winter ice',h:400,sky:0x9fb4d0,fog:0xe6ecf4,shelf:0x8b8f96,wall:0x4f5560}];
-const ZT={};const zoneAt=h=>{let z=ZONES[0];for(const q of ZONES)if(h>=q.h)z=q;return z};
+const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
+let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
+if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
+const rD=mul(SEED^0xDEC0); // decor stream: visuals only, never read by sim.js
+// camera tuning (visual only; physics tuning lives in sim.js)
+const T={camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.08,camWallOff:0.6};
+const ZONES=[ // colours per zone (names/heights come from sim.js)
+ {sky:0xbfd3c9,fog:0xd8e2da,shelf:0x5f7a4a,wall:0x4a3a2e},{sky:0xa9c6d8,fog:0xdce8ee,shelf:0x6f7d5a,wall:0x6b6f78},
+ {sky:0xd9cfc4,fog:0xefe7dd,shelf:0x7a6f5c,wall:0x5c5650},{sky:0x9fb4d0,fog:0xe6ecf4,shelf:0x8b8f96,wall:0x4f5560}].map((z,i)=>({...z,...ZN[i]}));
+const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
 const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
@@ -42,39 +34,15 @@ S.add(new THREE.HemisphereLight(0xfff8ee,0x667766,1.15));
 const sun=new THREE.DirectionalLight(0xfff2dd,1.5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
 Object.assign(sun.shadow.camera,{left:-30,right:30,top:30,bottom:-30,far:160});S.add(sun,sun.target);
 
-const boxes=[],mods=[];
-function box(x,y,z,w,h,d,kind){const zc=zoneAt(Math.max(0,y));
- const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:kind==='shelf'?zc.shelf:zc.wall}));
- m.position.set(x,y,z);m.userData.x0=x;m.castShadow=m.receiveShadow=true;S.add(m);m.updateMatrixWorld();
- const b={mesh:m,half:new THREE.Vector3(w/2,h/2,d/2),inv:m.matrixWorld.clone().invert(),kind};m.userData.box=b;boxes.push(b);return b;}
-function brkP(y){if(y<BRK.noneBelow||Q.has("nobrk"))return 0;let i=0;for(let k=0;k<4;k++)if(y>=ZONES[k].h)i=k;return BRK.share[i];}
-function mkBrk(b){b.brk=true;b.mesh.material.color.offsetHSL(0,-0.05,0.06);PS.brk++;return b;} // subtle pale tint before touch
-function touch(b){if(!b||!b.brk||b.crackAt!=null)return;b.crackAt=P.t;b.mesh.material.color.offsetHSL(0,0,0.14);b.mesh.material.emissive&&b.mesh.material.emissive.setHex(0x221a10);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);P.stats.cracks++;}
-function updBreaks(){for(let i=boxes.length-1;i>=0;i--){const b=boxes[i];if(b.crackAt==null)continue;const dl=b.kind==='wall'?BRK.wall:BRK.shelf;
- if(P.t-b.crackAt>=dl){S.remove(b.mesh);b.mesh.geometry.dispose();boxes.splice(i,1);b.gone=true;P.stats.breaks++;}else{const k=(P.t-b.crackAt)/dl;b.mesh.position.x=b.mesh.userData.x0+(Math.sin(P.t*70)*0.03*k);}}}
-const PS={brk:0};
-
-// ---------- endless seeded course: modules climb upward while running down -Z ----------
-// shelf -> (step | wallrun | chimney) -> shelf ...  All gaps sized for T jump physics.
-const G={z:0,y:0,n:0};
-function shelf(len){const p=G.n>0?brkP(G.y):0;
- if(len>=10&&rB()<p){const f=len*0.5,a=mkBrk(box(0,G.y-0.5,G.z-f/2,8,1,f,'shelf')),b=box(0,G.y-0.5,G.z-f-(len-f)/2,8,1,len-f,'shelf');
-  for(const q of[a,b]){q.top=G.y;q.z0=G.z;q.z1=G.z-len;q.cz=G.z-f-1.5;}G.z-=len;return b;} // front half cracks, rear (last) part always solid
- const b=box(0,G.y-0.5,G.z-len/2,8,1,len,'shelf');b.top=G.y;b.z0=G.z;b.z1=G.z-len;b.cz=G.z-2;G.z-=len;return b;}
-function genModule(){const lastShelf=shelf(G.n===0?30:8+rC()*8);const zEdge=G.z,y0=G.y;G.n++;
- const r=rC(),h=G.y,hard=Math.min(1,h/250);let m;
- if(r<0.30-0.1*hard){const gap=3+rC()*3,rise=0.4+rC()*1.1;G.z-=gap;G.y+=rise;m={type:'step',edge:zEdge,gap,rise};}
- else if(r<0.72){const s=rC()<0.5?-1:1,gap=9+rC()*5,rise=1+rC()*2;
-  const H=rise+7,w=box(s*4.6,y0-2+H/2,zEdge-gap/2,0.6,H,gap+6,'wall');w.mesh.userData.grp=w.mesh.id;if(rB()<brkP(y0))mkBrk(w);G.z-=gap;G.y+=rise;m={type:'wallrun',edge:zEdge,side:s,walls:[w],gap,rise};}
- else{ // chimney: two parallel trunks, kick wall-to-wall to gain height
-  const s0=rC()<0.5?-1:1,k=3+(rC()*2|0)+(hard>0.5?1:0),L=10.5*k+2,rise=1.7*k,H=rise+10,walls=[];
-  for(const s of[s0,-s0]){let z=zEdge-1,gid=null;for(let i=0;i<k;i++){const len=i===0?12.5:10.5;const w=box(s*1.75,y0-3+H/2,z-len/2,0.6,H,len,'wall');
-   gid=gid??w.mesh.id;w.mesh.userData.grp=gid;if(rB()<brkP(y0))mkBrk(w);walls.push(w);z-=len;}}
-  const gap=L+2;G.z=zEdge-gap;G.y+=rise;m={type:'chimney',edge:zEdge,side:s0,walls,gap,rise,k};}
- m.shelf=lastShelf;m.z0=lastShelf.z0;m.z1=G.z;m.y0=y0;mods.push(m);decor(lastShelf.z0,G.z,y0);}
-function ensureCourse(){while(G.z>P.pos.z-220)genModule();
- for(let i=boxes.length-1;i>=0;i--){const b=boxes[i];if(b.mesh.position.z-b.half.z>P.pos.z+70){S.remove(b.mesh);b.mesh.geometry.dispose();boxes.splice(i,1);}}
- for(let i=deco.length-1;i>=0;i--)if(deco[i].position.z>P.pos.z+90){S.remove(deco[i]);deco.splice(i,1);}}
+// ---------- course meshes mirror sim boxes ----------
+const meshes=new Map(),cracked=new Set();
+const hooks={
+ add(b){const zc=zoneAt(b.y);const m=new THREE.Mesh(new THREE.BoxGeometry(b.hx*2,b.hy*2,b.hz*2),new THREE.MeshLambertMaterial({color:b.kind==='shelf'?zc.shelf:zc.wall}));
+  m.position.set(b.x,b.y,b.z);m.castShadow=m.receiveShadow=true;S.add(m);meshes.set(b.id,m);m.userData.b=b;
+  queueMicrotask(()=>{if(b.brk)m.material.color.offsetHSL(0,-0.05,0.06);});}, // subtle pale tint before touch
+ crack(b){const m=meshes.get(b.id);if(!m)return;m.material.color.offsetHSL(0,0,0.14);m.material.emissive&&m.material.emissive.setHex(0x221a10);cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ remove(b){const m=meshes.get(b.id);if(!m)return;S.remove(m);m.geometry.dispose();meshes.delete(b.id);cracked.delete(m);},
+ module(m){decor(m.z0,m.z1,m.y0);}};
 
 // ---------- decor (separate seeded stream, no collision) ----------
 const deco=[];const birdG=new THREE.Group();S.add(birdG);
@@ -91,123 +59,70 @@ for(let i=0;i<14;i++){const h=60+rD()*90,c=new THREE.Mesh(new THREE.ConeGeometry
 for(let i=0;i<9;i++){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({color:0x2a2622});for(const s of[-1,1]){const w=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.06,0.25),m);w.position.x=s*0.42;w.userData.s=s;g.add(w);}
  g.userData={ph:rD()*6,r:8+rD()*14,h:6+rD()*10,sp:0.3+rD()*0.4};birdG.add(g);}
 
+// ---------- the run ----------
+const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here; forced 1 on daily/weekly */,nobrk:Q.has('nobrk'),nomist:Q.has('nomist'),miss:MISS,hooks});
+const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
+
 // ---------- player (placeholder grasshopper) ----------
-const P={pos:new THREE.Vector3(0,1,-3),vel:new THREE.Vector3(),r:0.4,state:'air',coyote:0,buffer:0,wallN:new THREE.Vector3(),wallSide:0,wallT:0,lastWall:null,lastWallT:9,lastShelf:null,
- maxH:0,t:0,caught:0,mode:'play',catchAt:0,stats:{wallruns:0,walljumps:0,catch:0,dead_at:null,cracks:0,breaks:0,late:0}};
 const body=new THREE.Group(),gm=new THREE.MeshLambertMaterial({color:0x6e9a3c}),dm=new THREE.MeshLambertMaterial({color:0x3f5e22});
 const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.22,0.7,4,8),gm);torso.rotation.x=Math.PI/2;torso.castShadow=true;body.add(torso);
 const headM=new THREE.Mesh(new THREE.SphereGeometry(0.2,10,8),gm);headM.position.set(0,0.1,0.55);body.add(headM);
 const legs=[];for(const s of[-1,1]){const l=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.8),dm);l.position.set(s*0.22,0.15,-0.25);l.rotation.x=-0.7;body.add(l);legs.push(l);
  const a=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.02,0.6),dm);a.position.set(s*0.08,0.35,0.8);a.rotation.x=-0.6;a.rotation.y=s*0.25;body.add(a);}
 S.add(body);
-const mistY={v:MIST.start};const mist=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.82,depthWrite:false}));mist.rotation.x=-Math.PI/2;S.add(mist);
+const mist=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.82,depthWrite:false}));mist.rotation.x=-Math.PI/2;S.add(mist);
 const mist2=mist.clone();mist2.material=mist.material.clone();mist2.material.opacity=0.35;S.add(mist2);
 
-// ---------- input: auto-run, tap = jump / wall-kick, drag = steer ----------
-const K={};let steer=0,ptr=null;
+// ---------- input: auto-run, tap = jump / wall-kick, drag = steer. Applied only at the next fixed tick. ----------
+const K={};let steer=0,ptr=null,pending=false;
 addEventListener('keydown',e=>{K[e.code]=1;if(e.code==='Space'){e.preventDefault();press();}});addEventListener('keyup',e=>K[e.code]=0);
 addEventListener('pointerdown',e=>{ptr={x:e.clientX,t:performance.now(),moved:false};});
 addEventListener('pointermove',e=>{if(!ptr)return;const dx=e.clientX-ptr.x;if(Math.abs(dx)>14)ptr.moved=true;if(ptr.moved)steer=THREE.MathUtils.clamp(dx/110,-1,1);});
 addEventListener('pointerup',()=>{if(ptr&&!ptr.moved&&performance.now()-ptr.t<350)press();ptr=null;steer=0;});
-function press(){if(P.mode==='catch'){if(P.t-P.catchAt>=0.5)doCatch();return}if(P.mode==='dead'){restart();return}P.buffer=T.jumpBuffer;hideHint();}
+function press(){if(P.mode==='dead'){restart();return}pending=true;hideHint();}
 let hinted=localStorage.getItem('tobu3d_hint')==='1';const hintEl=document.getElementById('hint');if(hinted||AUTO)hintEl.style.opacity=0;
 function hideHint(){if(!hinted&&P.t>4){hinted=true;localStorage.setItem('tobu3d_hint','1');hintEl.style.opacity=0;}}
-
-// ---------- collision ----------
-const _l=new THREE.Vector3(),_c=new THREE.Vector3(),_n=new THREE.Vector3();
-function collide(){let g=null;for(const b of boxes){_l.copy(P.pos).applyMatrix4(b.inv);
- _c.set(THREE.MathUtils.clamp(_l.x,-b.half.x,b.half.x),THREE.MathUtils.clamp(_l.y,-b.half.y,b.half.y),THREE.MathUtils.clamp(_l.z,-b.half.z,b.half.z));
- _n.subVectors(_l,_c);const d=_n.length();if(d>=P.r||d===0)continue;_n.multiplyScalar(1/d).transformDirection(b.mesh.matrixWorld);P.pos.addScaledVector(_n,P.r-d);
- const vn=P.vel.dot(_n);if(vn<0)P.vel.addScaledVector(_n,-vn);if(_n.y>0.7){g=b;}}return g;}
-const ray=new THREE.Raycaster();
-function probeWall(){let best=null;for(const s of[-1,1]){ray.set(P.pos,new THREE.Vector3(s,0,0));ray.far=P.r+T.wallRayLen;
- const near=boxes.filter(b=>b.kind==='wall'&&!b.gone&&Math.abs(b.mesh.position.z-P.pos.z)<b.half.z+2).map(b=>b.mesh);const h=ray.intersectObjects(near,false)[0];
- if(h){const n=h.face.normal.clone().transformDirection(h.object.matrixWorld);if(Math.abs(n.y)<T.wallMaxNormalY&&(!best||h.distance<best.d))best={d:h.distance,n,side:s,obj:h.object};}}return best;}
-
-// ---------- bot: reads only visible geometry, like a player looking ahead ----------
-function modAt(z){for(const m of mods)if(z<=m.z0&&z>m.z1)return m;return null;}
-function bot(){const m=modAt(P.pos.z);let jump=false,tx=0;if(!m)return{side:0,jump};
- const onShelf=P.pos.z>m.edge;
- if(m.type==='step'){tx=0;if(P.state==='ground'&&P.pos.z-m.edge<1.4&&onShelf)jump=true;}
- else if(m.type==='wallrun'){const w=m.walls[0];tx=m.side*3.7;
-  if(P.state==='ground'&&onShelf&&P.pos.z-m.edge<1.4)jump=true;
-  if(P.state==='wall'){tx=m.side*4;const zEnd=w.mesh.position.z-w.half.z;const dist=P.pos.z-m.z1;const cb=P.lastWall&&P.lastWall.userData.box;if(dist<7.5||(P.wallT>0.5&&dist<11)||P.vel.y<-3||P.wallT>1.2||(cb&&cb.crackAt!=null&&P.wallT>0.55))jump=true;}
-  if(P.state==='air'&&P.lastWall===w.mesh)tx=0;}
- else{ // chimney: alternate sides; kick near the top of each wall-run
-  if(P.state==='ground'&&onShelf){tx=m.side*0.8;if(P.pos.z-m.edge<1.4)jump=true;}
-  else if(P.state==='wall'){if(P.wallT>0.15&&(P.vel.y<1.5||P.wallT>0.5))jump=true;
-   if(P.pos.z<m.z1+6&&P.pos.y<m.y0+m.rise+0.5)jump=true;}
-  else tx=P.lastWall?-Math.sign(P.lastWall.position.x)*0.8:m.side*0.8;}
- if(P.state==='wall'&&jump&&MISS>0){if(P.kickPlan==null){const late=rM()<MISS;P.kickPlan=P.wallT+(late?0.3:0);if(late)P.stats.late++;}jump=P.wallT>=P.kickPlan;}
- return{side:THREE.MathUtils.clamp((tx-P.pos.x)/1.5,-1,1),jump};}
-
-const grp=o=>o?(o.userData.grp??o.id):null;
-// ---------- controller ----------
-function step(dt){P.t+=dt;P.lastWallT+=dt;P.buffer-=dt;P.coyote-=dt;
- let side;if(AUTO){const b=bot();side=b.side;if(b.jump)P.buffer=T.jumpBuffer;}else side=steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0));
- if(P.state==='wall'){P.wallT+=dt;const w=probeWall();
-  if(!w||grp(w.obj)!==grp(P.lastWall)||P.wallT>T.wallMaxTime){P.state='air';P.lastWallT=0;}
-  else{if(w.obj!==P.lastWall){P.lastWall=w.obj;touch(w.obj.userData.box);}P.wallN.copy(w.n);const vn=P.vel.dot(P.wallN);P.vel.addScaledVector(P.wallN,-vn);P.vel.addScaledVector(P.wallN,-T.wallStick*dt);
-   const k=Math.min(1,P.wallT/T.wallMaxTime);P.vel.y-=T.gravity*THREE.MathUtils.lerp(T.wallGravStart,T.wallGravEnd,k*k)*dt;
-   if(-P.vel.z<T.runSpeed)P.vel.z-=T.airAccel*dt;
-   if(P.buffer>0){P.buffer=0;P.state='air';P.lastWallT=0;P.stats.walljumps++;P.vel.addScaledVector(P.wallN,T.wallJumpOut);P.vel.y=T.wallJumpUp;}}}
- if(P.state!=='wall'){const accel=P.state==='ground'?T.groundAccel:T.airAccel;
-  const tvx=side*T.lateral,tvz=-T.runSpeed;const dx=tvx-P.vel.x,dz=tvz-P.vel.z,dl=Math.hypot(dx,dz),m=Math.min(dl,accel*dt);
-  if(dl>0){P.vel.x+=dx/dl*m;P.vel.z+=dz/dl*m;}P.vel.y-=T.gravity*dt;
-  if(P.state==='air'){const w=probeWall();
-   if(w&&P.vel.y<7&&-P.vel.z>T.wallMinSpeed&&(grp(w.obj)!==grp(P.lastWall)||P.lastWallT>T.sameWallCooldown)){
-    P.state='wall';P.wallT=0;P.kickPlan=null;P.wallN.copy(w.n);P.wallSide=w.side;P.lastWall=w.obj;P.stats.wallruns++;touch(w.obj.userData.box);
-    const vn=P.vel.dot(w.n);P.vel.addScaledVector(w.n,-vn);P.vel.y=Math.max(P.vel.y,T.wallEntryVy);}}
-  if((P.state==='ground'||P.coyote>0)&&P.buffer>0){P.buffer=0;P.coyote=0;P.vel.y=T.jumpVy;P.state='air';}}
- P.pos.addScaledVector(P.vel,dt);const g=collide();
- if(g&&P.state!=='wall'){if(P.state!=='ground')P.lastWall=null;P.state='ground';P.coyote=T.coyote;if(g.kind==='shelf'&&!g.brk)P.lastShelf=g;}
- else if(P.state==='ground'&&!g)P.state='air';if(P.state==='wall'&&g)P.state='ground';
- if(g)touch(g);updBreaks();
- P.maxH=Math.max(P.maxH,P.pos.y);
- // rising bottom
- let band=0;for(let i=0;i<4;i++)if(P.maxH>=MIST.zoneFrom[i])band=i;const sp=MIST.mps[band]*adapt(null);
- if(P.t>MIST.delay){const u=Math.min(1,(P.t-MIST.delay)/MIST.ease);mistY.v+=sp*u*u*(3-2*u)*dt;}
- if(Q.has('nomist'))mistY.v=P.maxH-30;else mistY.v=Math.max(mistY.v,P.maxH-40);
- for(const z of ZONES)if(P.maxH>=z.h&&!(z.n in ZT))ZT[z.n]=+P.t.toFixed(1); // never let the bottom trail more than 40 m (keeps pressure honest & visible)
- if(P.pos.y<mistY.v){if(!P.caught){P.mode='catch';P.catchAt=P.t;P.stats.catch++;}else{P.mode='dead';P.stats.dead_at=+P.maxH.toFixed(1);}}}
-function doCatch(){P.caught=1;P.mode='play';const s=P.lastShelf;
- const top=s?s.top:Math.max(0,P.maxH-6);P.pos.set(0,top+1.2,s?s.cz:P.pos.z);P.vel.set(0,0,-T.runSpeed*0.5);P.state='air';
- mistY.v=Math.min(mistY.v,top-6);/* Catch: back on your last shelf, mist pushed to 6 m below it. Nothing else. */}
 function restart(){location.reload();}
 
 // ---------- camera: lagged chase from behind & above, FOV kick, roll into walls ----------
+const V=(o)=>new THREE.Vector3(o.x,o.y,o.z);
 let roll=0;const wallOff=new THREE.Vector3(),V0=new THREE.Vector3();const camPos=new THREE.Vector3(0,5,20);
 function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
- wallOff.lerp(P.state==='wall'?P.wallN.clone().multiplyScalar(T.camWallOff):V0,1-Math.exp(-4*dt)); /* eased, never snaps (KAMI) */
+ wallOff.lerp(P.state==='wall'?V(P.wallN).multiplyScalar(T.camWallOff):V0,1-Math.exp(-4*dt)); /* eased, never snaps (KAMI) */
  const off=new THREE.Vector3(-P.vel.x*0.04,T.camHeight,T.camDist).add(wallOff);
- const want=P.pos.clone().add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */cam.position.copy(camPos);
+ const want=V(P.pos).add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */cam.position.copy(camPos);
  cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
  const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-6*dt));cam.rotation.z=roll;
  cam.fov=THREE.MathUtils.lerp(cam.fov,T.fovBase+(T.fovMax-T.fovBase)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
- body.position.copy(P.pos).add(new THREE.Vector3(0,-0.1,0));body.rotation.y=Math.atan2(P.vel.x,P.vel.z);
+ body.position.set(P.pos.x,P.pos.y-0.1,P.pos.z);body.rotation.y=Math.atan2(P.vel.x,P.vel.z);
  const lean=P.state==='wall'?P.wallSide*0.6:0;body.rotation.z+=(lean-body.rotation.z)*(1-Math.exp(-10*dt));
  const kick=P.state==='ground'?Math.sin(P.t*18)*0.5:-1.2;legs.forEach((l,i)=>l.rotation.x=-0.7+(i?kick:-kick)*0.4);
- sun.position.set(P.pos.x+25,P.pos.y+50,P.pos.z+15);sun.target.position.copy(P.pos);
+ sun.position.set(P.pos.x+25,P.pos.y+50,P.pos.z+15);sun.target.position.set(P.pos.x,P.pos.y,P.pos.z);
  mist.position.set(P.pos.x,mistY.v,P.pos.z-60);mist2.position.set(P.pos.x,mistY.v+1.2+Math.sin(P.t)*0.3,P.pos.z-60);mtns.position.set(0,P.pos.y*0.85,P.pos.z);
  birdG.children.forEach(b=>{const u=b.userData,a=P.t*u.sp+u.ph;b.position.set(Math.sin(a)*u.r,P.pos.y+u.h,P.pos.z-30+Math.cos(a)*u.r);b.rotation.y=a+Math.PI/2;b.children.forEach(w=>w.rotation.z=w.userData.s*Math.sin(P.t*9+u.ph)*0.6);});
- deco.forEach(d=>{if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});}
+ deco.forEach(d=>{if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});
+ for(let i=deco.length-1;i>=0;i--)if(deco[i].position.z>P.pos.z+90){S.remove(deco[i]);deco.splice(i,1);}
+ for(const m of cracked){const b=m.userData.b,dl=b.kind==='wall'?0.75:0.8,k=Math.min(1,(P.t-b.crackAt)/dl);m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
-function zoneTint(){const h=P.pos.y;let i=0;for(let k=0;k<ZONES.length;k++)if(h>=ZONES[k].h)i=k;const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
+function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
  const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.background.copy(_ca.setHex(a.sky).lerp(_cb.setHex(b.sky),t));S.fog.color.copy(_ca.setHex(a.fog).lerp(_cb.setHex(b.fog),t));
  if(a.n!==lastZone){lastZone=a.n;const z=document.getElementById('zone');z.textContent=a.n;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,1800);}}
 
 const hE=document.getElementById('h'),sE=document.getElementById('sub'),ov=document.getElementById('ov');
-let best=+(localStorage.getItem('tobu3d_best')||0);
-function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${P.caught?'':'  ·  Catch ready'}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
- if(P.mode==='catch'){ov.style.display='flex';document.getElementById('ovT').textContent='Second chance';document.getElementById('ovS').textContent=P.t-P.catchAt<0.5?'…':'Tap to Catch (optional ad slot in real build) · or wait to end run';}
- else if(P.mode==='dead'){ov.style.display='flex';document.getElementById('ovT').textContent=(P.maxH|0)+' m';document.getElementById('ovS').textContent='tap to climb again';if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
+let best=+(localStorage.getItem('tobu3d_best')||0),verdict='',sent=false;
+function onDeath(){if(sent)return;sent=true;const h=Math.round(P.maxH*10)/10;window.__run={log:packLog(sim.log),claim:{height:h}};
+ if(VERIFY&&!AUTO){verdict='checking run…';fetch(VERIFY+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(window.__run)})
+  .then(r=>r.json()).then(j=>verdict=j.ok?`verified ${j.height} m`:`not accepted: ${j.reason}`).catch(()=>verdict='offline: run not submitted');}}
+function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
+ if(P.mode==='catch'){ov.style.display='flex';document.getElementById('ovT').textContent='Second chance';document.getElementById('ovS').textContent=P.t-P.catchAt<0.5?'…':BOARD==='free'?'Tap to Catch (optional ad slot in real build) · or wait to end run':'Tap to Catch (free in ranked) · or wait to end run';}
+ else if(P.mode==='dead'){onDeath();ov.style.display='flex';document.getElementById('ovT').textContent=(P.maxH|0)+' m';document.getElementById('ovS').textContent=(verdict?verdict+'\n':'')+'tap to climb again';if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
  else ov.style.display='none';R.render(S,cam);}
 
-const DT=1/120;ensureCourse();
-function tick(dt){if(P.mode==='play'){step(dt);ensureCourse();}else if(P.mode==='catch'){P.t+=dt;if(AUTO&&P.t-P.catchAt>0.6)doCatch();else if(P.t-P.catchAt>6){P.mode='dead';P.stats.dead_at=+P.maxH.toFixed(1);}}updateCam(dt);}
-if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick(DT);if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
+function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);updateCam(DT);}
+if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
+ if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title='SIM '+JSON.stringify({m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:mods.length});}
-else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick(DT);acc-=DT;}render();requestAnimationFrame(loop);})(last);}
+ document.title='SIM '+JSON.stringify({m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
+else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);});
 </script></body></html>
