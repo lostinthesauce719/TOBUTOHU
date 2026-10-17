@@ -141,7 +141,7 @@ export function createSim(opt={}){
 }
 
 // Re-run a recorded log from scratch. Same seed + same inputs + same code => same height, on any device.
-export function replay(log,{maxTicks=20*60*120}={}){
+export function replay(log,{maxTicks=60*60*120}={}){
  if(!log||log.v!==SIM_VERSION)return{ok:false,reason:'version'};
  const end=log.end|0;if(end<=0||end>maxTicks)return{ok:false,reason:'length'};
  const sim=createSim({seed:log.seed,board:log.board,adapt:log.adapt});
