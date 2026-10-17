@@ -21,7 +21,7 @@ const rC=mul(SEED^0xA11CE), rD=mul(SEED^0xDEC0); // course stream, decor stream 
 const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.12,
  wallRayLen:1.0,wallMinSpeed:5,wallMaxNormalY:0.3,wallEntryVy:4.5,wallGravStart:0.12,wallGravEnd:1.0,wallMaxTime:1.4,wallStick:4,
  wallJumpOut:7.5,wallJumpUp:11,wallJumpKeep:1.0,sameWallCooldown:0.35,
- camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.2};
+ camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.08,camWallOff:0.6};
 // rising bottom (mist): m/s by 100 m band, start delay + ease-in like the 2D build. adapt() reads skill only.
 const MIST={start:-10,delay:3,ease:2,zoneFrom:[0,70,150,240],mps:[0.85,0.8,0.85,0.9]}; // KAMI: <=75% of bot climb rate per zone, no cap
 function adapt(skill){return 1.0/* greybox stub: skill-only (recent heights, deaths, near misses), clamp 0.85..1.15 */}
@@ -162,9 +162,10 @@ function doCatch(){P.caught=1;P.mode='play';const s=P.lastShelf;
 function restart(){location.reload();}
 
 // ---------- camera: lagged chase from behind & above, FOV kick, roll into walls ----------
-let roll=0;const camPos=new THREE.Vector3(0,5,20);
+let roll=0;const wallOff=new THREE.Vector3(),V0=new THREE.Vector3();const camPos=new THREE.Vector3(0,5,20);
 function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
- const off=new THREE.Vector3(-P.vel.x*0.04,T.camHeight,T.camDist);if(P.state==='wall')off.addScaledVector(P.wallN,0.5);
+ wallOff.lerp(P.state==='wall'?P.wallN.clone().multiplyScalar(T.camWallOff):V0,1-Math.exp(-4*dt)); /* eased, never snaps (KAMI) */
+ const off=new THREE.Vector3(-P.vel.x*0.04,T.camHeight,T.camDist).add(wallOff);
  const want=P.pos.clone().add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */cam.position.copy(camPos);
  cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
  const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-6*dt));cam.rotation.z=roll;
