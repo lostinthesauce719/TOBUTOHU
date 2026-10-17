@@ -5,11 +5,14 @@ import { createHash } from 'node:crypto';
 import { replay, unpackLog, SIM_VERSION, DT, ADAPT_MIN, ADAPT_MAX } from '../sim.js';
 
 const SALT = process.env.TOBU_SEED_SALT || 'dev-salt-change-me'; // keeps daily/weekly seeds unknown until the period opens
+// Periods follow Google Play Games' fixed reset: midnight at UTC-7 all year (no DST). Weekly runs Sunday 00:00 to Saturday 24:00 UTC-7.
+// Apple's recurring leaderboards must be configured with the same start time and duration so all three agree.
+export const RESET_OFFSET_MS = 7 * 3600e3;
 export function periodKey(board, now = new Date()) {
-  if (board === 'daily') return now.toISOString().slice(0, 10);              // UTC day
-  if (board === 'weekly') { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);    // ISO week
-    const y0 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return d.getUTCFullYear() + '-W' + String(Math.ceil(((d - y0) / 864e5 + 1) / 7)).padStart(2, '0'); }
+  const t = new Date(now.getTime() - RESET_OFFSET_MS);                        // wall clock at UTC-7
+  if (board === 'daily') return 'D' + t.toISOString().slice(0, 10);
+  if (board === 'weekly') { const d = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() - t.getUTCDay()));
+    return 'W' + d.toISOString().slice(0, 10); }                              // the Sunday the week starts on
   return null;
 }
 export function seedFor(board, key, salt = SALT) { return createHash('sha256').update(`${salt}|${board}|${key}`).digest().readUInt32BE(0); }

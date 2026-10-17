@@ -102,7 +102,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  birdG.children.forEach(b=>{const u=b.userData,a=P.t*u.sp+u.ph;b.position.set(Math.sin(a)*u.r,P.pos.y+u.h,P.pos.z-30+Math.cos(a)*u.r);b.rotation.y=a+Math.PI/2;b.children.forEach(w=>w.rotation.z=w.userData.s*Math.sin(P.t*9+u.ph)*0.6);});
  deco.forEach(d=>{if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});
  for(let i=deco.length-1;i>=0;i--)if(deco[i].position.z>P.pos.z+90){S.remove(deco[i]);deco.splice(i,1);}
- for(const m of cracked){const b=m.userData.b,dl=b.kind==='wall'?0.75:0.8,k=Math.min(1,(P.t-b.crackAt)/dl);m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
+ for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
 function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
  const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.background.copy(_ca.setHex(a.sky).lerp(_cb.setHex(b.sky),t));S.fog.color.copy(_ca.setHex(a.fog).lerp(_cb.setHex(b.fog),t));

@@ -4,7 +4,7 @@ import { gzipSync } from 'node:zlib';
 import { verifyRun, seedFor, periodKey } from './verify.mjs';
 const now = new Date(); let pass = 0, fail = 0;
 const expect = (name, cond, extra = '') => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
-function play(seed, board = 'free', o = {}) { const sim = createSim({ seed, board, ...o }); while (sim.P.mode !== 'dead' && sim.ticks < 15 * 60 * 120) sim.tick(sim.botInput()); return sim; }
+function play(seed, board = 'free', o = {}) { const sim = createSim({ seed, board, ...o }); while (sim.P.mode !== 'dead' && sim.ticks < 25 * 60 * 120) sim.tick(sim.botInput()); return sim; }
 const clone = x => JSON.parse(JSON.stringify(x));
 
 // 1) honest runs pass, height reproduced exactly
