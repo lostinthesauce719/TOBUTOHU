@@ -108,7 +108,7 @@ export function createHero(scene, P, boxes) {
       for (const L of LEGS) { if (L.kind === 'hind' && st.lastSf) { // push-off: hind claws pin where the kick started
           const hw = world(L.hipV, new THREE.Vector3()), side = new THREE.Vector3(L.s, 0, 0).applyQuaternion(st.q);
           if (st.lastSf.kind === 'ground' || side.x * st.lastSf.side > -0.1) { L.plant = project(world(L.restV, new THREE.Vector3()), st.lastSf); L.n.copy(st.lastSf.n); }
-          L.hold = 0.16; } else if (L.plant) L.hold = 0.05; } }
+          L.hold = 0.18; } else if (L.plant) L.hold = L.kind === 'front' ? 0.2 : 0.08; } } // §8.2.4: forelegs release last (each claw stays pinned only while in reach, so it never floats)
     st.latch += dt; st.land += dt; st.kick += dt;
 
     // ---- orientation: yaw to travel, pitch to velocity, roll toward wall / into steer (brief §6) ----
@@ -122,12 +122,13 @@ export function createHero(scene, P, boxes) {
 
     // ---- position: drop the body onto its contact surface; latch squash toward the wall ----
     const offW = new THREE.Vector3(0, -(P.r - RIDE), 0);
-    if (state === 'wall') { const k = Math.min(1, st.latch / 0.08); offW.set(sf.side * (P.r - RIDE + 0.05 * (1 - k)), -0.08, 0); }
-    if (state === 'ground') { const k = st.land / 0.2; if (k < 1) offW.y -= 0.12 * Math.sin(Math.PI * Math.min(1, k * 1.4)) * (1 - 0.3 * k); }
+    if (state === 'wall') { const k = Math.min(1, st.latch / 0.08); offW.set(sf.side * (P.r - 0.12), -0.08, 0); } // belly hugs the wall; no offset that springs away from it
+    if (state === 'ground' && st.land < 0.2) { const t = st.land; offW.y -= 0.055 * (t < 0.08 ? Math.sin(Math.PI / 2 * t / 0.08) : 0.5 + 0.5 * Math.cos(Math.PI * (t - 0.08) / 0.12)); } // §8.2.5: compress 0.08 s, dip 0.05 BL, ease out with no overshoot
     st.off.lerp(offW, 1 - Math.exp(-dt / (state === 'wall' && st.latch < 0.08 ? 0.015 : 0.05)));
     root.position.set(P.pos.x, P.pos.y, P.pos.z).add(st.off); root.quaternion.copy(st.q);
-    const squash = state === 'wall' && st.latch < 0.08 ? Math.sin(Math.PI * st.latch / 0.08) : 0;
-    body.scale.set(1 + 0.1 * squash, 1 - 0.14 * squash, 1 + 0.04 * squash);
+    const lt = st.latch, squash = state !== 'wall' ? 0 : lt < 0.08 ? Math.sin(Math.PI / 2 * lt / 0.08) : lt < 0.18 ? 0.5 + 0.5 * Math.cos(Math.PI * (lt - 0.08) / 0.1) : 0; // §8.2.1: 13% toward the wall in 0.08 s, recover 0.10 s
+    const nl = sf.n ? sf.n.clone().applyQuaternion(st.q.clone().invert()) : new THREE.Vector3(0, 1, 0);
+    body.scale.set(1 - 0.13 * squash * Math.abs(nl.x), 1 - 0.13 * squash * Math.abs(nl.y), 1);
     root.updateMatrixWorld(true);
     const delta = st.lastRoot ? root.position.clone().sub(st.lastRoot) : new THREE.Vector3(); st.lastRoot = root.position.clone();
 
@@ -176,6 +177,7 @@ export function createHero(scene, P, boxes) {
       if (L.t) { const n = L.plant ? L.n : bodyUp; ankle = L.foot.clone().addScaledVector(n, 0.05).addScaledVector(bodyBack, -0.06); }
       const pole = L.kind === 'hind' ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, 0.35).addScaledVector(sideW, 0.3) : sideW.clone().addScaledVector(bodyUp, 0.8);
       const dA = ankle.distanceTo(hipW), maxA = L.a + L.b - 1e-3;
+      if (dA > maxA && L.plant) { L.plant = null; L.hold = 0; if (contact) { L.swing = 1e-6; L.from.copy(L.foot); } } // out of reach: lift and re-plant, never drag a planted claw off its spot
       if (dA > maxA) { const k = maxA / dA; const f = L.foot.clone().sub(ankle); ankle = hipW.clone().lerp(ankle, k); L.foot.copy(ankle).add(f); } // never draw a stretched leg
       const { knee } = ik(hipW, ankle, L.a, L.b, pole);
       placeSeg(L.s1, hipW, knee); placeSeg(L.s2, knee, ankle); if (L.s3) placeSeg(L.s3, ankle, L.foot);
@@ -189,5 +191,5 @@ export function createHero(scene, P, boxes) {
     if (state === 'wall') { patch.position.set(sf.d - sf.side * 0.01, P.pos.y - 0.1, P.pos.z); patch.rotation.set(0, sf.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0); }
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
-  return { update, root };
+  return { legs: LEGS, update, root };
 }
