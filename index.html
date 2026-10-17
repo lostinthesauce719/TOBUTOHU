@@ -23,7 +23,7 @@ const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5
  wallJumpOut:7.5,wallJumpUp:11,wallJumpKeep:1.0,sameWallCooldown:0.35,
  camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.2};
 // rising bottom (mist): m/s by 100 m band, start delay + ease-in like the 2D build. adapt() reads skill only.
-const MIST={start:-10,delay:3,ease:2,zoneFrom:[0,70,150,240],mps:[0.85,0.8,0.9,0.9]}; // KAMI: <=75% of bot climb rate per zone, no cap
+const MIST={start:-10,delay:3,ease:2,zoneFrom:[0,70,150,240],mps:[0.85,0.8,0.85,0.9]}; // KAMI: <=75% of bot climb rate per zone, no cap
 function adapt(skill){return 1.0/* greybox stub: skill-only (recent heights, deaths, near misses), clamp 0.85..1.15 */}
 const ZONES=[ // name, from height (m), sky, fog, shelf, wall
  {n:'Cedar forest',h:0,sky:0xbfd3c9,fog:0xd8e2da,shelf:0x5f7a4a,wall:0x4a3a2e},
