@@ -76,6 +76,58 @@ export function barkMat(CB, share = 0.47) {
   });
 }
 
+
+// breakables: cel card plus the perforation tell (Art spec D §7). Dashed #140F0A lines, 3 cm wide in the world but never under
+// 2 px at 360 (perfU.minPx is set from the canvas width), dash 8 cm / gap 4.5 cm, along both long edges, across the tear line,
+// and down the front face. On touch the dashes split into a jagged pale #EEF2E0 gap, 1.5 cm widening to 4 cm by 0.85 T.
+// Visual only: geometry and timing come from the sim.
+export const perfU = { minPx: { value: 6 } };
+export function perfMat(lit, base, shade, top, half, perf = '#140F0A', tear = '#EEF2E0') {
+  const t = top || [lit, base, shade];
+  const m = new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      cL: { value: new THREE.Color(lit) }, cB: { value: new THREE.Color(base) }, cS: { value: new THREE.Color(shade) },
+      tL: { value: new THREE.Color(t[0]) }, tB: { value: new THREE.Color(t[1]) }, tS: { value: new THREE.Color(t[2]) },
+      pC: { value: new THREE.Color(perf) }, gC: { value: new THREE.Color(tear) }, ld: { value: LIGHT },
+      hx: { value: new THREE.Vector3(...half) }, tearK: { value: -1 },
+    }]),
+    vertexShader: `#include <fog_pars_vertex>
+      varying vec3 vN; varying float vUp; varying vec3 vP; varying vec3 vON;
+      void main(){ vec3 wn=normalize(mat3(modelMatrix)*normal); vUp=wn.y; vN=normalize(normalMatrix*normal); vP=position; vON=normal;
+        vec4 mvPosition=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `#include <fog_pars_fragment>
+      uniform vec3 cL,cB,cS,tL,tB,tS,pC,gC,ld,hx; uniform float tearK, minPx; varying vec3 vN; varying float vUp; varying vec3 vP; varying vec3 vON;
+      float hash(float x){ return fract(sin(x*127.1)*43758.5453); }
+      // one dashed line: d = distance across the line (m), a = position along it (m)
+      float line(float d, float a, float fw, inout float gap, bool tl){
+        float hw = max(0.015, fw*minPx*0.5);
+        float jag = (hash(floor(a/0.03))-0.5)*0.012;
+        if (tl && tearK >= 0.) { float g = mix(0.0075, 0.02, clamp(tearK/0.85,0.,1.)) + jag; if (abs(d) < g) { gap = 1.; return 0.; } return abs(d) < g + hw*0.6 ? 1. : 0.; }
+        if (abs(d) > hw) return 0.;
+        return mod(a, 0.125) < 0.08 ? 1. : 0.;
+      }
+      void main(){ float dl=dot(normalize(vN),ld); bool top=vUp>0.6;
+        vec3 c = dl>0.57 ? (top?tL:cL) : dl>-0.09 ? (top?tB:cB) : (top?tS:cS);
+        vec3 n = abs(vON); float k = 0., gap = 0.;
+        // the face's two in-plane axes; the longer one is the card's long axis
+        vec2 p2 = n.x > 0.5 ? vP.yz : n.y > 0.5 ? vP.xz : vP.xy;
+        vec2 h2 = n.x > 0.5 ? hx.yz : n.y > 0.5 ? hx.xz : hx.xy;
+        bool lx = h2.x >= h2.y; float pL = lx ? p2.x : p2.y, pS = lx ? p2.y : p2.x, hS = lx ? h2.y : h2.x;
+        float ins = min(0.12, hS*0.35);
+        if (hS > 0.2) k = line(abs(pS) - (hS - ins), pL, fwidth(pS), gap, false);                  // both long edges (skip thin faces)
+        k = max(k, line(pL, pS, fwidth(pL), gap, true));                                           // across the card at the tear line, and down the front
+        if (gap > 0.) c = gC; else if (k > 0.) c = pC;
+        gl_FragColor=vec4(c,1.);
+        #include <fog_fragment>
+      }`,
+  });
+  m.uniforms.minPx = perfU.minPx; // shared, follows the canvas width
+  return m;
+}
+
 // ID material: r = class, g = object id, b = view depth (m)
 const idMats = new Map();
 function idMat(cls, oid) {

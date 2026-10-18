@@ -14,7 +14,7 @@
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';
-import {createPost,celMat,barkMat,CLS} from './cel.js';
+import {createPost,celMat,barkMat,perfMat,perfU,CLS} from './cel.js';
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
@@ -30,7 +30,7 @@ const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
 const R=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true}); // MSAA lives in the post passR.setPixelRatio(Math.min(2,devicePixelRatio));
-R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);const post=createPost(R,PAL); // unlit cel: no lights, no shadow map
+R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);perfU.minPx.value=Math.max(2,R.domElement.width/180);const post=createPost(R,PAL); // unlit cel: no lights, no shadow map
 const S=new THREE.Scene();S.background=new THREE.Color(ZONES[0].sky);S.fog=new THREE.Fog(ZONES[0].fog,60,220);
 if(innerWidth<innerHeight){T.fovBase=55;T.fovMax=64;} /* portrait: grasshopper ~16% width, lower-middle */ const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
 
@@ -39,17 +39,18 @@ const meshes=new Map(),cracked=new Set();
 const hooks={
  add(b){const zc=zoneAt(b.y);const m=new THREE.Mesh(new THREE.BoxGeometry(b.hx*2,b.hy*2,b.hz*2),climbMat(b,zc));
   m.position.set(b.x,b.y,b.z);S.add(m);meshes.set(b.id,m);m.userData.b=b;post.tag(m,CLS.climb);
-  queueMicrotask(()=>{if(b.brk)m.material=climbMat(b,zc);});}, // breakable palette once the sim has flagged it
- crack(b){const m=meshes.get(b.id);if(!m)return;if(!m.material.uniforms.cB)m.material=celMat(CB.breakable_lit,CB.breakable_front,CB.breakable_fold); /* bark walls are made before they're flagged breakable */const u=m.material.uniforms;u.tB.value.set(CB.breakable_fold);u.cB.value.set(CB.breakable_fold);cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+  pendBrk.push([b,m,zc]);}, // breakable material once the sim has flagged it (flushed after each tick; the shot loop never yields to microtasks)
+ crack(b){const m=meshes.get(b.id);if(!m)return;if(!m.material.uniforms.tearK)m.material=climbMat(b,zoneAt(b.y)); /* made before the sim flagged it breakable */m.material.uniforms.tearK.value=0; /* perforation splits into the pale tear */cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
  remove(b){const m=meshes.get(b.id);if(!m)return;S.remove(m);m.geometry.dispose();meshes.delete(b.id);cracked.delete(m);},
  module(m){decor(m.z0,m.z1,m.y0);}};
 
 // climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
+const pendBrk=[];function flushBrk(){for(const [b,m,zc] of pendBrk)if(b.brk&&!m.material.uniforms.tearK)m.material=climbMat(b,zc);pendBrk.length=0;}
 function climbMat(b,zc){
- if(b.kind==='shelf'){if(b.brk)return celMat(CB.breakable_front,CB.breakable_front,CB.breakable_fold,[CB.breakable_lit,CB.breakable_top,CB.breakable_fold]);
+ if(b.kind==='shelf'){if(b.brk)return perfMat(CB.breakable_front,CB.breakable_front,CB.breakable_fold,[CB.breakable_lit,CB.breakable_top,CB.breakable_fold],[b.hx,b.hy,b.hz],CB.perforation,CB.breakable_tear);
   if(zc.key==='winter')return celMat(CB.shelf_front,CB.shelf_front,CB.shelf_front,[CB.ice_frost_edge,CB.ice_shelf,CB.ice_shelf]);
   return celMat(CB.shelf_front,CB.shelf_front,CB.shelf_front,[CB.shelf_top_lit,CB.shelf_top,CB.shelf_front]);}
- if(b.brk)return celMat(CB.breakable_lit,CB.breakable_front,CB.breakable_fold);
+ if(b.brk)return perfMat(CB.breakable_lit,CB.breakable_front,CB.breakable_fold,null,[b.hx,b.hy,b.hz],CB.perforation,CB.breakable_tear);
  rD();return barkMat(CB,(CB.ridge_share?CB.ridge_share[0]+0.02:0.47)); /* bark with 45-50% ridge (Art) */}
 // ---------- decor (separate seeded stream, no collision) ----------
 const deco=[];const birdG=new THREE.Group();S.add(birdG);
@@ -113,7 +114,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  birdG.children.forEach(b=>{const u=b.userData,a=P.t*u.sp+u.ph;b.position.set(Math.sin(a)*u.r,P.pos.y+u.h,P.pos.z-30+Math.cos(a)*u.r);b.rotation.y=a+Math.PI/2;b.children.forEach(w=>w.rotation.z=w.userData.s*Math.sin(P.t*9+u.ph)*0.6);});
  deco.forEach(d=>{if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});
  for(let i=deco.length-1;i>=0;i--)if(deco[i].position.z>P.pos.z+90){S.remove(deco[i]);deco.splice(i,1);}
- for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
+ for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
 function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
  const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.background.copy(_ca.setHex(a.sky).lerp(_cb.setHex(b.sky),t));S.fog.color.copy(_ca.setHex(a.fog).lerp(_cb.setHex(b.fog),t));
@@ -132,11 +133,11 @@ function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best
 const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
 function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;
  _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
-function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);updateCam(DT);mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
+function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);flushBrk();updateCam(DT);mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
 if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
  document.title="SIM "+JSON.stringify({warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
-addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);});
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);});
 </script></body></html>
