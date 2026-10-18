@@ -5,6 +5,7 @@
 #h{font-size:34px}#zone{position:fixed;left:0;right:0;top:38%;text-align:center;color:#fff;font-size:30px;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none}
 #ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
 #ov b{font-size:40px}#help{position:fixed;right:10px;bottom:10px;color:#fff;text-shadow:0 1px 3px #000;text-align:right;pointer-events:none;font-size:12px}
+#mread{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));text-align:center;color:#F2E8CC;font-weight:700;font-size:16px;text-shadow:0 0 2px #1E2630,0 0 2px #1E2630,0 1px 3px #1E2630;pointer-events:none;display:none}#mread.warn{color:#C44834}
 #hint{position:fixed;left:0;right:0;bottom:14%;text-align:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000;pointer-events:none;transition:opacity .8s}</style></head>
 <body><div id="hud"><span id="h">0 m</span>
 <span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · drag to steer</div>
@@ -13,6 +14,8 @@
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';
+import {createPost,celMat,CLS} from './cel.js';
+const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
@@ -21,43 +24,52 @@ if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VER
 const rD=mul(SEED^0xDEC0); // decor stream: visuals only, never read by sim.js
 // camera tuning (visual only; physics tuning lives in sim.js)
 const T={camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.08,camWallOff:0.6};
-const ZONES=[ // colours per zone (names/heights come from sim.js)
- {sky:0xbfd3c9,fog:0xd8e2da,shelf:0x5f7a4a,wall:0x4a3a2e},{sky:0xa9c6d8,fog:0xdce8ee,shelf:0x6f7d5a,wall:0x6b6f78},
- {sky:0xd9cfc4,fog:0xefe7dd,shelf:0x7a6f5c,wall:0x5c5650},{sky:0x9fb4d0,fog:0xe6ecf4,shelf:0x8b8f96,wall:0x4f5560}].map((z,i)=>({...z,...ZN[i]}));
+const hx=c=>parseInt(c.slice(1),16);
+const ZONES=['spring','summer','autumn','winter'].map((k,i)=>{const p=PAL[k];return {...ZN[i],key:k,p,sky:hx(p.sky_top),fog:hx(p.fog)};}); // names/heights from sim.js, colours from palettes.json
 const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
-const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
-R.setSize(innerWidth,innerHeight);R.shadowMap.enabled=true;document.body.appendChild(R.domElement);
-const S=new THREE.Scene();S.background=new THREE.Color(ZONES[0].sky);S.fog=new THREE.Fog(ZONES[0].fog,50,190);
+const R=new THREE.WebGLRenderer({antialias:false,preserveDrawingBuffer:true}); // MSAA lives in the post passR.setPixelRatio(Math.min(2,devicePixelRatio));
+R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);const post=createPost(R,PAL); // unlit cel: no lights, no shadow map
+const S=new THREE.Scene();S.background=new THREE.Color(ZONES[0].sky);S.fog=new THREE.Fog(ZONES[0].fog,60,220);
 if(innerWidth<innerHeight){T.fovBase=55;T.fovMax=64;} /* portrait: grasshopper ~16% width, lower-middle */ const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
-S.add(new THREE.HemisphereLight(0xfff8ee,0x667766,1.15));
-const sun=new THREE.DirectionalLight(0xfff2dd,1.5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
-Object.assign(sun.shadow.camera,{left:-30,right:30,top:30,bottom:-30,far:160});S.add(sun,sun.target);
 
 // ---------- course meshes mirror sim boxes ----------
 const meshes=new Map(),cracked=new Set();
 const hooks={
- add(b){const zc=zoneAt(b.y);const m=new THREE.Mesh(new THREE.BoxGeometry(b.hx*2,b.hy*2,b.hz*2),new THREE.MeshLambertMaterial({color:b.kind==='shelf'?zc.shelf:zc.wall}));
-  m.position.set(b.x,b.y,b.z);m.castShadow=m.receiveShadow=true;S.add(m);meshes.set(b.id,m);m.userData.b=b;
-  queueMicrotask(()=>{if(b.brk)m.material.color.offsetHSL(0,-0.05,0.06);});}, // subtle pale tint before touch
- crack(b){const m=meshes.get(b.id);if(!m)return;m.material.color.offsetHSL(0,0,0.14);m.material.emissive&&m.material.emissive.setHex(0x221a10);cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ add(b){const zc=zoneAt(b.y);const m=new THREE.Mesh(new THREE.BoxGeometry(b.hx*2,b.hy*2,b.hz*2),climbMat(b,zc));
+  m.position.set(b.x,b.y,b.z);S.add(m);meshes.set(b.id,m);m.userData.b=b;post.tag(m,CLS.climb);
+  queueMicrotask(()=>{if(b.brk)m.material=climbMat(b,zc);});}, // breakable palette once the sim has flagged it
+ crack(b){const m=meshes.get(b.id);if(!m)return;const u=m.material.uniforms;u.tB.value.set(CB.breakable_fold);u.cB.value.set(CB.breakable_fold);cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
  remove(b){const m=meshes.get(b.id);if(!m)return;S.remove(m);m.geometry.dispose();meshes.delete(b.id);cracked.delete(m);},
  module(m){decor(m.z0,m.z1,m.y0);}};
 
+// climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
+function climbMat(b,zc){
+ if(b.kind==='shelf'){if(b.brk)return celMat(CB.breakable_front,CB.breakable_front,CB.breakable_fold,[CB.breakable_lit,CB.breakable_top,CB.breakable_fold]);
+  if(zc.key==='winter')return celMat(CB.shelf_front,CB.shelf_front,CB.shelf_front,[CB.ice_frost_edge,CB.ice_shelf,CB.ice_shelf]);
+  return celMat(CB.shelf_front,CB.shelf_front,CB.shelf_front,[CB.shelf_top_lit,CB.shelf_top,CB.shelf_front]);}
+ if(b.brk)return celMat(CB.breakable_lit,CB.breakable_front,CB.breakable_fold);
+ return rD()<0.47?celMat(CB.ridge_lit,CB.ridge_base,CB.ridge_shade):celMat(CB.bark_lit,CB.bark_base,CB.bark_shade);}
 // ---------- decor (separate seeded stream, no collision) ----------
 const deco=[];const birdG=new THREE.Group();S.add(birdG);
 function decor(z0,z1,y){const zc=zoneAt(y);
- for(let z=z0;z>z1;z-=6){for(const s of[-1,1]){if(rD()<0.6){const H=30+rD()*30;const t=new THREE.Mesh(new THREE.CylinderGeometry(0.6+rD()*0.6,1.2+rD()*0.8,H,7),new THREE.MeshLambertMaterial({color:zc.n==='Spring cedar'?0x3d3128:0x5a5e66}));
-   t.position.set(s*(10+rD()*30),y-12+H/2,z-rD()*6);S.add(t);deco.push(t);}}}
- if(zc.n!=='Spring cedar'&&rD()<0.5){const wf=new THREE.Mesh(new THREE.PlaneGeometry(4+rD()*4,40),new THREE.MeshBasicMaterial({color:0xf2f7fa,transparent:true,opacity:0.75,fog:true}));
+ for(let z=z0;z>z1;z-=6){for(const s of[-1,1]){if(rD()<0.6){const H=18+rD()*22,d=10+rD()*30,p=zc.p,near=d<24;
+   const t=new THREE.Mesh(new THREE.ConeGeometry(2+rD()*2.5,H,7),near?celMat(p.foliage_near_lit,p.foliage_near,p.foliage_near_shade):celMat(p.foliage_mid,p.foliage_mid,p.foliage_far));
+   t.position.set(s*d,y-12+H/2,z-rD()*6);S.add(t);deco.push(t);post.tag(t,near?CLS.near:CLS.none);
+   if(zc.key==='spring'){const pink=rD()<p.blossom_pink_ratio; // ~60/40 white/pink, from the decor stream only
+    const bl=new THREE.Mesh(new THREE.IcosahedronGeometry(1.6+rD()*1.4,0),pink?celMat(p.blossom_pink_lit,p.blossom_pink_lit,p.blossom_pink_shade):celMat(p.blossom_white_lit,p.blossom_white_lit,p.blossom_white_shade));
+    bl.position.set(t.position.x+(rD()-.5)*2,y-12+H*(0.55+rD()*0.35),t.position.z+1.5);S.add(bl);deco.push(bl);post.tag(bl,near?CLS.near:CLS.none);}}}}
+ if(zc.n!=='Spring cedar'&&rD()<0.5){const wf=new THREE.Mesh(new THREE.PlaneGeometry(4+rD()*4,40),new THREE.MeshBasicMaterial({color:hx(G.waterfall.body),transparent:true,opacity:0.85,fog:true}));
   const s=rD()<.5?-1:1;wf.position.set(s*(22+rD()*20),y+4,z1+rD()*(z0-z1));wf.rotation.y=-s*0.6;S.add(wf);deco.push(wf);}
  if(zc.n==='Autumn steam'||rD()<0.15){const st=new THREE.Mesh(new THREE.SphereGeometry(3+rD()*3,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
   st.position.set((rD()<.5?-1:1)*(9+rD()*10),y-3,z1+rD()*(z0-z1));st.userData.steam=1;S.add(st);deco.push(st);}}
 const mtns=new THREE.Group();S.add(mtns);
-for(let i=0;i<14;i++){const h=60+rD()*90,c=new THREE.Mesh(new THREE.ConeGeometry(h*0.7,h,6),new THREE.MeshLambertMaterial({color:0x8fa3b8,fog:true}));
+for(let i=0;i<14;i++){const h=60+rD()*90,c=new THREE.Mesh(new THREE.ConeGeometry(h*0.7,h,6),celMat(G.rock.lit,G.rock.base,G.rock.shade));
  const a=(i/14)*Math.PI*2;c.position.set(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);mtns.add(c);}
-for(let i=0;i<9;i++){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({color:0x2a2622});for(const s of[-1,1]){const w=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.06,0.25),m);w.position.x=s*0.42;w.userData.s=s;g.add(w);}
+for(let i=0;i<10;i++){const p=PAL.summer,c=new THREE.Mesh(new THREE.SphereGeometry(1,10,6),celMat(p.cloud_lit,p.cloud_lit,p.cloud_shade));
+ const a=-0.9+rD()*1.8;c.scale.set(18+rD()*20,5+rD()*4,8);c.position.set(Math.sin(a)*190,40+rD()*60,Math.cos(a)*-190-40);mtns.add(c);} // clouds: far cards, no lines
+for(let i=0;i<9;i++){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({color:hx(G.line.near_scenery)});for(const s of[-1,1]){const w=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.06,0.25),m);w.position.x=s*0.42;w.userData.s=s;g.add(w);}
  g.userData={ph:rD()*6,r:8+rD()*14,h:6+rD()*10,sp:0.3+rD()*0.4};birdG.add(g);}
 
 // ---------- the run ----------
@@ -65,9 +77,16 @@ const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here
 const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
 
 // ---------- player: style D grasshopper, contact-driven poses (visual only, hero.js) ----------
-const hero=createHero(S,P,sim.boxes);
-const mist=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.82,depthWrite:false}));mist.rotation.x=-Math.PI/2;S.add(mist);
-const mist2=mist.clone();mist2.material=mist.material.clone();mist2.material.opacity=0.35;S.add(mist2);
+const hero=createHero(S,P,sim.boxes);hero.parts.forEach(o=>post.tag(o,CLS.hero)); // hero row is 0 px: its own hull draws it
+// mist: drawn by the post pass as a scalloped edge (line over band over body); warning line inside 3 s, off past 3.5 s
+const MW=G.mist;let mSp=0,mLast=null,mWarn=false,mWarnA=0;const mRead=document.createElement('div');mRead.id='mread';document.body.appendChild(mRead);
+function mistTick(dt){if(mLast!==null)mSp+=((mistY.v-mLast)/dt-mSp)*(1-Math.exp(-dt/0.5));mLast=mistY.v;
+ const tt=(P.pos.y-mistY.v)/Math.max(mSp-(P.state==='air'?Math.min(0,P.vel.y):0),0.05); /* closing speed: mist rise plus any fall */ if(!mWarn&&tt<MW.warning_on_s)mWarn=true;else if(mWarn&&tt>MW.warning_off_s)mWarn=false;
+ mWarnA=THREE.MathUtils.clamp(mWarnA+(mWarn?1:-1)*dt/MW.warning_fade_s,0,1);}
+const _mv=new THREE.Vector3(),_sz=new THREE.Vector2();
+function mistDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_mv.set(P.pos.x,mistY.v,Math.min(P.pos.z,cam.position.z-6)).project(cam); /* edge at the hero's depth, never closer than 6 m */const y=(_mv.y*0.5+0.5)*_sz.y,U=post.U;
+ U.mistY.value=_mv.z<1?y:-1e4;U.warn.value=mWarnA;U.mistT.value=P.t;
+ const off=y<0,d=Math.max(0,P.pos.y-mistY.v);mRead.style.display=off&&P.mode!=='dead'?'block':'none';mRead.textContent='mist '+d.toFixed(0)+' m';mRead.classList.toggle('warn',mWarnA>0.5);}
 
 // ---------- input: auto-run, tap = jump / wall-kick, drag = steer. Applied only at the next fixed tick. ----------
 const K={};let steer=0,ptr=null,pending=false;
@@ -90,8 +109,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
  const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-6*dt));cam.rotation.z=roll;
  cam.fov=THREE.MathUtils.lerp(cam.fov,T.fovBase+(T.fovMax-T.fovBase)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
- sun.position.set(P.pos.x+25,P.pos.y+50,P.pos.z+15);sun.target.position.set(P.pos.x,P.pos.y,P.pos.z);
- mist.position.set(P.pos.x,mistY.v,P.pos.z-60);mist2.position.set(P.pos.x,mistY.v+1.2+Math.sin(P.t)*0.3,P.pos.z-60);mtns.position.set(0,P.pos.y*0.85,P.pos.z);
+ mtns.position.set(0,P.pos.y*0.85,P.pos.z);
  birdG.children.forEach(b=>{const u=b.userData,a=P.t*u.sp+u.ph;b.position.set(Math.sin(a)*u.r,P.pos.y+u.h,P.pos.z-30+Math.cos(a)*u.r);b.rotation.y=a+Math.PI/2;b.children.forEach(w=>w.rotation.z=w.userData.s*Math.sin(P.t*9+u.ph)*0.6);});
  deco.forEach(d=>{if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});
  for(let i=deco.length-1;i>=0;i--)if(deco[i].position.z>P.pos.z+90){S.remove(deco[i]);deco.splice(i,1);}
@@ -109,16 +127,16 @@ function onDeath(){if(sent)return;sent=true;const h=Math.round(P.maxH*10)/10;win
 function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){ov.style.display='flex';document.getElementById('ovT').textContent='Second chance';document.getElementById('ovS').textContent=P.t-P.catchAt<0.5?'…':BOARD==='free'?'Tap to Catch (optional ad slot in real build) · or wait to end run':'Tap to Catch (free in ranked) · or wait to end run';}
  else if(P.mode==='dead'){onDeath();ov.style.display='flex';document.getElementById('ovT').textContent=(P.maxH|0)+' m';document.getElementById('ovS').textContent=(verdict?verdict+'\n':'')+'tap to climb again';if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else ov.style.display='none';R.render(S,cam);}
+ else ov.style.display='none';mistDraw();post.render(S,cam);}
 
 const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
 function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;
  _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
-function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);updateCam(DT);hero.update(DT,R.domElement.width/1080);if(CLOSE)closeCam(DT);}
+function tick(){const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);updateCam(DT);mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
 if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title='SIM '+JSON.stringify({m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
+ document.title="SIM "+JSON.stringify({warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);});
 </script></body></html>

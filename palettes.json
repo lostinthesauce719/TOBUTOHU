@@ -1,0 +1,187 @@
+{
+  "_meta": {
+    "source": "art/direction/spec_3d_materials_D_2026-10-17.md + Apollo 2026-10-17 (spring white+pale pink blossoms; autumn gold+olive, no rust)",
+    "status": "final",
+    "luma": "Rec.709 0-255",
+    "rules": [
+      "climbables luma 45-95 (clamp in shader)",
+      "non-climbables >= 105",
+      "hero luma 120-190, >=30 above bark behind",
+      "vermilion #C44834 hazards only",
+      "no hue 340-45 deg at HSV sat > 0.35 in sky/foliage",
+      "shade = mix(base, shadow_tint, 0.35); lit = mix(base, lit_tint, 0.08-0.10)"
+    ],
+    "retint": "swap the season block; climbables, hero, mist (except winter band) and UI stay from 'global'"
+  },
+  "global": {
+    "climbable": {
+      "bark_base": "#4E4840",
+      "bark_lit": "#5E5950",
+      "bark_shade": "#3D3E40",
+      "ridge_base": "#2C4458",
+      "ridge_lit": "#3C5263",
+      "ridge_shade": "#273B50",
+      "ridge_share": [
+        0.45,
+        0.5
+      ],
+      "shelf_top": "#2C3E36",
+      "shelf_top_lit": "#45583F",
+      "shelf_front": "#22332F",
+      "breakable_top": "#3F4F3D",
+      "breakable_lit": "#4E5C45",
+      "breakable_front": "#33423E",
+      "breakable_fold": "#364434",
+      "breakable_tear": "#EEF2E0",
+      "perforation": "#140F0A",
+      "ice_shelf": "#2E3C48",
+      "ice_frost_edge": "#A8C4D4",
+      "luma_cap": 95
+    },
+    "hero": {
+      "base": "#86AE58",
+      "lit": "#A6C872",
+      "shade": "#678651",
+      "sash": "#3E5C76",
+      "sash_shade": "#334A63",
+      "line": "#1E2A2A",
+      "rim": "#EEF0DA",
+      "line_px_1080": 2,
+      "rim_px_1080": 1.5,
+      "max_hls_sat": 0.45
+    },
+    "line": {
+      "outline": "#1E2630",
+      "outline_climbable_px_1080": 3,
+      "hazard_pickup_px_1080": 2,
+      "near_scenery": "#4E6A72",
+      "near_scenery_px_1080": 1.5,
+      "perforation": "#140F0A",
+      "perforation_px_1080": 6
+    },
+    "shadow_tint": "#1E2A40",
+    "lit_tint": "#F2EEDC",
+    "hero_contact_patch": {
+      "color": "#1E2A40",
+      "opacity": 0.35
+    },
+    "hazard_vermilion": "#C44834",
+    "pickup_gold": "#D8B76A",
+    "rock": {
+      "lit": "#9FBBC4",
+      "base": "#7A9AA6",
+      "shade": "#68848F"
+    },
+    "waterfall": {
+      "body": "#D2DEE7",
+      "highlight": "#F2F6F8"
+    },
+    "mist": {
+      "top_line": "#F4F7F9",
+      "top_line_px_1080": 3,
+      "band": "#96A7B8",
+      "band_min_px_1080": 24,
+      "body": "#C8D1DA",
+      "body_shade": "#B4BFCA",
+      "warning_line": "#C44834",
+      "warning_line_px_1080": 6,
+      "warning_on_s": 3.0,
+      "warning_off_s": 3.5,
+      "warning_fade_s": 0.4
+    },
+    "ui": {
+      "ground": "#2A3B55",
+      "panel": "#3E5C76",
+      "text": "#F2E8CC",
+      "text_secondary": "#B9C2CC",
+      "best_selected": "#D8B76A",
+      "panel_outline": "#1E2630",
+      "panel_outline_px_1080": 3,
+      "hud_text": "#F2E8CC",
+      "hud_text_outline": "#1E2630",
+      "vermilion_in_ui": false
+    }
+  },
+  "spring": {
+    "zone_m": [
+      0,
+      70
+    ],
+    "sky_top": "#A8D8EE",
+    "sky_horizon": "#DCEFF2",
+    "fog": "#E0ECEE",
+    "cloud_lit": "#E6EDF1",
+    "cloud_shade": "#C2D2DE",
+    "foliage_near_lit": "#92B27C",
+    "foliage_near": "#74985F",
+    "foliage_near_shade": "#6B8E6D",
+    "foliage_near_tips": "#A6C870",
+    "foliage_mid": "#86B4C4",
+    "foliage_far": "#A9CCD8",
+    "blossom_white_lit": "#F4F3EE",
+    "blossom_white_shade": "#DCDDE0",
+    "blossom_pink_lit": "#E9D6D8",
+    "blossom_pink_shade": "#D9B8BE",
+    "blossom_pink_ratio": 0.4,
+    "blossom_ratio_note": "~60% white / 40% pink per cluster set, varied by course seed",
+    "mist_band": "#96A7B8"
+  },
+  "summer": {
+    "zone_m": [
+      70,
+      150
+    ],
+    "sky_top": "#92D0F2",
+    "sky_horizon": "#CDEBF7",
+    "fog": "#DCE8EE",
+    "cloud_lit": "#E6EDF1",
+    "cloud_shade": "#C2D2DE",
+    "foliage_near_lit": "#92B27C",
+    "foliage_near": "#74985F",
+    "foliage_near_shade": "#6B8E6D",
+    "foliage_mid": "#86B4C4",
+    "foliage_far": "#A9CCD8",
+    "mist_band": "#96A7B8"
+  },
+  "autumn": {
+    "zone_m": [
+      150,
+      240
+    ],
+    "sky_top": "#A9C4D8",
+    "sky_horizon": "#E4E2CE",
+    "fog": "#DEDDD0",
+    "cloud_lit": "#E6EDF1",
+    "cloud_shade": "#C2D2DE",
+    "foliage_near_lit": "#A3A860",
+    "foliage_near": "#9AA052",
+    "foliage_near_shade": "#6F774C",
+    "foliage_mid": "#86B4C4",
+    "foliage_far": "#A9CCD8",
+    "foliage_far_gold": "#D8B76A",
+    "foliage_far_gold_max_share": 0.15,
+    "steam": "#F2F6F8",
+    "mist_band": "#96A7B8",
+    "no_orange": true
+  },
+  "winter": {
+    "zone_m": [
+      240,
+      null
+    ],
+    "sky_top": "#C4DCEA",
+    "sky_horizon": "#E8F0F4",
+    "fog": "#ECF1F4",
+    "cloud_lit": "#E6EDF1",
+    "cloud_shade": "#C2D2DE",
+    "foliage_near_lit": "#92B27C",
+    "foliage_near": "#74985F",
+    "foliage_near_shade": "#6B8E6D",
+    "foliage_mid": "#86B4C4",
+    "foliage_far": "#A9CCD8",
+    "snow_cap": "#F2F6F8",
+    "ice_shelf": "#2E3C48",
+    "ice_frost_edge": "#A8C4D4",
+    "mist_band": "#8A9CAE"
+  }
+}

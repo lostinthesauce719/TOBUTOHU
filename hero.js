@@ -2,6 +2,7 @@
 // VISUAL ONLY: reads the sim's player state (P) and course boxes, never writes to them,
 // so replays, break timings and the server check are untouched.
 import * as THREE from './vendor/three.module.min.js';
+THREE.ColorManagement.enabled = false; // style D hexes are authored in sRGB and written as-is (no linear workflow)
 
 const C = { lit: 0xA6C872, base: 0x86AE58, shade: 0x678651, sash: 0x3E5C76, sashS: 0x334A63, eye: 0x4E6A3A, line: 0x1E2A2A, rim: 0xEEF0DA, patch: 0x1E2A40 };
 const BL = 1.1;               // body length in world units (matches the camera framing KAMI approved)
@@ -17,18 +18,18 @@ function cel(lit, base, shade) {
       vec3 c=mix(cS,cB,smoothstep(-0.105,-0.075,d)); c=mix(c,cL,smoothstep(0.555,0.585,d)); gl_FragColor=vec4(c,1.); }`,
   });
 }
-const hullU = { px: { value: 1 } }; // pixels per 1080-px unit of render width
+const hullU = { res: { value: new THREE.Vector2(1080, 1920) } }; // real render-buffer size; widths are set per frame in real pixels
 function hull(color, widthPx) {
   return new THREE.ShaderMaterial({
-    uniforms: { c: { value: new THREE.Color(color) }, w: { value: widthPx }, px: hullU.px, res: { value: new THREE.Vector2(1080, 1920) } },
+    uniforms: { c: { value: new THREE.Color(color) }, w: { value: widthPx }, res: hullU.res },
     side: THREE.BackSide,
-    vertexShader: `uniform float w,px; uniform vec2 res; void main(){ vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);
-      vec3 n=normalMatrix*normal; vec2 d=normalize((projectionMatrix*vec4(n,0.)).xy+1e-6); p.xy+=d*(w*px*2./res)*p.w; gl_Position=p; }`,
+    vertexShader: `uniform float w; uniform vec2 res; void main(){ vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.);
+      vec3 n=normalMatrix*normal; vec2 d=normalize((projectionMatrix*vec4(n,0.)).xy+1e-6); p.xy+=d*(w*2./res)*p.w; gl_Position=p; }`,
     fragmentShader: `uniform vec3 c; void main(){ gl_FragColor=vec4(c,1.); }`,
   });
 }
 const M = { body: cel(C.lit, C.base, C.shade), sash: cel(0x4a6a86, C.sash, C.sashS), eye: cel(C.eye, C.eye, 0x3d5530) };
-const H = { line: hull(C.line, 2), rim: hull(C.rim, 3.5) };
+const H = { line: hull(C.line, 2), rim: hull(C.rim, 3.5) }; // spec D: 2 px line (floor 1) + 1.5 px rim outside it (floor 1), at 1080 width
 const hullMats = [H.line, H.rim];
 
 // mesh + its two hulls (rim drawn first, then line, then the body)
@@ -98,8 +99,8 @@ export function createHero(scene, P, boxes) {
     if (sf.kind === 'wall') p.x = sf.d; else p.y = sf.d; return p;
   }
 
-  function update(dt, px) {
-    hullU.px.value = px;
+  function update(dt, px, w = 1080, h = 1920) {
+    hullU.res.value.set(w, h); const lw = Math.max(2 * px, 1); H.line.uniforms.w.value = lw; H.rim.uniforms.w.value = lw + Math.max(1.5 * px, 1);
     const sf = surface(), state = sf.kind;
     // ---- events from state changes (visual only) ----
     if (state === 'wall' && st.prev !== 'wall') { st.latch = 0; for (const L of LEGS) L.swing = 0; }
@@ -191,5 +192,5 @@ export function createHero(scene, P, boxes) {
     if (state === 'wall') { patch.position.set(sf.d - sf.side * 0.01, P.pos.y - 0.1, P.pos.z); patch.rotation.set(0, sf.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0); }
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
-  return { legs: LEGS, update, root };
+  return { legs: LEGS, update, root, parts: [root, ...LEGS.flatMap(L => [L.s1, L.s2, L.s3].filter(Boolean))] };
 }
