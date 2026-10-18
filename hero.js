@@ -176,7 +176,7 @@ export function createHero(scene, P, boxes) {
       // pose the leg: knees up and back for the hind V, out and up for the small legs
       let ankle = L.foot;
       if (L.t) { const n = L.plant ? L.n : bodyUp; ankle = L.foot.clone().addScaledVector(n, 0.05).addScaledVector(bodyBack, -0.06); }
-      const pole = L.kind === 'hind' ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, 0.35).addScaledVector(sideW, 0.3) : sideW.clone().addScaledVector(bodyUp, 0.8);
+      const pole = L.kind === 'hind' ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, 0.35).addScaledVector(sideW, 0.7) /* femurs splay ~35° out from vertical in front/back view (Art) */ : sideW.clone().addScaledVector(bodyUp, 0.8);
       const dA = ankle.distanceTo(hipW), maxA = L.a + L.b - 1e-3;
       if (dA > maxA && L.plant) { L.plant = null; L.hold = 0; if (contact) { L.swing = 1e-6; L.from.copy(L.foot); } } // out of reach: lift and re-plant, never drag a planted claw off its spot
       if (dA > maxA) { const k = maxA / dA; const f = L.foot.clone().sub(ankle); ankle = hipW.clone().lerp(ankle, k); L.foot.copy(ankle).add(f); } // never draw a stretched leg

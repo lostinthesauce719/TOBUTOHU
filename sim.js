@@ -5,7 +5,7 @@
 //  * only + - * / Math.sqrt Math.abs Math.min Math.max Math.round Math.imul in physics (all IEEE-exact on every engine;
 //    no sin/cos/exp/pow/hypot, which can differ by 1 ulp between V8, JavaScriptCore and Godot)
 //  * every random number comes from the seed; rendering, camera, decor and frame rate never touch this state
-export const SIM_VERSION = 'tobu-sim-2';
+export const SIM_VERSION = 'tobu-sim-3';
 export const DT = 1 / 120;
 export function mul(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 export const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.12,
@@ -16,6 +16,9 @@ export const MIST={start:-10,delay:3,ease:2,zoneFrom:[0,120,250,400],mps:[0.75,0
 export const BRK={share:[0.10,0.20,0.30,0.40],noneBelow:50,wall:[0.75,0.6,0.55,0.55],shelf:[0.8,0.55,0.5,0.5],long:[0,0.3,0.4,0.5],
  rampPer100:0.05,maxShare:0.6}; // breaks bite from Summer; long = 8-10 m shelf, last 2 m solid
 // late ramp: chimney kick gap drifts from 2.9 m to 3.5-3.8 m between 600 and 900 m; height per kick drops 1.7 -> 0.9 m
+// LATE: SEASONS late-v2-2026-10-17 (/workspace/tobu/late_gap_table.json). Past 600 m: kick gaps 2.9-3.1 m, mist flat 0.85 m/s, breakable share by band.
+export const LATE={from:600,mist:0.85,bands:[[600,[2.9,3.1],0.45,0.5],[700,[2.9,3.1],0.50,0.5],[800,[2.9,3.1],0.55,0.5],[900,[2.9,3.1],0.60,0.5]],wall:0.55,shelf:0.5};
+export const lateBand=y=>{let b=null;for(const r of LATE.bands)if(y>=r[0])b=r;return b};
 export const RAMP={from:600,span:300,gap0:2.9,gapLo:3.5,gapHi:3.8,risePerKick0:1.7,risePerKick1:0.9};
 export const ZONES=[{n:'Spring cedar',h:0},{n:'Summer cliffs',h:120},{n:'Autumn steam',h:250},{n:'Winter ice',h:400}];
 export const zoneIdx=h=>{let i=0;for(let k=0;k<ZONES.length;k++)if(h>=ZONES[k].h)i=k;return i};
@@ -35,9 +38,9 @@ export function createSim(opt={}){
  const log={v:SIM_VERSION,seed:SEED,board,adapt:ADAPT,taps:[],steer:[],end:0};let n=0,lastQ=0;
 
  function box(x,y,z,w,h,d,kind){const b={id:nid++,x,y,z,hx:w/2,hy:h/2,hz:d/2,kind,grp:null,brk:false,crackAt:null,gone:false};boxes.push(b);H.add&&H.add(b);return b;}
- function brkP(y){if(y<BRK.noneBelow||opt.nobrk)return 0;let p=BRK.share[zoneIdx(y)];if(y>RAMP.from)p=Math.min(BRK.maxShare,p+BRK.rampPer100*Math.floor((y-RAMP.from)/100));return p;}
+ function brkP(y){if(y<BRK.noneBelow||opt.nobrk)return 0;const lb=lateBand(y);return lb?lb[2]:BRK.share[zoneIdx(y)];}
  const rampF=y=>y<=RAMP.from?0:Math.min(1,(y-RAMP.from)/RAMP.span);
- function mkBrk(b){b.brk=true;const z=zoneIdx(b.y);b.dl=b.kind==='wall'?BRK.wall[z]:BRK.shelf[z];return b;}
+ function mkBrk(b){b.brk=true;const z=zoneIdx(b.y);b.dl=b.y>=LATE.from?(b.kind==='wall'?LATE.wall:LATE.shelf):(b.kind==='wall'?BRK.wall[z]:BRK.shelf[z]);return b;}
  function touch(b){if(!b||!b.brk||b.crackAt!=null)return;b.crackAt=P.t;P.stats.cracks++;H.crack&&H.crack(b);}
  function drop(i){const b=boxes[i];boxes.splice(i,1);b.gone=true;H.remove&&H.remove(b);}
  function updBreaks(){for(let i=boxes.length-1;i>=0;i--){const b=boxes[i];if(b.crackAt==null)continue;if(P.t-b.crackAt>=b.dl){drop(i);P.stats.breaks++;}}}
@@ -46,7 +49,7 @@ export function createSim(opt={}){
  const G={z:0,y:0,n:0};
  function shelf(len){const p=G.n>0?brkP(G.y):0;
   if(p>0&&rB()<p){const zi=zoneIdx(G.y);
-   if(rB()<BRK.long[zi]){len=8+rB()*2;const f=Math.min(len-2,(BRK.shelf[zi]-0.05)*T.runSpeed), // breakable part short enough to run across before it breaks; rest solid
+   if(rB()<(lateBand(G.y)?lateBand(G.y)[3]:BRK.long[zi])){len=8+rB()*2;const f=Math.min(len-2,((G.y>=LATE.from?LATE.shelf:BRK.shelf[zi])-0.05)*T.runSpeed), // breakable part short enough to run across before it breaks; rest solid
     a=mkBrk(box(0,G.y-0.5,G.z-f/2,8,1,f,'shelf')),b=box(0,G.y-0.5,G.z-f-(len-f)/2,8,1,len-f,'shelf');
     for(const q of[a,b]){q.top=G.y;q.z0=G.z;q.z1=G.z-len;q.cz=G.z-f-(len-f)/2;}a.long=true;G.z-=len;return b;}}
   if(len>=10&&p>0&&rB()<0.5){const f=len*0.5,a=mkBrk(box(0,G.y-0.5,G.z-f/2,8,1,f,'shelf')),b=box(0,G.y-0.5,G.z-f-(len-f)/2,8,1,len-f,'shelf');
@@ -55,10 +58,10 @@ export function createSim(opt={}){
  function genModule(){const lastShelf=shelf(G.n===0?30:8+rC()*8);const zEdge=G.z,y0=G.y;G.n++;
   const r=rC(),h=G.y,hard=Math.min(1,h/250);let m;
   if(r<0.30-0.1*hard){const gap=3+rC()*3,rise=0.4+rC()*1.1;G.z-=gap;G.y+=rise;m={type:'step',edge:zEdge,gap,rise};}
-  else if(r<0.72){const s=rC()<0.5?-1:1,isB=rB()<brkP(y0),dlW=BRK.wall[zoneIdx(y0)];let gap=9+rC()*5,rise=1+rC()*2;
+  else if(r<0.72){const s=rC()<0.5?-1:1,isB=rB()<brkP(y0),dlW=y0>=LATE.from?LATE.wall:BRK.wall[zoneIdx(y0)];let gap=9+rC()*5,rise=1+rC()*2;
    if(isB&&gap>(dlW-0.15)*T.runSpeed){const g2=(dlW-0.15)*T.runSpeed;rise*=g2/gap;gap=g2;} // a breakable wall must be crossable with a clean kick before it breaks
    const Hh=rise+7,w=box(s*4.6,y0-2+Hh/2,zEdge-gap/2,0.6,Hh,gap+6,'wall');w.grp=w.id;if(isB)mkBrk(w);G.z-=gap;G.y+=rise;m={type:'wallrun',edge:zEdge,side:s,walls:[w],gap,rise};}
-  else{const s0=rC()<0.5?-1:1,k=3+(rC()*2|0)+(hard>0.5?1:0),L=10.5*k+2,f=rampF(y0),kg=f>0?lerp(RAMP.gap0,RAMP.gapLo+rC()*(RAMP.gapHi-RAMP.gapLo),f):RAMP.gap0,
+  else{const s0=rC()<0.5?-1:1,k=3+(rC()*2|0)+(hard>0.5?1:0),L=10.5*k+2,lb=lateBand(y0),f=0,kg=lb?lb[1][0]+rC()*(lb[1][1]-lb[1][0]):RAMP.gap0,
     hw=kg/2+0.3,rise=lerp(RAMP.risePerKick0,RAMP.risePerKick1,f)*k,Hh=rise+10,walls=[];
    for(const s of[s0,-s0]){let z=zEdge-1,gid=null;for(let i=0;i<k;i++){const len=i===0?12.5:10.5;const w=box(s*hw,y0-3+Hh/2,z-len/2,0.6,Hh,len,'wall');
     gid=gid??w.id;w.grp=gid;if(rB()<brkP(y0))mkBrk(w);walls.push(w);z-=len;}}
@@ -101,7 +104,7 @@ export function createSim(opt={}){
   if(g)touch(g);updBreaks();
   P.maxH=Math.max(P.maxH,p.y);
   // rising bottom: speed by the highest zone reached x per-run skill factor; never trails more than 40 m
-  let base=MIST.mps[zoneIdx(P.maxH)];if(P.maxH>MIST.rampFrom)base=Math.min(MIST.cap,base+MIST.rampPer50*Math.floor((P.maxH-MIST.rampFrom)/50));let sp=base*ADAPT;for(let i=MIST.lateCap.length-1;i>=0;i--)if(P.maxH>=MIST.lateCap[i][0]){sp=Math.min(sp,MIST.lateCap[i][1]);break;}
+  const sp=P.maxH>=LATE.from?LATE.mist:MIST.mps[zoneIdx(P.maxH)]*ADAPT; // late mist is flat 0.85 m/s: never below (KAMI), never above 75% of the perfect bot (LAUNCH)
   if(P.t>MIST.delay){const u=Math.min(1,(P.t-MIST.delay)/MIST.ease);mist.v+=sp*u*u*(3-2*u)*dt;}
   if(opt.nomist)mist.v=P.maxH-30;else mist.v=Math.max(mist.v,P.maxH-MIST.trail);
   for(const z of ZONES)if(P.maxH>=z.h&&!(z.n in ZT))ZT[z.n]=Math.round(P.t*10)/10;
