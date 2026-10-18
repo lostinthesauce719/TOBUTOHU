@@ -60,7 +60,7 @@ export function createSim(opt={}){
   if(r<0.30-0.1*hard){const gap=3+rC()*3,rise=0.4+rC()*1.1;G.z-=gap;G.y+=rise;m={type:'step',edge:zEdge,gap,rise};}
   else if(r<0.72){const s=rC()<0.5?-1:1,isB=rB()<brkP(y0),dlW=y0>=LATE.from?LATE.wall:BRK.wall[zoneIdx(y0)];let gap=9+rC()*5,rise=1+rC()*2;
    if(isB&&gap>(dlW-0.15)*T.runSpeed){const g2=(dlW-0.15)*T.runSpeed;rise*=g2/gap;gap=g2;} // a breakable wall must be crossable with a clean kick before it breaks
-   const Hh=rise+7,w=box(s*4.6,y0-2+Hh/2,zEdge-gap/2,0.6,Hh,gap+6,'wall');w.grp=w.id;if(isB)mkBrk(w);G.z-=gap;G.y+=rise;m={type:'wallrun',edge:zEdge,side:s,walls:[w],gap,rise};}
+   const Hh=rise+7,w=box(s*4.6,y0-2+Hh/2,zEdge-gap/2,0.6,Hh,gap+6,'wall');w.grp=w.id;if(isB)mkBrk(w);G.z-=gap;G.y+=rise;m={type:'wallrun',edge:zEdge,side:s,walls:[w],gap,rise,y0};}
   else{const s0=rC()<0.5?-1:1,k=3+(rC()*2|0)+(hard>0.5?1:0),L=10.5*k+2,lb=lateBand(y0),f=0,kg=lb?lb[1][0]+rC()*(lb[1][1]-lb[1][0]):RAMP.gap0,
     hw=kg/2+0.3,rise=lerp(RAMP.risePerKick0,RAMP.risePerKick1,f)*k,Hh=rise+10,walls=[];
    for(const s of[s0,-s0]){let z=zEdge-1,gid=null;for(let i=0;i<k;i++){const len=i===0?12.5:10.5;const w=box(s*hw,y0-3+Hh/2,z-len/2,0.6,Hh,len,'wall');
@@ -130,7 +130,7 @@ export function createSim(opt={}){
   if(m.type==='step'){if(P.state==='ground'&&P.pos.z-m.edge<1.4&&onShelf)jump=true;}
   else if(m.type==='wallrun'){const w=m.walls[0];tx=m.side*3.7;
    if(P.state==='ground'&&onShelf&&P.pos.z-m.edge<1.4)jump=true;
-   if(P.state==='wall'){tx=m.side*4;const dist=P.pos.z-m.z1;const cb=P.lastWall;if(dist<7.5||(P.wallT>0.5&&dist<11)||P.vel.y<-3||P.wallT>1.2||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12))jump=true;}
+   if(P.state==='wall'){tx=m.side*4;const dist=P.pos.z-m.z1;const cb=P.lastWall;const ta=dist/T.runSpeed,ya=P.pos.y+T.wallJumpUp*ta-0.5*T.gravity*ta*ta,reach=ya>=m.y0+m.rise+0.3; /* bot: only take the early kick if it still clears the next shelf */ if(dist<7.5||(P.wallT>0.5&&dist<11&&reach)||P.vel.y<-3||P.wallT>1.2||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12))jump=true;}
    if(P.state==='air'&&P.lastWall===w)tx=0;}
   else{if(P.state==='ground'&&onShelf){tx=m.side*0.8;if(P.pos.z-m.edge<1.4)jump=true;}
    else if(P.state==='wall'){const cb=P.lastWall;if(P.wallT>0.15&&(P.vel.y<1.5||P.wallT>0.5||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12)))jump=true;if(P.pos.z<m.z1+6&&P.pos.y<m.y0+m.rise+0.5)jump=true;}
