@@ -46,6 +46,36 @@ export function celMat(lit, base, shade, top = null) {
   });
 }
 
+
+// bark: fluted trunk. Each 1.6 m flute bends the normal across its width so every visible face shows lit, base and shade bands;
+// the groove part of each flute (share ~47%) uses the ridge colours. Visual only.
+export function barkMat(CB, share = 0.47) {
+  return new THREE.ShaderMaterial({
+    fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      bL: { value: new THREE.Color(CB.bark_lit) }, bB: { value: new THREE.Color(CB.bark_base) }, bS: { value: new THREE.Color(CB.bark_shade) },
+      rL: { value: new THREE.Color(CB.ridge_lit) }, rB: { value: new THREE.Color(CB.ridge_base) }, rS: { value: new THREE.Color(CB.ridge_shade) },
+      ld: { value: LIGHT }, share: { value: share },
+    }]),
+    vertexShader: `#include <fog_pars_vertex>
+      varying vec3 vN; varying vec3 vW; varying vec3 vWN;
+      void main(){ vWN=normalize(mat3(modelMatrix)*normal); vN=normalize(normalMatrix*normal); vW=(modelMatrix*vec4(position,1.)).xyz;
+        vec4 mvPosition=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `#include <fog_pars_fragment>
+      uniform vec3 bL,bB,bS,rL,rB,rS,ld; uniform float share; varying vec3 vN; varying vec3 vW; varying vec3 vWN;
+      void main(){ float d=dot(normalize(vN),ld);
+        float u = abs(vWN.x)>0.5 ? vW.z : vW.x; float f=fract(u/1.6);
+        float t = abs(vWN.y)>0.6 ? d : 0.35*d + 1.8*(f-0.5);
+        bool g = f < share;
+        vec3 c = t>0.57 ? (g?rL:bL) : t>-0.09 ? (g?rB:bB) : (g?rS:bS);
+        gl_FragColor=vec4(c,1.);
+        #include <fog_fragment>
+      }`,
+  });
+}
+
 // ID material: r = class, g = object id, b = view depth (m)
 const idMats = new Map();
 function idMat(cls, oid) {

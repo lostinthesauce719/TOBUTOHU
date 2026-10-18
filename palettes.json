@@ -105,7 +105,7 @@
   "spring": {
     "zone_m": [
       0,
-      70
+      120
     ],
     "sky_top": "#A8D8EE",
     "sky_horizon": "#DCEFF2",
@@ -128,8 +128,8 @@
   },
   "summer": {
     "zone_m": [
-      70,
-      150
+      120,
+      250
     ],
     "sky_top": "#92D0F2",
     "sky_horizon": "#CDEBF7",
@@ -141,12 +141,53 @@
     "foliage_near_shade": "#6B8E6D",
     "foliage_mid": "#86B4C4",
     "foliage_far": "#A9CCD8",
-    "mist_band": "#96A7B8"
+    "mist_band": "#96A7B8",
+    "storm": {
+      "_note": "BRUSH 2026-10-18 summer storm state (D_kit/summer/summer_spec.md). Lerp sky/fog over 2 s on storm start; climbables, hero, mist unchanged.",
+      "sky_top": "#8DA6BE",
+      "sky_horizon": "#C6D4DE",
+      "fog": "#CCD8E0",
+      "sky_min_luma": 105,
+      "cloud_min_luma": 205,
+      "thunder_darken": {
+        "toward": "#1E2A40",
+        "amount": 0.15,
+        "min_luma": 105
+      },
+      "rain_veil": "#A9BCCB",
+      "rain_veil_alpha": 0.32,
+      "rain_streak": "#E8F0F5",
+      "rain_far_alpha": 0.28,
+      "rain_near_alpha": 0.38,
+      "rain_far_px_1080": 1,
+      "rain_near_px_1080": 2,
+      "rain_slant_deg": 12,
+      "rain_on_climbable": "#4A6274",
+      "splash": "#F4F7F9",
+      "bolt_core": "#F4F7F9",
+      "bolt_glow": "#BFD8E4",
+      "bolt_line": "#1E2630",
+      "bolt_core_px_1080": 6,
+      "bolt_line_px_1080": 2,
+      "telegraph_color": "hazard_vermilion",
+      "telegraph_ring_px_1080": 6,
+      "telegraph_column_px_1080": 4,
+      "afterglow": "#BFD8E4",
+      "gust_ribbon": "#F4F7F9",
+      "gust_ribbon_shade": "#C2D2DE",
+      "wet_sheen": "#4A6274",
+      "wet_drip": "#7F98AA",
+      "wet_darken": {
+        "toward": "#1E2A40",
+        "amount": 0.18,
+        "min_luma": 45
+      }
+    }
   },
   "autumn": {
     "zone_m": [
-      150,
-      240
+      250,
+      400
     ],
     "sky_top": "#A9C4D8",
     "sky_horizon": "#E4E2CE",
@@ -166,7 +207,7 @@
   },
   "winter": {
     "zone_m": [
-      240,
+      400,
       null
     ],
     "sky_top": "#C4DCEA",

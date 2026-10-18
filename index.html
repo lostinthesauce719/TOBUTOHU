@@ -14,7 +14,7 @@
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';
-import {createPost,celMat,CLS} from './cel.js';
+import {createPost,celMat,barkMat,CLS} from './cel.js';
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
@@ -23,7 +23,7 @@ let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
 if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
 const rD=mul(SEED^0xDEC0); // decor stream: visuals only, never read by sim.js
 // camera tuning (visual only; physics tuning lives in sim.js)
-const T={camDist:2.6,camHeight:2.0,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.08,camWallOff:0.6};
+const T={camDist:3.0,camHeight:1.6,camPitch:22,camLag:7,fovBase:50,fovMax:60,camRollMax:0.08,camWallOff:0.6};
 const hx=c=>parseInt(c.slice(1),16);
 const ZONES=['spring','summer','autumn','winter'].map((k,i)=>{const p=PAL[k];return {...ZN[i],key:k,p,sky:hx(p.sky_top),fog:hx(p.fog)};}); // names/heights from sim.js, colours from palettes.json
 const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
@@ -40,7 +40,7 @@ const hooks={
  add(b){const zc=zoneAt(b.y);const m=new THREE.Mesh(new THREE.BoxGeometry(b.hx*2,b.hy*2,b.hz*2),climbMat(b,zc));
   m.position.set(b.x,b.y,b.z);S.add(m);meshes.set(b.id,m);m.userData.b=b;post.tag(m,CLS.climb);
   queueMicrotask(()=>{if(b.brk)m.material=climbMat(b,zc);});}, // breakable palette once the sim has flagged it
- crack(b){const m=meshes.get(b.id);if(!m)return;const u=m.material.uniforms;u.tB.value.set(CB.breakable_fold);u.cB.value.set(CB.breakable_fold);cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ crack(b){const m=meshes.get(b.id);if(!m)return;if(!m.material.uniforms.cB)m.material=celMat(CB.breakable_lit,CB.breakable_front,CB.breakable_fold); /* bark walls are made before they're flagged breakable */const u=m.material.uniforms;u.tB.value.set(CB.breakable_fold);u.cB.value.set(CB.breakable_fold);cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
  remove(b){const m=meshes.get(b.id);if(!m)return;S.remove(m);m.geometry.dispose();meshes.delete(b.id);cracked.delete(m);},
  module(m){decor(m.z0,m.z1,m.y0);}};
 
@@ -50,7 +50,7 @@ function climbMat(b,zc){
   if(zc.key==='winter')return celMat(CB.shelf_front,CB.shelf_front,CB.shelf_front,[CB.ice_frost_edge,CB.ice_shelf,CB.ice_shelf]);
   return celMat(CB.shelf_front,CB.shelf_front,CB.shelf_front,[CB.shelf_top_lit,CB.shelf_top,CB.shelf_front]);}
  if(b.brk)return celMat(CB.breakable_lit,CB.breakable_front,CB.breakable_fold);
- return rD()<0.47?celMat(CB.ridge_lit,CB.ridge_base,CB.ridge_shade):celMat(CB.bark_lit,CB.bark_base,CB.bark_shade);}
+ rD();return barkMat(CB,(CB.ridge_share?CB.ridge_share[0]+0.02:0.47)); /* bark with 45-50% ridge (Art) */}
 // ---------- decor (separate seeded stream, no collision) ----------
 const deco=[];const birdG=new THREE.Group();S.add(birdG);
 function decor(z0,z1,y){const zc=zoneAt(y);
@@ -105,7 +105,7 @@ let roll=0;const wallOff=new THREE.Vector3(),V0=new THREE.Vector3();const camPos
 function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  wallOff.lerp(P.state==='wall'?V(P.wallN).multiplyScalar(T.camWallOff):V0,1-Math.exp(-4*dt)); /* eased, never snaps (KAMI) */
  const off=new THREE.Vector3(-P.vel.x*0.04,T.camHeight,T.camDist).add(wallOff);
- const want=V(P.pos).add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */camPos.y=Math.min(camPos.y,P.pos.y+T.camHeight+1.2);camPos.y=Math.max(camPos.y,P.pos.y+T.camHeight-2.5);camPos.z=Math.max(Math.min(camPos.z,P.pos.z+T.camDist+2),P.pos.z+T.camDist-2); /* KAMI: hero always in frame, incl. long falls and the death frame; lag stays inside this leash */cam.position.copy(camPos);
+ const want=V(P.pos).add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */camPos.y=Math.min(camPos.y,P.pos.y+T.camHeight+0.6);camPos.y=Math.max(camPos.y,P.pos.y+T.camHeight-2.5);camPos.z=Math.max(Math.min(camPos.z,P.pos.z+T.camDist+2),P.pos.z+T.camDist-2); /* KAMI: hero always in frame, incl. long falls and the death frame; lag stays inside this leash */cam.position.copy(camPos);
  cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
  const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-6*dt));cam.rotation.z=roll;
  cam.fov=THREE.MathUtils.lerp(cam.fov,T.fovBase+(T.fovMax-T.fovBase)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
