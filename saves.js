@@ -7,13 +7,17 @@ const KEY = 'tobu_saves_v1';
 export const dayKey = (ms = Date.now()) => new Date(ms - 7 * 3600e3).toISOString().slice(0, 10);
 export function createSaves(store = globalThis.localStorage) {
   let s; try { s = JSON.parse(store.getItem(KEY)) || {}; } catch (e) { s = {}; }
-  s.n = Math.max(0, Math.min(SAVE_CAP, s.n | 0)); s.zones = s.zones || []; s.daily = s.daily || '';
+  s.n = Math.max(0, Math.min(SAVE_CAP, s.n | 0)); s.zones = s.zones || []; s.daily = s.daily || ''; s.free = s.free || '';
   const save = () => { try { store.setItem(KEY, JSON.stringify(s)); } catch (e) {} };
   const add = why => { if (s.n >= SAVE_CAP) return false; s.n++; save(); return why; };
   return {
     get n() { return s.n; },
     zone(key) { if (s.zones.includes(key)) return false; s.zones.push(key); save(); return add('zone'); },   // first reach only, even if capped
     daily(day = dayKey()) { if (s.daily === day) return false; s.daily = day; save(); return add('daily'); },
+    // who pays for this run's one Catch (locked 2026-10-18): ranked, under-13 and Remove-ads get it free every run;
+    // casual gets the first Catch each game day free, then a banked save, then an optional ad (with a same-size No thanks)
+    source(everyRun, day = dayKey()) { return everyRun || s.free !== day ? 'free' : s.n > 0 ? 'save' : 'ad'; },
+    commit(src, everyRun, day = dayKey()) { if (src === 'free' && !everyRun) { s.free = day; save(); } else if (src === 'save' && s.n > 0) { s.n--; save(); } },
     spend(board) { if (board !== 'free' || s.n <= 0) return false; s.n--; save(); return true; },          // casual only
   };
 }
