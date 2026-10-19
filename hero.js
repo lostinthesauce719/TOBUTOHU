@@ -167,7 +167,7 @@ export function createHero(scene, P, boxes) {
           const fall = state === 'air' && P.vel.y < -6;
           const loc = L.restV.clone();
           if (L.kind === 'hind') { const push = state === 'ground' ? 0.05 * Math.sin(P.t * 30 + (L.s > 0 ? Math.PI : 0)) : 0;
-            loc.set(L.s * (fall ? 0.3 : 0.17), fall ? -0.2 : (state === 'ground' ? -RIDE + 0.03 : -0.12), (fall ? -0.55 : -0.46) + push); }
+            loc.set(L.s * (fall ? 0.3 : state === 'ground' ? 0.11 : 0.17), fall ? -0.2 : (state === 'ground' ? -RIDE + 0.03 : -0.12), (fall ? -0.55 : -0.46) + push); }
           else loc.set(L.s * (fall ? 0.26 : 0.17), fall ? -0.12 : -0.14, L.kind === 'front' ? (fall ? 0.4 : 0.34) : 0.05);
           if (state === 'wall') loc.y += 0.05;
           world(loc, tmp); L.foot.add(delta).lerp(tmp, 1 - Math.exp(-dt / 0.04));
@@ -176,7 +176,8 @@ export function createHero(scene, P, boxes) {
       // pose the leg: knees up and back for the hind V, out and up for the small legs
       let ankle = L.foot;
       if (L.t) { const n = L.plant ? L.n : bodyUp; ankle = L.foot.clone().addScaledVector(n, 0.05).addScaledVector(bodyBack, -0.06); }
-      const pole = L.kind === 'hind' ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, 0.35).addScaledVector(sideW, 0.7) /* femurs splay ~35° out from vertical in front/back view (Art) */ : sideW.clone().addScaledVector(bodyUp, 0.8);
+      const gnd = state === 'ground';
+      const pole = L.kind === 'hind' ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, gnd ? 0.8 : 0.35).addScaledVector(sideW, gnd ? 0.18 : 0.7) /* on shelves and landings the knees tip back and up, staying above the back (KAMI/Art); on walls they splay ~35° */ /* femurs splay ~35° out from vertical in front/back view (Art) */ : sideW.clone().addScaledVector(bodyUp, 0.8);
       const dA = ankle.distanceTo(hipW), maxA = L.a + L.b - 1e-3;
       if (dA > maxA && L.plant) { L.plant = null; L.hold = 0; if (contact) { L.swing = 1e-6; L.from.copy(L.foot); } } // out of reach: lift and re-plant, never drag a planted claw off its spot
       if (dA > maxA) { const k = maxA / dA; const f = L.foot.clone().sub(ankle); ankle = hipW.clone().lerp(ankle, k); L.foot.copy(ankle).add(f); } // never draw a stretched leg
