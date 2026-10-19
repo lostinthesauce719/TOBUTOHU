@@ -16,6 +16,7 @@ import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';
 import {createPost,celMat,barkMat,perfMat,perfU,CLS} from './cel.js';
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
+import {createSaves} from './saves.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
@@ -116,16 +117,18 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  for(let i=deco.length-1;i>=0;i--)if(deco[i].position.z>P.pos.z+90){S.remove(deco[i]);deco.splice(i,1);}
  for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
+const SAVES=createSaves(); // earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
+function toast(t){const z=document.getElementById('zone');z.textContent=t;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,2200);}
 function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
  const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.background.copy(_ca.setHex(a.sky).lerp(_cb.setHex(b.sky),t));S.fog.color.copy(_ca.setHex(a.fog).lerp(_cb.setHex(b.fog),t));
- if(a.n!==lastZone){lastZone=a.n;const z=document.getElementById('zone');z.textContent=a.n;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,1800);}}
+ if(a.n!==lastZone){if(lastZone&&!AUTO&&SAVES.zone(a.n))toast('+1 save · first time in '+a.n);lastZone=a.n;const z=document.getElementById('zone');z.textContent=a.n;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,1800);}}
 
 const hE=document.getElementById('h'),sE=document.getElementById('sub'),ov=document.getElementById('ov');
 let best=+(localStorage.getItem('tobu3d_best')||0),verdict='',sent=false;
-function onDeath(){if(sent)return;sent=true;const h=Math.round(P.maxH*10)/10;window.__run={log:packLog(sim.log),claim:{height:h}};
+function onDeath(){if(sent)return;sent=true;if(BOARD==='daily'&&!AUTO&&SAVES.daily())toast('+1 save · daily run done');const h=Math.round(P.maxH*10)/10;window.__run={log:packLog(sim.log),claim:{height:h}};
  if(VERIFY&&!AUTO){verdict='checking run…';fetch(VERIFY+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(window.__run)})
   .then(r=>r.json()).then(j=>verdict=j.ok?`verified ${j.height} m`:`not accepted: ${j.reason}`).catch(()=>verdict='offline: run not submitted');}}
-function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
+function render(){zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){ov.style.display='flex';document.getElementById('ovT').textContent='Second chance';document.getElementById('ovS').textContent=P.t-P.catchAt<0.5?'…':BOARD==='free'?'Tap to Catch (optional ad slot in real build) · or wait to end run':'Tap to Catch (free in ranked) · or wait to end run';}
  else if(P.mode==='dead'){onDeath();ov.style.display='flex';document.getElementById('ovT').textContent=(P.maxH|0)+' m';document.getElementById('ovS').textContent=(verdict?verdict+'\n':'')+'tap to climb again';if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
  else ov.style.display='none';mistDraw();post.render(S,cam);}
