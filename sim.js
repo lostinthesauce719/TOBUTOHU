@@ -5,7 +5,7 @@
 //  * only + - * / Math.sqrt Math.abs Math.min Math.max Math.round Math.imul in physics (all IEEE-exact on every engine;
 //    no sin/cos/exp/pow/hypot, which can differ by 1 ulp between V8, JavaScriptCore and Godot)
 //  * every random number comes from the seed; rendering, camera, decor and frame rate never touch this state
-export const SIM_VERSION = 'tobu-sim-3';
+export const SIM_VERSION = 'tobu-sim-4'; // 4: the Catch screen has no countdown; waiting is not simulated, No thanks ends the log in catch mode
 export const DT = 1 / 120;
 export function mul(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 export const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.12,
@@ -113,19 +113,22 @@ export function createSim(opt={}){
  function doCatch(){P.caught=1;P.mode='play';const s=P.lastShelf; // back on your last solid shelf, mist 6 m below it. Free in ranked.
   const top=s?s.top:Math.max(0,P.maxH-6);P.pos.x=0;P.pos.y=top+1.2;if(s)P.pos.z=s.cz;P.vel.x=0;P.vel.y=0;P.vel.z=-T.runSpeed*0.5;P.state='air';
   mist.v=Math.min(mist.v,top-6);}
- function press(){if(P.mode==='catch'){if(P.t-P.catchAt>=0.5)doCatch();return}if(P.mode==='dead')return;P.buffer=T.jumpBuffer;}
+ function press(){if(P.mode==='catch'){doCatch();return}/* the 0.5 s accidental-tap guard is on the client's Catch button */if(P.mode==='dead')return;P.buffer=T.jumpBuffer;}
 
  // one fixed step. inp={press:bool, steer:-1..1}. Records exactly what it simulated.
- function tick(inp={}){if(P.mode==='dead')return;const q=qSteer(inp.steer||0);
+ function tick(inp={}){if(P.mode==='dead')return;if(P.mode==='catch'&&!inp.press)return; // the world is frozen on the Catch screen: no countdown (locked menus), no ticks logged while the player decides
+ const q=qSteer(inp.steer||0);
   if(inp.press)log.taps.push(n);if(q!==lastQ){log.steer.push([n,q]);lastQ=q;}n++;log.end=n;
   if(inp.press)press();
   if(P.mode==='play'){step(DT,q/127);ensureCourse();}
-  else if(P.mode==='catch'){P.t+=DT;if(P.t-P.catchAt>6)die();}}
+}
+ // No thanks: the run ends where it stands. Not an input; a log that ends on the Catch screen replays as declined.
+ function decline(){if(P.mode==='catch')die();}
 
  // ---------- test bot: reads only nearby geometry, taps at most 10x/s like a fast thumb ----------
  const modAt=z=>{for(const m of mods)if(z<=m.z0&&z>m.z1)return m;return null};
  let bWant=false,bLast=-99;
- function botInput(){if(P.mode==='catch')return{press:P.t-P.catchAt>0.6,steer:0};
+ function botInput(){if(P.mode==='catch')return{press:true,steer:0};
   const m=modAt(P.pos.z);let jump=false,tx=0;if(!m)return{press:false,steer:0};const onShelf=P.pos.z>m.edge;
   if(m.type==='step'){if(P.state==='ground'&&P.pos.z-m.edge<1.4&&onShelf)jump=true;}
   else if(m.type==='wallrun'){const w=m.walls[0];tx=m.side*3.7;
@@ -140,7 +143,7 @@ export function createSim(opt={}){
   return{press:pr,steer:clamp((tx-P.pos.x)/1.5,-1,1)};}
 
  ensureCourse();
- return{P,boxes,mods,mist,ZT,log,tick,botInput,modAt,get ticks(){return n},get adapt(){return ADAPT}};
+ return{P,boxes,mods,mist,ZT,log,tick,decline,botInput,modAt,get ticks(){return n},get adapt(){return ADAPT}};
 }
 
 // Re-run a recorded log from scratch. Same seed + same inputs + same code => same height, on any device.
@@ -154,6 +157,7 @@ export function replay(log,{maxTicks=60*60*120}={}){
   if(sim.P.mode==='dead')return{ok:false,reason:'inputs after death',tick:i};
   sim.tick({press:pr,steer});}
  if(ti!==taps.length||si!==st.length)return{ok:false,reason:'inputs out of order'};
+ sim.decline(); // ended on the Catch screen = No thanks
  return{ok:true,dead:sim.P.mode==='dead',maxH:sim.P.maxH,height:Math.round(sim.P.maxH*10)/10,t:sim.P.t,stats:sim.P.stats,adapt:sim.adapt};
 }
 
