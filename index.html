@@ -97,6 +97,10 @@ addEventListener('pointerdown',e=>{ptr={x:e.clientX,t:performance.now(),moved:fa
 addEventListener('pointermove',e=>{if(!ptr)return;const dx=e.clientX-ptr.x;if(Math.abs(dx)>14)ptr.moved=true;if(ptr.moved)steer=THREE.MathUtils.clamp(dx/110,-1,1);});
 addEventListener('pointerup',()=>{if(ptr&&!ptr.moved&&performance.now()-ptr.t<350)press();ptr=null;steer=0;});
 function press(){if(P.mode==='dead'){restart();return}pending=true;hideHint();}
+// No thanks: end the run now. It plays out the rest of the Catch window with no input, the same ticks a player who just waits would
+// produce, so the run log and the server check are identical either way. Nothing is spent.
+function declineCatch(){if(P.mode!=='catch')return;pending=false;let n=0;while(P.mode==='catch'&&n++<2000)sim.tick({press:false,steer:0});}
+window.declineCatch=declineCatch;addEventListener('keydown',e=>{if(e.code==='KeyN')declineCatch();});
 let hinted=localStorage.getItem('tobu3d_hint')==='1';const hintEl=document.getElementById('hint');if(hinted||AUTO)hintEl.style.opacity=0;
 function hideHint(){if(!hinted&&P.t>4){hinted=true;localStorage.setItem('tobu3d_hint','1');hintEl.style.opacity=0;}}
 function restart(){location.reload();}
