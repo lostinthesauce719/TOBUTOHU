@@ -6,10 +6,36 @@
 #ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
 #ov b{font-size:40px}#help{position:fixed;right:10px;bottom:10px;color:#fff;text-shadow:0 1px 3px #000;text-align:right;pointer-events:none;font-size:12px}
 #mread{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));text-align:center;color:#F2E8CC;font-weight:700;font-size:16px;text-shadow:0 0 2px #1E2630,0 0 2px #1E2630,0 1px 3px #1E2630;pointer-events:none;display:none}#mread.warn{color:#C44834}
-#hint{position:fixed;left:0;right:0;bottom:14%;text-align:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000;pointer-events:none;transition:opacity .8s}</style></head>
+#hint{position:fixed;left:0;right:0;bottom:14%;text-align:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000;pointer-events:none;transition:opacity .8s}
+/* BRUSH style-D game-over / Catch screens (menus/README.md, locked 2026-10-18): 1080x1920 layout scaled to the viewport. BRUSH restyles later */
+#cw{position:fixed;inset:0;display:none;z-index:5;background:rgba(42,59,85,.45)}#cw.on{display:block}
+#cb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--u,1));font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#F2E8CC;font-weight:900}
+#cb .pn{position:absolute;left:80px;top:250px;width:920px;height:1450px;border-radius:56px;background:#2A3B55;box-shadow:0 0 0 4px #1E2630;box-sizing:border-box}
+#cb .c{position:absolute;left:0;width:1080px;text-align:center;transform:translateY(-50%);white-space:nowrap}
+#cb .t2{color:#B9C2CC}#cb .best{position:absolute;left:330px;top:690px;width:420px;height:100px;border-radius:50px;box-shadow:inset 0 0 0 3px #D8B76A;color:#D8B76A;font-size:48px;line-height:100px;text-align:center}
+#cb .btn{position:absolute;top:1030px;width:400px;height:190px;border-radius:40px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;cursor:pointer;padding:0}
+#cb .btn b{position:absolute;left:0;right:0;top:70px;transform:translateY(-50%);font-weight:900}#cb .btn i{position:absolute;left:0;right:0;top:140px;transform:translateY(-50%);font-style:normal;font-size:36px;font-weight:800}
+#cb .btn[disabled]{cursor:default}
+#cb .dis{position:absolute;left:130px;top:960px;width:820px;height:230px;border-radius:40px;background:#3A4458;color:#B9C2CC}
+#pips{position:absolute;top:990px;height:45px;transform:translateY(-50%);display:flex;align-items:center;gap:12px}
+#pips .p{width:var(--pip,45px);height:var(--pip,45px);border-radius:50%;box-sizing:border-box;flex:none}
+#pips .p.f{background:#F2E8CC;box-shadow:inset 0 0 0 3px #F2E8CC,inset 0 0 0 6px #3E5C76}#pips .p.e{box-shadow:inset 0 0 0 3px #808588}
+#pips span{margin-left:6px;font-size:30px;font-weight:800;color:#F2E8CC}
+#cb .retry{position:absolute;left:330px;top:1310px;width:420px;height:150px;border-radius:75px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;font-size:84px;cursor:pointer}
+#cb .home{position:absolute;left:470px;top:1500px;width:140px;height:110px;border-radius:30px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;border:0;color:#F2E8CC;font:inherit;font-size:30px;cursor:pointer}
+</style></head>
 <body><div id="hud"><span id="h">0 m</span>
 <span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · drag to steer</div>
 <div id="ov"><b id="ovT"></b><div id="ovS"></div></div>
+<div id="cw"><div id="cb"><div class="pn"></div>
+<div class="c" style="top:350px;font-size:70px">INTO THE MIST</div><div class="c t2" style="top:470px;font-size:40px;font-weight:800">HEIGHT</div>
+<div class="c" id="cH" style="top:580px;font-size:150px">0 m</div><div class="best" id="cBest">BEST 0 m</div>
+<div id="cOffer"><div class="c" style="top:870px;font-size:52px">Second chance?</div><div class="c t2" id="cSub" style="top:930px;font-size:34px;font-weight:700"></div>
+<div id="pips"></div>
+<button class="btn" id="bCatch" style="left:130px"><b id="bCatch1">Catch</b><i id="bCatch2"></i></button><button class="btn" id="bNo" style="left:550px"><b id="bNo1">No thanks</b><i>end this run</i></button></div>
+<div id="cUsed" style="display:none"><div class="c t2" style="top:880px;font-size:52px">Second chance</div><div class="dis"></div><div class="c" style="top:1030px;font-size:50px;color:#B9C2CC">Catch used</div><div class="c" style="top:1092px;font-size:40px;color:#B9C2CC;font-weight:700">one per run</div></div>
+<button class="retry" id="bRetry">&#x21BB; RETRY</button><button class="home" id="bHome">&#x2302;<br>HOME</button>
+</div></div>
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
@@ -167,6 +193,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+90){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-LOOK.fogFar-10;} /* fully fogged decor skips its draw */
  for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
+if(SIM&&Q.has('demo')){const [n,fu]=Q.get('demo').split(',');localStorage.setItem('tobu_saves_v1',JSON.stringify({n:+n,zones:[],daily:'',free:fu==='1'?new Date(Date.now()-7*3600e3).toISOString().slice(0,10):''}));} // capture states only
 const SAVES=createSaves();const EVERY=BOARD!=='free'||Q.has('u13')||localStorage.getItem('tobu_noads')==='1';let catchSrc=null,catchDone=false; // earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
 function toast(t){const z=document.getElementById('zone');z.textContent=t;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,2200);}
 function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
@@ -178,20 +205,38 @@ let best=+(localStorage.getItem('tobu3d_best')||0),verdict='',sent=false;
 function onDeath(){if(sent)return;sent=true;if(BOARD==='daily'&&!AUTO&&SAVES.daily())toast('+1 save · daily run done');const h=Math.round(P.maxH*10)/10;window.__run={log:packLog(sim.log),claim:{height:h}};
  if(VERIFY&&!AUTO){verdict='checking run…';fetch(VERIFY+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(window.__run)})
   .then(r=>r.json()).then(j=>verdict=j.ok?`verified ${j.height} m`:`not accepted: ${j.reason}`).catch(()=>verdict='offline: run not submitted');}}
+// ---- Catch screens (README priority: used -> free every run -> daily free -> save -> ad loaded -> no-ad free fallback) ----
+const cwEl=document.getElementById("cw"),cbEl=document.getElementById("cb"),$=id=>document.getElementById(id);
+const AD_READY=Q.has('adready'); // no ad SDK in this build: an ad never loads, so the shipping fallback (free this time, no save used) applies
+function fitCW(){const u=Math.min(innerWidth/1080,innerHeight/1750); /* width-driven on phones: 45 px pips at 1080, 15 px at 360 */cbEl.style.setProperty('--u',u);cbEl.style.setProperty('--pip',Math.max(45,15/u)+'px'); /* never under 15 px on screen */}addEventListener('resize',fitCW);fitCW();
+function catchState(){const src=catchSrc;if(src==='free')return EVERY?'every':'daily';if(src==='save')return 'save';return AD_READY?'ad':'noad';}
+const CS={every:['Your Catch is free this run','Catch','(free this run)',null],daily:['Your free Catch for today','Catch','(free today)',1],save:['Saves come from daily runs and new seasons','Catch','(use 1 save)',1],
+ ad:['Optional: watch a short ad (about 30 s) to use your Catch','Watch ad to Catch','(about 30 s)',1],noad:['Free this time  ·  no save used','Catch','(free this time)',1]};
+function pipsHTML(n){let h='';for(let i=0;i<3;i++)h+=`<div class="p ${i<n?'f':'e'}"></div>`;return h+`<span>Saves ${n}/3</span>`;}
+let cwKey='';function showCW(mode){const st=mode==='catch'?catchState():P.caught?'used':'over',key=mode+st+SAVES.n+(P.maxH|0)+best;if(key===cwKey)return;cwKey=key;
+ cwEl.classList.add('on');$('cH').textContent=(P.maxH|0)+' m';$('cBest').textContent='BEST  '+(Math.max(best,P.maxH)|0)+' m';
+ $('cOffer').style.display=mode==='catch'?'':'none';$('cUsed').style.display=mode!=='catch'&&P.caught?'':'none';
+ if(mode==='catch'){const c=CS[st];$('cSub').textContent=c[0];$('cSub').style.fontSize=(c[0].length<48?34:31)+'px';$('bCatch1').textContent=c[1];$('bCatch2').textContent=c[2];
+  const sz=st==='ad'?40:50;$('bCatch1').style.fontSize=$('bNo1').style.fontSize=sz+'px'; // one shared label size per screen (ad screen 40 px)
+  const pe=$('pips');if(c[3]&&BOARD==='free'){pe.style.display='flex';pe.innerHTML=pipsHTML(SAVES.n);pe.style.left=(330-(3*parseFloat(getComputedStyle(cbEl).getPropertyValue('--pip')||45)+2*12+pe.querySelector('span').offsetWidth+6)/2)+'px';}else pe.style.display='none';}
+ window.__cw={state:st,pip:(()=>{const p=document.querySelector('#pips .p');return p&&$('pips').style.display!=='none'?+p.getBoundingClientRect().width.toFixed(2):0})(),catchBtn:+$('bCatch').getBoundingClientRect().width.toFixed(1),noBtn:+$('bNo').getBoundingClientRect().width.toFixed(1)};}
+const stopEv=e=>{e.stopPropagation();};for(const id of['bCatch','bNo','bRetry','bHome']){const b=$(id);b.addEventListener('pointerdown',stopEv);b.addEventListener('pointerup',stopEv);}
+$('bCatch').addEventListener('click',e=>{e.stopPropagation();if(P.mode!=='catch'||performance.now()-catchShown<500)return; /* 0.5 s guard: a climbing tap can't take the Catch */pending=true;});
+$('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});const leave=e=>{e.stopPropagation();if(P.mode==='catch')declineCatch();restart();}; /* Retry / Home on the offer = decline (never costs anything) */$('bRetry').addEventListener('click',leave);$('bHome').addEventListener('click',leave);
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
- if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='flex';document.getElementById('ovT').textContent='Second chance?';document.getElementById('ovS').textContent=P.t-P.catchAt<0.5?'…':catchSrc==='free'?'Your Catch is free this run · tap to Catch':catchSrc==='save'?'Use a save ('+SAVES.n+'/3) · tap to Catch · or wait to end run':'Watch a short ad (about 30 s) · tap to Catch · or No thanks';}
- else if(P.mode==='dead'){onDeath();ov.style.display='flex';document.getElementById('ovT').textContent=(P.maxH|0)+' m';document.getElementById('ovS').textContent=(verdict?verdict+'\n':'')+'tap to climb again';if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else ov.style.display='none';mistDraw();lightDraw();post.render(S,cam);}
+ if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
+ else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
+ else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();post.render(S,cam);}
 
 const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
 function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;
  _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
 let catchShown=0;function tick(){if(P.mode==='catch'&&!catchShown)catchShown=performance.now();if(!AUTO&&P.mode==='catch'&&performance.now()-catchShown<500)pending=false; /* 0.5 s guard so a climbing tap can't take the Catch */
  const inp=AUTO?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);flushBrk();updateCam(DT);shadowTick();mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
-if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
+if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;if(Q.has('catchshot')&&P.mode==='catch')break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title="SIM "+JSON.stringify({draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
+ document.title="SIM "+JSON.stringify({cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
 </script></body></html>
