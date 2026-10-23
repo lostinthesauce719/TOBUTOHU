@@ -13,7 +13,7 @@
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
-import {createHero} from './hero.js';
+import {createHero} from './hero.js';import {kit} from './clipkit.js';
 import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';import {createFlashLimiter} from './flash.js';
@@ -45,13 +45,20 @@ function poolAdd(b,mat){const p=pool(mat),i=p.im.count++;p.ids[i]=b;_m4.compose(
 function poolDel(e){const p=e.pool,i=p.ids.indexOf(e.b),l=--p.im.count;if(i<0)return;if(i!==l){p.im.getMatrixAt(l,_m4);p.im.setMatrixAt(i,_m4);p.ids[i]=p.ids[l];}p.ids.length=l;p.im.instanceMatrix.needsUpdate=true;}
 function meshFor(b,mat){const m=new THREE.Mesh(UB,mat);m.scale.set(b.hx*2,b.hy*2,b.hz*2);m.position.set(b.x,b.y,b.z);m.userData.b=b;S.add(m);meshes.set(b.id,m);return m;}
 const hooks={
- add(b){const zc=zoneAt(b.y);if(b.brk)meshFor(b,climbMat(b,zc));else poolAdd(b,climbMat(b,zc));pendBrk.push([b,zc]);}, // breakable flag may arrive after add (flushed after each tick)
- crack(b){let m=meshes.get(b.id);if(!m)return;if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));}m.material.uniforms.tearK.value=0;cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
- remove(b){const m=meshes.get(b.id);if(!m)return;if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
- module(m){decor(m.z0,m.z1,m.y0);}};
+ add(b){pendKit.push(b);}, // built when the module closes (brk flags are set by then): merged kit geometry per module // breakable flag may arrive after add (flushed after each tick)
+ crack(b){flushKit();let m=meshes.get(b.id);if(!m)return;if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));}m.material.uniforms.tearK.value=0;cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ remove(b){const m=meshes.get(b.id);if(!m)return;if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
+ module(m){flushKit();decor(m.z0,m.z1,m.y0);}};
+// BRUSH clipkit: branch ledges + curved bark walls (visual only; contact faces sit on the flat sim colliders), one merged draw per module
+const KM=gridMat(0xffffff,{vc:1}),pendKit=[];
+function flushKit(){if(!pendKit.length)return;const gs=[],ent={n:0,mesh:null};
+ for(const b of pendKit){if(b.gone)continue;if(b.brk){meshFor(b,climbMat(b,zoneAt(b.y)));continue;}
+  gs.push(b.kind==='shelf'?kit.ledge(THREE,b):kit.wall(THREE,b,Math.sign(b.x)||1));ent.n++;meshes.set(b.id,{kit:ent,b});}
+ pendKit.length=0;if(!gs.length)return;const g=mergeKit(gs);ent.mesh=new THREE.Mesh(g,KM);ent.mesh.frustumCulled=false;S.add(ent.mesh);}
+function mergeKit(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;const o=new THREE.BufferGeometry();for(const a of['position','normal','color']){const arr=new Float32Array(n*3);let k=0;for(const g of gs){arr.set(g.attributes[a].array,k);k+=g.attributes[a].array.length;}o.setAttribute(a,new THREE.BufferAttribute(arr,3));}return o;}
 
 // climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
-const pendBrk=[];function flushBrk(){for(const [b,zc] of pendBrk){const m=meshes.get(b.id);if(b.brk&&m&&m.pool){poolDel(m);meshFor(b,climbMat(b,zc));}}pendBrk.length=0;}
+const pendBrk=[];function flushBrk(){flushKit();for(const [b,zc] of pendBrk){const m=meshes.get(b.id);if(b.brk&&m&&m.pool){poolDel(m);meshFor(b,climbMat(b,zc));}}pendBrk.length=0;}
 // look reset placeholders: trunk walls bark-brown, ledge shelves moss, winter ice pale; breakables warm with perforations
 const LC={bark:0x516384,moss:0x5476A2,ice:0x858FD1,brk:0xABB8EB}; // BRUSH clipstyle v2: slate climbables, lavender ice, pale lavender breakables (dark perforations)
 function climbMat(b,zc){
@@ -68,10 +75,10 @@ const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1
 // decor: placeholder forest (cylinder trunks + cone canopies, spring blossom puffs), merged into one draw per module
 function decor(z0,z1,y){const zc=zoneAt(y),fc=FC[zc.key],gs=[];
  for(let z=z0;z>z1;z-=6){for(const s of[-1,1]){if(rD()<0.6){const H=18+rD()*22,d=10+rD()*30,r=0.6+rD()*0.5,x=s*d,zz=z-rD()*6,yb=y-12;
-   const tr=colored(new THREE.CylinderGeometry(r*0.8,r,H,8),0x858FD1);tr.translate(x,yb+H/2,zz);gs.push(tr);
-   const cr=2+rD()*2.5,ch=H*0.55,cn=colored(new THREE.ConeGeometry(cr,ch,8),fc[rD()<0.5?0:1]);cn.translate(x,yb+H-ch*0.35,zz);gs.push(cn);
+   const cd=kit.cedar(THREE,H,r*2.6);cd.translate(x,yb,zz);gs.push(cd); /* BRUSH clipkit cedar */
    if(zc.key==='spring'){const pink=rD()<PAL.spring.blossom_pink_ratio,bl=colored(new THREE.IcosahedronGeometry(1.6+rD()*1.4,1),pink?fc[3]:fc[2]);
     bl.translate(x+(rD()-.5)*2,yb+H*(0.55+rD()*0.35),zz+1.5);gs.push(bl);}}}}
+ if(rD()<0.3){const s=rD()<.5?-1:1,t=kit.torii(THREE,10,9);t.rotateY(s*0.5);t.translate(s*(16+rD()*10),y-2,z1+rD()*(z0-z1));gs.push(t);} /* torii: background, no collider, pale lavender */
  if(gs.length){const m=new THREE.Mesh(merge(gs),VC);m.position.z=0;m.userData.zEnd=z1;m.userData.zStart=z0;S.add(m);deco.push(m);}
  if(zc.n!=='Spring cedar'&&rD()<0.5){const wf=new THREE.Mesh(new THREE.PlaneGeometry(4+rD()*4,40),new THREE.MeshBasicMaterial({color:hx(G.waterfall.body),transparent:true,opacity:0.85,fog:true}));
   const s=rD()<.5?-1:1;wf.position.set(s*(22+rD()*20),y+4,z1+rD()*(z0-z1));wf.rotation.y=-s*0.6;S.add(wf);deco.push(wf);}
@@ -83,7 +90,8 @@ mtns.add(new THREE.Mesh(merge(gs),VC));}
 // drop shadow: crisp dark disc on the highest surface under the climber (reads sim boxes, never writes)
 const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1C2438,transparent:true,opacity:0.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;S.add(shadow);
 function shadowTick(){let top=-1e9;for(const b of sim.boxes){const t=b.y+b.hy;if(t<=P.pos.y+0.05&&t>top&&Math.abs(P.pos.x-b.x)<=b.hx&&Math.abs(P.pos.z-b.z)<=b.hz)top=t;}
- const h=P.pos.y-top;shadow.visible=top>-1e8&&h<12&&P.state!=='wall';if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.85*k;} /* hard edge #1C2438 85% (clipstyle) */
+ if(P.state==='wall'&&P.lastWall){const b=P.lastWall,sd=P.wallSide;shadow.visible=true;shadow.position.set(b.x-sd*b.hx-sd*0.02,P.pos.y-0.05,P.pos.z);shadow.rotation.set(0,-sd*Math.PI/2,0);shadow.scale.set(0.8,0.4,1);shadow.material.opacity=0.85;return;} /* wall-run: hard shadow projected onto the wall plane */
+ shadow.rotation.set(-Math.PI/2,0,0);const h=P.pos.y-top;shadow.visible=top>-1e8&&h<12;if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.85*k;} /* hard edge #1C2438 85% (clipstyle) */
 // ---------- the run ----------
 const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here; forced 1 on daily/weekly */,nobrk:Q.has('nobrk'),nomist:Q.has('nomist'),miss:MISS,hooks});
 const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;

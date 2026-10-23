@@ -2,6 +2,7 @@
 // VISUAL ONLY: reads the sim's player state (P) and course boxes, never writes to them,
 // so replays, break timings and the server check are untouched.
 import * as THREE from './vendor/three.module.min.js';
+import { heroMesh, placeBone, legName } from './clipkit.js'; // BRUSH production kit: 1 SkinnedMesh, 15 bones, 1 draw
 THREE.ColorManagement.enabled = false; // style D hexes are authored in sRGB and written as-is (no linear workflow)
 
 const C = { lit: 0x86AE58, base: 0x6E9A42, shade: 0x6E9A42, belly: 0xF2EEE0, sash: 0xFFD23F, sashS: 0xFFD23F, // BRUSH clipstyle green hero (2026-10-22)
@@ -88,13 +89,13 @@ for (const s of [-1, 1]) {
 }
 
 export function createHero(scene, P, boxes) {
-  const root = new THREE.Group(); const body = buildBody(); root.add(body); scene.add(root);
+  const root = new THREE.Group(); const HM = heroMesh(THREE, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })); const body = HM.mesh; body.bindMode = 'attached'; /* bones are children of the mesh: attached keeps them out of double model transforms */ root.add(body); scene.add(root);
+  const boneBy = new Map(HM.bones.map(b => [b.name, b])), _inv = new THREE.Matrix4(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  const bone = (L, i, a, b) => placeBone(THREE, boneBy.get(legName(L, i)), _a.copy(a).applyMatrix4(_inv), _b.copy(b).applyMatrix4(_inv)); // IK points (world) -> body-local
   const patch = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), new THREE.MeshBasicMaterial({ color: C.patch, transparent: true, opacity: 0.35, depthWrite: false }));
   patch.scale.set(0.36, 0.72, 1); scene.add(patch);
   for (const L of LEGS) {
     L.hipV = new THREE.Vector3(...L.hip); L.restV = new THREE.Vector3(...L.rest);
-    L.s1 = seg(L.kind === 'hind' ? 0.05 : 0.016, L.kind === 'hind' ? 0.022 : 0.012); L.s2 = seg(L.kind === 'hind' ? 0.016 : 0.012, 0.009);
-    scene.add(L.s1, L.s2); if (L.t) { L.s3 = seg(0.012, 0.008); scene.add(L.s3); }
     L.plant = null; L.n = new THREE.Vector3(0, 1, 0); L.swing = 0; L.from = new THREE.Vector3(); L.foot = new THREE.Vector3(); L.hold = 0;
   }
   const st = { prev: 'air', q: new THREE.Quaternion(), off: new THREE.Vector3(), latch: 9, land: 9, kick: 9, fwd: new THREE.Vector3(0, 0, -1), sq: 0, turn: 0 };
@@ -142,7 +143,7 @@ export function createHero(scene, P, boxes) {
     const lt = st.latch, squash = state !== 'wall' ? 0 : lt < 0.08 ? Math.sin(Math.PI / 2 * lt / 0.08) : lt < 0.18 ? 0.5 + 0.5 * Math.cos(Math.PI * (lt - 0.08) / 0.1) : 0; // §8.2.1: 13% toward the wall in 0.08 s, recover 0.10 s
     const nl = sf.n ? sf.n.clone().applyQuaternion(st.q.clone().invert()) : new THREE.Vector3(0, 1, 0);
     body.scale.set(1 - 0.13 * squash * Math.abs(nl.x), 1 - 0.13 * squash * Math.abs(nl.y), 1);
-    root.updateMatrixWorld(true);
+    root.updateMatrixWorld(true); _inv.copy(body.matrixWorld).invert();
     const delta = st.lastRoot ? root.position.clone().sub(st.lastRoot) : new THREE.Vector3(); st.lastRoot = root.position.clone();
 
     // ---- feet: plant on real contact points, step when out of stride, pin through push-off ----
@@ -194,7 +195,7 @@ export function createHero(scene, P, boxes) {
       if (dA > maxA && L.plant) { L.plant = null; L.hold = 0; if (contact) { L.swing = 1e-6; L.from.copy(L.foot); } } // out of reach: lift and re-plant, never drag a planted claw off its spot
       if (dA > maxA) { const k = maxA / dA; const f = L.foot.clone().sub(ankle); ankle = hipW.clone().lerp(ankle, k); L.foot.copy(ankle).add(f); } // never draw a stretched leg
       const { knee } = ik(hipW, ankle, L.a, L.b, pole);
-      placeSeg(L.s1, hipW, knee); placeSeg(L.s2, knee, ankle); if (L.s3) placeSeg(L.s3, ankle, L.foot);
+      bone(L, 1, hipW, knee); bone(L, 2, knee, ankle); if (L.t) bone(L, 3, ankle, L.foot);
     }
 
     if (swinging[st.turn] === 0) st.turn ^= 1; // tripod gait: groups take turns stepping
@@ -205,5 +206,5 @@ export function createHero(scene, P, boxes) {
     if (state === 'wall') { patch.position.set(sf.d - sf.side * 0.01, P.pos.y - 0.1, P.pos.z); patch.rotation.set(0, sf.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0); }
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
-  return { legs: LEGS, update, root, parts: [root, ...LEGS.flatMap(L => [L.s1, L.s2, L.s3].filter(Boolean))] };
+  return { legs: LEGS, update, root, parts: [body], mesh: body };
 }
