@@ -145,7 +145,7 @@ export function createSim(opt={}){
  // ---------- test bot: reads only nearby geometry, taps at most 10x/s like a fast thumb ----------
  const modAt=z=>{for(const m of mods)if(z<=m.z0&&z>m.z1)return m;return null};
  let bWant=false,bLast=-99;
- function botInput(){if(P.mode==='catch')return{press:true,steer:0};
+ const DHC=1.5; function botInput(){if(P.mode==='catch')return{press:true,steer:0};
   const m=modAt(P.pos.z);let jump=false,tx=0;if(!m)return{press:false,steer:0};const onShelf=P.pos.z>m.edge;
   if(m.type==='step'){if(P.state==='ground'&&P.pos.z-m.edge<1.4&&onShelf)jump=true;}
   else if(m.type==='wallrun'){const w=m.walls[0];tx=m.side*3.7;
@@ -153,7 +153,7 @@ export function createSim(opt={}){
    if(P.state==='wall'){tx=m.side*4;const dist=P.pos.z-m.z1;const cb=P.lastWall;const ta=dist/T.runSpeed,ya=P.pos.y+T.wallJumpUp*ta-0.5*T.gravity*ta*ta,reach=ya>=m.y0+m.rise+0.3; /* bot: only take the early kick if it still clears the next shelf */ if(dist<7.5||(P.wallT>0.5&&dist<11&&reach)||P.vel.y<-3||P.wallT>1.2||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12))jump=true;}
    if(P.state==='air'&&P.lastWall===w)tx=0;}
   else{if(P.state==='ground'&&onShelf){tx=m.side*0.8;if(P.pos.z-m.edge<1.4)jump=true;}
-   else if(P.state==='wall'){const cb=P.lastWall;if(P.wallT>0.15&&(P.vel.y<1.5||P.wallT>0.5||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12)))jump=true;if(P.pos.z<m.z1+6&&P.pos.y<m.y0+m.rise+0.5)jump=true;}
+   else if(P.state==='wall'){const cb=P.lastWall;if(P.wallT>0.15&&(P.vel.y<1.5||P.wallT>0.5||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12)))jump=true;if(P.pos.z<m.z1+6&&P.pos.y<m.y0+m.rise+0.5)jump=true;const crk=cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12;if(jump&&!crk&&cb&&P.pos.y>cb.y+cb.hy-DHC&&P.pos.y>m.y0+m.rise+0.5)jump=false; /* bot only: no kick that would carry it over the wall tops (seed 8 rode the chimney rims 7 m above the exit shelf and overshot) */ /* bot only: no more upward kicks once well above the exit shelf (seed 8 chimney overshoot) */}
    else tx=P.lastWall?-Math.sign(P.lastWall.x)*0.8:m.side*0.8;}
   if(P.state==='wall'&&jump&&opt.miss>0){if(P.kickPlan==null){const late=rM()<opt.miss;P.kickPlan=P.wallT+(late?0.3:0);if(late)P.stats.late++;}jump=P.wallT>=P.kickPlan;}
   if(P.state!=='wall')for(const k of strikes){const a=P.t-k.t0;if(a>LIGHTNING.warn+LIGHTNING.strike)continue;const dz=P.pos.z-k.z;if(dz<-1.5||dz>14)continue;if(Math.abs(tx-k.x)<LIGHTNING.r+0.9)tx=k.x+(k.x>0?-1:k.x<0?1:(m.side||1))*2.6;} // bot sees the ring like a player would
