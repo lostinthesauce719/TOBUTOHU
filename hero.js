@@ -15,7 +15,7 @@ function cel(lit, base, shade) {
     uniforms: { cL: { value: new THREE.Color(lit) }, cB: { value: new THREE.Color(base) }, cS: { value: new THREE.Color(shade) }, L: { value: LIGHT } },
     vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader: `uniform vec3 cL,cB,cS,L; varying vec3 vN; void main(){ float d=dot(normalize(vN),L);
-      vec3 c=mix(cS,cB,smoothstep(-0.105,-0.075,d)); c=mix(c,cL,smoothstep(0.555,0.585,d)); gl_FragColor=vec4(c,1.); }`,
+      vec3 c=mix(cS,cB,smoothstep(-0.6,0.1,d)); c=mix(c,cL,smoothstep(0.1,0.9,d)); /* look reset: smooth, no bands */ gl_FragColor=vec4(c,1.); }`,
   });
 }
 const hullU = { res: { value: new THREE.Vector2(1080, 1920) } }; // real render-buffer size; widths are set per frame in real pixels
@@ -38,7 +38,7 @@ function part(geo, mat = M.body) {
   const rim = new THREE.Mesh(geo, H.rim); rim.renderOrder = 1;
   const line = new THREE.Mesh(geo, H.line); line.renderOrder = 2;
   const m = new THREE.Mesh(geo, mat); m.renderOrder = 3;
-  g.add(rim, line, m); return g;
+  g.add(m); return g; // look reset: no hull outlines (rim/line kept for BRUSH's mesh)
 }
 
 // ---------- body (brief §1–2; local +z = head, +y = back) ----------
@@ -54,7 +54,17 @@ function buildBody() {
   const abd = part(new THREE.ConeGeometry(0.06, 0.62, 8)); abd.rotation.x = -Math.PI / 2; abd.position.set(0, -0.015, -0.22); abd.scale.set(1, 1, 0.85); b.add(abd);
   const sash = part(new THREE.CylinderGeometry(0.078, 0.078, 0.05, 12, 1, true), M.sash); sash.rotation.x = Math.PI / 2; sash.position.set(0, 0.0, 0.2); b.add(sash);
   const tail = part(new THREE.BoxGeometry(0.012, 0.03, 0.13), M.sash); tail.position.set(0.085, -0.02, 0.15); tail.rotation.set(0.3, -0.25, 0.2); b.add(tail);
-  return b;
+  return bake(b);
+}
+// look reset: bake the rigid body parts into one mesh per material (11 draws -> 3); poses only move the whole body
+function bake(b) {
+  b.updateMatrixWorld(true); const by = new Map();
+  b.traverse(o => { if (!o.isMesh) return; const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); (by.get(o.material) || by.set(o.material, []).get(o.material)).push(g); });
+  const out = new THREE.Group();
+  for (const [mat, gs] of by) { let n = 0; gs.forEach(g => n += g.attributes.position.count); const P = new Float32Array(n * 3), N = new Float32Array(n * 3); let k = 0;
+    for (const g of gs) { P.set(g.attributes.position.array, k * 3); N.set(g.attributes.normal.array, k * 3); k += g.attributes.position.count; }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(N, 3)); out.add(new THREE.Mesh(geo, mat)); }
+  return out;
 }
 
 // ---------- legs: world-space segments posed by 2-bone IK ----------
