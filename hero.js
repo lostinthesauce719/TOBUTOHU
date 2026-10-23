@@ -4,18 +4,20 @@
 import * as THREE from './vendor/three.module.min.js';
 THREE.ColorManagement.enabled = false; // style D hexes are authored in sRGB and written as-is (no linear workflow)
 
-const C = { lit: 0xA6C872, base: 0x86AE58, shade: 0x678651, sash: 0x3E5C76, sashS: 0x334A63, eye: 0x4E6A3A, line: 0x1E2A2A, rim: 0xEEF0DA, patch: 0x1E2A40 };
+const C = { lit: 0x86AE58, base: 0x6E9A42, shade: 0x6E9A42, belly: 0xF2EEE0, sash: 0xFFD23F, sashS: 0xFFD23F, // BRUSH clipstyle green hero (2026-10-22)
+  eye: 0x4E6A3A, line: 0x1E2A2A, rim: 0xEEF0DA, patch: 0x1E2A40 };
 const BL = 1.1;               // body length in world units (matches the camera framing KAMI approved)
 const RIDE = 0.22;            // thorax centre above the contact surface
 const LIGHT = new THREE.Vector3(-0.5, 0.7, 0.5).normalize(); // camera-space light (BRUSH brief §3)
 
 // ---------- cel + hull materials (brief §3) ----------
-function cel(lit, base, shade) {
+function cel(lit, base, shade, belly = -1) {
   return new THREE.ShaderMaterial({
-    uniforms: { cL: { value: new THREE.Color(lit) }, cB: { value: new THREE.Color(base) }, cS: { value: new THREE.Color(shade) }, L: { value: LIGHT } },
-    vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-    fragmentShader: `uniform vec3 cL,cB,cS,L; varying vec3 vN; void main(){ float d=dot(normalize(vN),L);
-      vec3 c=mix(cS,cB,smoothstep(-0.6,0.1,d)); c=mix(c,cL,smoothstep(0.1,0.9,d)); /* look reset: smooth, no bands */ gl_FragColor=vec4(c,1.); }`,
+    uniforms: { cL: { value: new THREE.Color(lit) }, cB: { value: new THREE.Color(base) }, cS: { value: new THREE.Color(shade) }, cU: { value: new THREE.Color(belly < 0 ? base : belly) }, uB: { value: belly < 0 ? 0 : 1 }, L: { value: LIGHT } },
+    vertexShader: `varying vec3 vN; varying float vWy; void main(){ vN=normalize(normalMatrix*normal); vWy=normalize(mat3(modelMatrix)*normal).y; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `uniform vec3 cL,cB,cS,cU,L; uniform float uB; varying vec3 vN; varying float vWy; void main(){ float d=dot(normalize(vN),L);
+      vec3 c=mix(cS,cB,smoothstep(-0.6,0.1,d)); c=mix(c,cL,smoothstep(0.1,0.9,d)); /* look reset: smooth, no bands */
+      if(uB>0.5 && vWy<-0.35) c=cU; /* cream belly / leg undersides */ gl_FragColor=vec4(c,1.); }`,
   });
 }
 const hullU = { res: { value: new THREE.Vector2(1080, 1920) } }; // real render-buffer size; widths are set per frame in real pixels
@@ -28,7 +30,7 @@ function hull(color, widthPx) {
     fragmentShader: `uniform vec3 c; void main(){ gl_FragColor=vec4(c,1.); }`,
   });
 }
-const M = { body: cel(C.lit, C.base, C.shade), sash: cel(0x4a6a86, C.sash, C.sashS), eye: cel(C.eye, C.eye, 0x3d5530) };
+const M = { body: cel(C.lit, C.base, C.shade, C.belly), sash: new THREE.MeshBasicMaterial({ color: C.sash, fog: false }) /* exactly #FFD23F, no shading shift */, eye: cel(C.eye, C.eye, 0x3d5530) };
 const H = { line: hull(C.line, 2), rim: hull(C.rim, 3.5) }; // spec D: 2 px line (floor 1) + 1.5 px rim outside it (floor 1), at 1080 width
 const hullMats = [H.line, H.rim];
 

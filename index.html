@@ -81,9 +81,9 @@ const mtns=new THREE.Group();S.add(mtns);{const gs=[];
 for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0xC7D6EB);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
 mtns.add(new THREE.Mesh(merge(gs),VC));}
 // drop shadow: crisp dark disc on the highest surface under the climber (reads sim boxes, never writes)
-const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1b2233,transparent:true,opacity:0.55,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;S.add(shadow);
+const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1C2438,transparent:true,opacity:0.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;S.add(shadow);
 function shadowTick(){let top=-1e9;for(const b of sim.boxes){const t=b.y+b.hy;if(t<=P.pos.y+0.05&&t>top&&Math.abs(P.pos.x-b.x)<=b.hx&&Math.abs(P.pos.z-b.z)<=b.hz)top=t;}
- const h=P.pos.y-top;shadow.visible=top>-1e8&&h<12&&P.state!=='wall';if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.6*k;}
+ const h=P.pos.y-top;shadow.visible=top>-1e8&&h<12&&P.state!=='wall';if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.85*k;} /* hard edge #1C2438 85% (clipstyle) */
 // ---------- the run ----------
 const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here; forced 1 on daily/weekly */,nobrk:Q.has('nobrk'),nomist:Q.has('nomist'),miss:MISS,hooks});
 const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
