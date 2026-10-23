@@ -4,7 +4,7 @@
 import * as THREE from './vendor/three.module.min.js';
 
 export const KEY = new THREE.Vector3(0.35, 0.85, 0.4).normalize();   // soft key, world space
-export const LOOK = { skyTop: 0x1f6fe0, skyHor: 0xbfe6ff, fog: 0xcfe4f4, fogNear: 10, fogFar: 120,
+export const LOOK = { skyTop: 0x4367A0, skyHor: 0xA5C8FB, fog: 0xD2EBFE, cloud: 0xDBE5FD, fogNear: 10, fogFar: 120,
   hemiSky: 0xf2f8ff, hemiGround: 0x6f7f9a, grid: 0xffffff };
 
 const lib = THREE.UniformsLib.fog;
@@ -23,12 +23,12 @@ const VS = `#include <fog_pars_vertex>
     #include <fog_vertex>
   }`;
 const SHADE = `
-  uniform vec3 base, hS, hG, key, gC; uniform float cell, gA, gW;
+  uniform vec3 base, hS, hG, key, gC; uniform float cell, gA, gW, gridPx;
   vec3 shade(vec3 c, vec3 n){ float h=n.y*0.5+0.5; vec3 amb=mix(hG,hS,h); float k=max(dot(n,key),0.);
-    return c*(amb*0.78+0.42*k); }
+    return c*min(mix(0.8,1.0,h)+0.2*k,1.04); }
   // thin anti-aliased world grid on the face's two in-plane axes
   float grid(vec3 w, vec3 n){ vec3 a=abs(n); vec2 p = a.x>0.5 ? w.zy : a.y>0.5 ? w.xz : w.xy; p/=cell;
-    vec2 f=abs(fract(p-0.5)-0.5)/fwidth(p); float l=1.-min(min(f.x,f.y)/gW,1.);
+    vec2 f=abs(fract(p-0.5)-0.5)/fwidth(p); float l=1.-clamp(min(f.x,f.y)-gridPx+0.5,0.,1.);
     return l; }
   float checker(vec3 w, vec3 n){ vec3 a=abs(n); vec2 p = a.x>0.5 ? w.zy : a.y>0.5 ? w.xz : w.xy; p=floor(p/cell); return mod(p.x+p.y,2.); }`;
 
@@ -39,7 +39,7 @@ export function gridMat(color, o = {}) {
   const m = new THREE.ShaderMaterial({ fog: true, vertexColors: !!o.vc,
     uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(color) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
       hG: { value: new THREE.Color(LOOK.hemiGround) }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
-      cell: { value: o.cell || 1 }, gA: { value: o.gA ?? 0.45 }, gW: { value: o.gW || 1.1 } }]),
+      cell: { value: o.cell || 1 }, gA: { value: o.gA ?? 0.7 }, gW: { value: o.gW || 1.1 } }]),
     vertexShader: VS,
     fragmentShader: `#include <fog_pars_fragment>
       ${SHADE} varying vec3 vW; varying vec3 vWN; varying vec3 vC;
@@ -47,17 +47,19 @@ export function gridMat(color, o = {}) {
         gl_FragColor=vec4(c,1.);
         #include <fog_fragment>
       }` });
-  cache.set(k, m); return m;
+  m.uniforms.gridPx = gridU.px; cache.set(k, m); return m;
 }
 
 // breakables: same grid look, warm tint, plus a dark dashed perforation across the card's tear line and along the long
 // edges; on crack the dash splits into a pale widening tear (tearK 0..1). Lines never under perfU.minPx.
+// grid spec (clipstyle v2): 2 px line at 1080 width, never under 1 px; white 70%, drawn on top of the shading
+export const gridU = { px: { value: 1 } };
 export const perfU = { minPx: { value: 6 } };
 export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0') {
   const m = new THREE.ShaderMaterial({ fog: true, 
     uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(color) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
       hG: { value: new THREE.Color(LOOK.hemiGround) }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
-      cell: { value: 1 }, gA: { value: 0.45 }, gW: { value: 1.1 }, pC: { value: new THREE.Color(perf) }, tC: { value: new THREE.Color(tear) },
+      cell: { value: 1 }, gA: { value: 0.7 }, gW: { value: 1.1 }, pC: { value: new THREE.Color(perf) }, tC: { value: new THREE.Color(tear) },
       hx: { value: new THREE.Vector3(...half) }, tearK: { value: -1 } }]),
     vertexShader: VS,
     fragmentShader: `#include <fog_pars_fragment>
@@ -77,7 +79,7 @@ export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0') {
         gl_FragColor=vec4(c,1.);
         #include <fog_fragment>
       }` });
-  m.uniforms.minPx = perfU.minPx; return m;
+  m.uniforms.minPx = perfU.minPx; m.uniforms.gridPx = gridU.px; return m;
 }
 
 // sky dome: vertical cyan gradient + soft procedural clouds; follows the camera, no fog, drawn first
@@ -93,7 +95,7 @@ export function makeSky() {
         vec3 c=mix(hor,top,pow(clamp(y,0.,1.),0.55));
         vec2 uv=d.xz/max(y+0.18,0.05)*1.4; float cl=smoothstep(0.52,0.78,fbm(uv+vec2(3.1,1.7)));
         cl*=smoothstep(-0.05,0.12,y)*(1.-smoothstep(0.55,0.9,y));
-        c=mix(c,vec3(1.),cl*0.95);
+        c=mix(c,vec3(0.86,0.9,0.99),cl*0.95);
         c=mix(c,fogC,1.-smoothstep(-0.05,0.16,y));   // horizon melts into the fog
         gl_FragColor=vec4(c,1.); }` });
   const s = new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), m); s.renderOrder = -10; s.frustumCulled = false; s.userData.sky = 1; return s;

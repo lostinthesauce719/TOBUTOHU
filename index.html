@@ -14,7 +14,7 @@
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';
-import {createPost,gridMat,perfMat,perfU,makeSky,LOOK} from './look.js';const CLS={};
+import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx} from './sim.js';
@@ -24,14 +24,14 @@ let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
 if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
 const rD=mul(SEED^0xDEC0); // decor stream: visuals only, never read by sim.js
 // camera tuning (visual only; physics tuning lives in sim.js)
-const T={camDist:2.3,camHeight:1.05,camPitch:14,camLag:7,camLagY:3.5,fovBase:90,fovMax:100,camRollMax:0.2,camRollRate:3.5,camWallOff:0.7};
+const T={camDist:2.3,camHeight:1.05,camPitch:14,camLag:7,camLagY:3.5,fovBase:90,fovMax:100,tightDist:1.55,tightHeight:1.1,tightFov:80,tightRate:2.2,camRollMax:0.2,camRollRate:3.5,camWallOff:0.7};
 const hx=c=>parseInt(c.slice(1),16);
 const ZONES=['spring','summer','autumn','winter'].map((k,i)=>{const p=PAL[k];return {...ZN[i],key:k,p,sky:hx(p.sky_top),fog:hx(p.fog)};}); // names/heights from sim.js, colours from palettes.json
 const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
 const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); R.setPixelRatio(Math.min(2,devicePixelRatio));
-R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);perfU.minPx.value=Math.max(2,R.domElement.width/180);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
+R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
 const S=new THREE.Scene();const sky=makeSky();S.add(sky);S.fog=new THREE.Fog(LOOK.fog,LOOK.fogNear,LOOK.fogFar);
 const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
 
@@ -53,7 +53,7 @@ const hooks={
 // climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
 const pendBrk=[];function flushBrk(){for(const [b,zc] of pendBrk){const m=meshes.get(b.id);if(b.brk&&m&&m.pool){poolDel(m);meshFor(b,climbMat(b,zc));}}pendBrk.length=0;}
 // look reset placeholders: trunk walls bark-brown, ledge shelves moss, winter ice pale; breakables warm with perforations
-const LC={bark:0x8f7d6c,moss:0x7c9a62,ice:0xa9c4d8,brk:0xc49a5a};
+const LC={bark:0x516384,moss:0x5476A2,ice:0x858FD1,brk:0xABB8EB}; // BRUSH clipstyle v2: slate climbables, lavender ice, pale lavender breakables (dark perforations)
 function climbMat(b,zc){
  if(b.brk)return perfMat(LC.brk,[b.hx,b.hy,b.hz],CB.perforation,CB.breakable_tear);
  if(b.kind==='shelf')return gridMat(zc.key==='winter'?LC.ice:LC.moss);
@@ -64,11 +64,11 @@ function colored(g,hex){g=g.index?g.toNonIndexed():g;const n=g.attributes.positi
 function merge(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;const P=new Float32Array(n*3),N=new Float32Array(n*3),C=new Float32Array(n*3);let o=0;
  for(const g of gs){P.set(g.attributes.position.array,o*3);N.set(g.attributes.normal.array,o*3);C.set(g.attributes.color.array,o*3);o+=g.attributes.position.count;}
  const m=new THREE.BufferGeometry();m.setAttribute('position',new THREE.BufferAttribute(P,3));m.setAttribute('normal',new THREE.BufferAttribute(N,3));m.setAttribute('color',new THREE.BufferAttribute(C,3));return m;}
-const FC={spring:[0x5d8a52,0x86ab6a,0xf2f0ea,0xf0cfd6],summer:[0x4f7f4a,0x76a060],autumn:[0xb88f3e,0x8a8a46],winter:[0xdfe8ee,0xb8cad6]};
+const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1],autumn:[0xABB8EB,0x858FD1],winter:[0xC7D6EB,0xABB8EB]}; // lavender cedars (clipstyle)
 // decor: placeholder forest (cylinder trunks + cone canopies, spring blossom puffs), merged into one draw per module
 function decor(z0,z1,y){const zc=zoneAt(y),fc=FC[zc.key],gs=[];
  for(let z=z0;z>z1;z-=6){for(const s of[-1,1]){if(rD()<0.6){const H=18+rD()*22,d=10+rD()*30,r=0.6+rD()*0.5,x=s*d,zz=z-rD()*6,yb=y-12;
-   const tr=colored(new THREE.CylinderGeometry(r*0.8,r,H,8),0x5a4636);tr.translate(x,yb+H/2,zz);gs.push(tr);
+   const tr=colored(new THREE.CylinderGeometry(r*0.8,r,H,8),0x858FD1);tr.translate(x,yb+H/2,zz);gs.push(tr);
    const cr=2+rD()*2.5,ch=H*0.55,cn=colored(new THREE.ConeGeometry(cr,ch,8),fc[rD()<0.5?0:1]);cn.translate(x,yb+H-ch*0.35,zz);gs.push(cn);
    if(zc.key==='spring'){const pink=rD()<PAL.spring.blossom_pink_ratio,bl=colored(new THREE.IcosahedronGeometry(1.6+rD()*1.4,1),pink?fc[3]:fc[2]);
     bl.translate(x+(rD()-.5)*2,yb+H*(0.55+rD()*0.35),zz+1.5);gs.push(bl);}}}}
@@ -78,7 +78,7 @@ function decor(z0,z1,y){const zc=zoneAt(y),fc=FC[zc.key],gs=[];
  if(zc.n==='Autumn steam'||rD()<0.15){const st=new THREE.Mesh(new THREE.SphereGeometry(3+rD()*3,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
   st.position.set((rD()<.5?-1:1)*(9+rD()*10),y-3,z1+rD()*(z0-z1));st.userData.steam=1;S.add(st);deco.push(st);}}
 const mtns=new THREE.Group();S.add(mtns);{const gs=[];
-for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0x7f93a8);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
+for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0xC7D6EB);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
 mtns.add(new THREE.Mesh(merge(gs),VC));}
 // drop shadow: crisp dark disc on the highest surface under the climber (reads sim boxes, never writes)
 const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1b2233,transparent:true,opacity:0.55,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;S.add(shadow);
@@ -116,15 +116,18 @@ function restart(){location.reload();}
 
 // ---------- camera: lagged chase from behind & above, FOV kick, roll into walls ----------
 const V=(o)=>new THREE.Vector3(o.x,o.y,o.z);
-let roll=0,spdK=0;const wallOff=new THREE.Vector3(),V0=new THREE.Vector3();const camPos=new THREE.Vector3(0,5,20);
+let roll=0,spdK=0,tightK=0;
+// chimney framing: how enclosed the climber is (both sides walled within ~2.6 m). Reads sim boxes only, eased in and out.
+function tightness(){let L=99,Rr=99;for(const b of sim.boxes){if(b.kind==='shelf'||Math.abs(P.pos.z-b.z)>b.hz+1.5||P.pos.y<b.y-b.hy-1||P.pos.y>b.y+b.hy+2)continue;const dx=b.x-P.pos.x;if(dx>0)Rr=Math.min(Rr,dx-b.hx);else L=Math.min(L,-dx-b.hx);}return THREE.MathUtils.clamp((5.2-(L+Rr))/1.6,0,1);}const wallOff=new THREE.Vector3(),V0=new THREE.Vector3();const camPos=new THREE.Vector3(0,5,20);
 function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  wallOff.lerp(P.state==='wall'?V(P.wallN).multiplyScalar(T.camWallOff):V0,1-Math.exp(-4*dt)); /* eased, never snaps (KAMI) */
- const off=new THREE.Vector3(-P.vel.x*0.04,T.camHeight,T.camDist).add(wallOff);
- const want=V(P.pos).add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x,oy=camPos.y;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.y=oy+(want.y-oy)*(1-Math.exp(-T.camLagY*dt)); /* smoothed vertical follow */camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */camPos.y=Math.min(camPos.y,P.pos.y+T.camHeight+0.6);camPos.y=Math.max(camPos.y,P.pos.y+T.camHeight-2.5);camPos.z=Math.max(Math.min(camPos.z,P.pos.z+T.camDist+2),P.pos.z+T.camDist-2); /* KAMI: hero always in frame, incl. long falls and the death frame; lag stays inside this leash */cam.position.copy(camPos);
+ tightK+=(tightness()-tightK)*(1-Math.exp(-T.tightRate*dt));const cD=THREE.MathUtils.lerp(T.camDist,T.tightDist,tightK),cH=THREE.MathUtils.lerp(T.camHeight,T.tightHeight,tightK);
+ const off=new THREE.Vector3(-P.vel.x*0.04,cH,cD).add(wallOff);
+ const want=V(P.pos).add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x,oy=camPos.y;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.y=oy+(want.y-oy)*(1-Math.exp(-T.camLagY*dt)); /* smoothed vertical follow */camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */camPos.y=Math.min(camPos.y,P.pos.y+cH+0.6);camPos.y=Math.max(camPos.y,P.pos.y+cH-THREE.MathUtils.lerp(2.5,1.0,tightK));camPos.z=Math.max(Math.min(camPos.z,P.pos.z+cD+2),P.pos.z+cD-2); /* KAMI: hero always in frame, incl. long falls and the death frame; lag stays inside this leash */cam.position.copy(camPos);
  cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
  const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-T.camRollRate*dt));cam.rotation.z=roll; /* eased bank into wall-runs */ sky.position.copy(cam.position);
  spdK+=((P.state==='wall'?1:THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-12.5)/5,0,1))-spdK)*(1-Math.exp(-5*dt));post.U.spd.value=spdK;post.U.sT.value=P.t;
- cam.fov=THREE.MathUtils.lerp(cam.fov,T.fovBase+(T.fovMax-T.fovBase)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
+ cam.fov=THREE.MathUtils.lerp(cam.fov,THREE.MathUtils.lerp(T.fovBase,T.tightFov,tightK)+(T.fovMax-T.fovBase)*(1-tightK)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
  mtns.position.set(0,P.pos.y*0.85,P.pos.z);
  deco.forEach(d=>{if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});
  for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+90){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-LOOK.fogFar-10;} /* fully fogged decor skips its draw */
@@ -154,7 +157,7 @@ let catchShown=0;function tick(){if(P.mode==='catch'&&!catchShown)catchShown=per
 if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title="SIM "+JSON.stringify({draws:post.U.draws,warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
+ document.title="SIM "+JSON.stringify({draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
-addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);});
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
 </script></body></html>
