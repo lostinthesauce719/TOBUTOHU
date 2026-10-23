@@ -108,9 +108,12 @@ export function createPost(R, pal) {
     uniforms: { res: { value: new THREE.Vector2() }, px: { value: 1 }, mistY: { value: -1e4 }, warn: { value: 0 }, mistT: { value: 0 },
       mLine: { value: new THREE.Color(M.top_line) }, mBand: { value: new THREE.Color(M.band) }, mBody: { value: new THREE.Color(M.body) }, mWarn: { value: new THREE.Color(M.warning_line) },
       mLinePx: { value: M.top_line_px_1080 }, mBandPx: { value: M.band_min_px_1080 }, mWarnPx: { value: M.warning_line_px_1080 },
-      spd: { value: 0 }, sT: { value: 0 }, sC: { value: new THREE.Vector2(0.5, 0.55) } },
+      spd: { value: 0 }, sT: { value: 0 }, sC: { value: new THREE.Vector2(0.5, 0.55) },
+      // lightning columns (screen px): ends a->b, radius px at each end, state x=phase(0 off,1 warn,2 strike,3 after) y=progress z=flash w=glow alpha
+      cA: { value: [new THREE.Vector4(), new THREE.Vector4()] }, cRad: { value: [new THREE.Vector2(), new THREE.Vector2()] }, cSt: { value: [new THREE.Vector4(), new THREE.Vector4()] }, edgePx: { value: 6 } },
     vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
-    fragmentShader: `uniform vec2 res,sC; uniform float px,mistY,warn,mistT,mLinePx,mBandPx,mWarnPx,spd,sT; uniform vec3 mLine,mBand,mBody,mWarn; varying vec2 vUv;
+    fragmentShader: `uniform vec2 res,sC; uniform float px,mistY,warn,mistT,mLinePx,mBandPx,mWarnPx,spd,sT; uniform vec3 mLine,mBand,mBody,mWarn; varying vec2 vUv; uniform vec4 cA[2]; uniform vec2 cRad[2]; uniform vec4 cSt[2]; uniform float edgePx;
+      vec4 over(vec4 o, vec3 c, float a){ return vec4(mix(o.rgb,c,a/max(a+o.a*(1.-a),1e-4)), a+o.a*(1.-a)); }
       float h1(float x){ return fract(sin(x*91.7)*43758.5453); }
       void main(){ vec2 p=vUv*res; vec4 o=vec4(0.);
         // speed lines: thin radial streaks from just above centre, only toward the edges, flicker per angular bucket
@@ -120,6 +123,18 @@ export function createPost(R, pal) {
           float line=1.-smoothstep(0.,w,abs(fb-0.5)*2.-0.0); line=step(abs(fb-0.5),w*0.5);
           float rr=smoothstep(0.28,0.55,r)*(1.-smoothstep(0.95,1.2,r));
           float s=on*line*rr*spd*0.9; o=vec4(1.,1.,1.,s); }
+        // lightning (D_kit summer §4): vermilion edge lines >= 2 px at 360, ink both sides, bolt core/glow, local column flash only
+        for(int i=0;i<2;i++){ vec4 st=cSt[i]; if(st.x<0.5) continue; vec2 a=cA[i].xy, b=cA[i].zw; vec2 ab=b-a; float L=length(ab); if(L<1.) continue; vec2 t=ab/L, nrm=vec2(-t.y,t.x);
+          float u=dot(p-a,t), v=dot(p-a,nrm); if(u<-40.||u>L+40.) continue; float uc=clamp(u/L,0.,1.); float R=mix(cRad[i].x,cRad[i].y,uc);
+          if(u>=0.&&u<=L){
+            if(st.z>0.5 && abs(v)<R) o=over(o,vec3(0.749,0.847,0.894),0.5);                           // the flash: a tint inside the column only
+            if(st.x<2.5){ float e=abs(abs(v)-R); float ink=edgePx*0.5+2.*px; float filled=step(uc,st.y)+step(1.5,st.x); float dash=step(mod(u,26.*px),12.*px);
+              float on=max(min(filled,1.),dash*0.999); if(e<ink && on>0.) o=over(o, e<edgePx*0.5? vec3(0.769,0.282,0.204) : vec3(0.118,0.149,0.188), 1.); }
+            if(st.x>1.5){ float fr=floor(sT/0.12); float q=uc*9.; float j0=floor(q); float h0=fract(sin((j0+fr*17.)*91.7)*43758.5)-0.5, h1=fract(sin((j0+1.+fr*17.)*91.7)*43758.5)-0.5; float w=mix(h0,h1,fract(q))*R*0.9*(1.-0.6*uc*uc); /* jagged bolt, frames A/B swap every 0.12 s */
+              float d=abs(v-w); float ga=st.w;
+              if(d<13.*px) o=over(o,vec3(0.749,0.847,0.894),0.45*ga*(1.-d/(13.*px)));
+              if(st.x<2.5){ if(d<3.*px+2.*px) o=over(o,vec3(0.118,0.149,0.188),1.); if(d<3.*px) o=over(o,vec3(0.957,0.969,0.976),1.); } } }
+        }
         if(mistY>-1e3){ float sc=4.*px*sin(p.x/(38.*px)+mistT*0.8)+2.*px*sin(p.x/(13.*px)-mistT*1.3);
           float e=mistY+sc, lw=mix(max(mLinePx*px,1.),max(mWarnPx*px,2.),warn), bw=max(mBandPx*px,8.);
           if(p.y<e){ vec3 lc=mix(mLine,mWarn,warn); if(p.y>e-lw) o=vec4(lc,1.); else if(p.y>e-lw-bw) o=vec4(mBand,1.); else o=vec4(mBody,0.92); } }

@@ -5,7 +5,7 @@
 //  * only + - * / Math.sqrt Math.abs Math.min Math.max Math.round Math.imul in physics (all IEEE-exact on every engine;
 //    no sin/cos/exp/pow/hypot, which can differ by 1 ulp between V8, JavaScriptCore and Godot)
 //  * every random number comes from the seed; rendering, camera, decor and frame rate never touch this state
-export const SIM_VERSION = 'tobu-sim-4'; // 4: the Catch screen has no countdown; waiting is not simulated, No thanks ends the log in catch mode
+export const SIM_VERSION = 'tobu-sim-5'; // 5: telegraphed summer lightning (seeded, lethal column knocks the climber off) ;; was 4: // 4: the Catch screen has no countdown; waiting is not simulated, No thanks ends the log in catch mode
 export const DT = 1 / 120;
 export function mul(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 export const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.12,
@@ -20,6 +20,9 @@ export const BRK={share:[0.10,0.20,0.30,0.40],noneBelow:50,wall:[0.75,0.6,0.55,0
 export const LATE={from:600,mist:0.85,bands:[[600,[2.9,3.1],0.45,0.5],[700,[2.9,3.1],0.50,0.5],[800,[2.9,3.1],0.55,0.5],[900,[2.9,3.1],0.60,0.5]],wall:0.55,shelf:0.5};
 export const lateBand=y=>{let b=null;for(const r of LATE.bands)if(y>=r[0])b=r;return b};
 export const RAMP={from:600,span:300,gap0:2.9,gapLo:3.5,gapHi:3.8,risePerKick0:1.7,risePerKick1:0.9};
+// Summer lightning (SEASONS course spec 10-18 + D_kit summer_spec §4, mid tuning): from the end of summer's 30 m ramp to the band end.
+// Ring warns 1.0 s, strike 0.25 s, afterglow 0.5 s (safe), every ~8 s, 1.2 m column. Lane comes from a seeded table, never the player's position.
+export const LIGHTNING={from:150,to:250,warn:1.0,strike:0.25,after:0.5,every:8,jit:0.3,r:1.2,colH:8,lanes:[-2.6,0,2.6],ahead:[8,30],knockVy:-6,knockVz:4};
 export const ZONES=[{n:'Spring cedar',h:0},{n:'Summer cliffs',h:120},{n:'Autumn steam',h:250},{n:'Winter ice',h:400}];
 export const zoneIdx=h=>{let i=0;for(let k=0;k<ZONES.length;k++)if(h>=ZONES[k].h)i=k;return i};
 export const ADAPT_MIN=0.85, ADAPT_MAX=1.15;
@@ -30,10 +33,11 @@ export const qSteer=v=>Math.round(clamp(v,-1,1)*127); // steer is sent and simul
 export function createSim(opt={}){
  const SEED=(opt.seed>>>0), H=opt.hooks||{}, board=opt.board||'free';
  const ADAPT=(board==='daily'||board==='weekly')?1:clamp(opt.adapt??1,ADAPT_MIN,ADAPT_MAX);
- const rC=mul(SEED^0xA11CE), rB=mul(SEED^0xB4EA), rM=mul(SEED^0x3155);
+ const rC=mul(SEED^0xA11CE), rB=mul(SEED^0xB4EA), rM=mul(SEED^0x3155), rL=mul(SEED^0x11E7);
  const boxes=[],mods=[];let nid=1;
  const P={pos:{x:0,y:1,z:-3},vel:{x:0,y:0,z:0},r:0.4,state:'air',coyote:0,buffer:0,wallN:{x:0,y:0,z:0},wallSide:0,wallT:0,lastWall:null,lastWallT:9,lastShelf:null,kickPlan:null,
-  maxH:0,t:0,caught:0,mode:'play',catchAt:0,stats:{wallruns:0,walljumps:0,catch:0,dead_at:null,cracks:0,breaks:0,late:0}};
+  maxH:0,t:0,caught:0,mode:'play',catchAt:0,stats:{wallruns:0,walljumps:0,catch:0,dead_at:null,cracks:0,breaks:0,late:0,strikes:0,struck:0}};
+ const strikes=[];let nextStrike=null,sid=1;
  const mist={v:MIST.start}, ZT={};
  const log={v:SIM_VERSION,seed:SEED,board,adapt:ADAPT,taps:[],steer:[],end:0};let n=0,lastQ=0;
 
@@ -108,7 +112,20 @@ export function createSim(opt={}){
   if(P.t>MIST.delay){const u=Math.min(1,(P.t-MIST.delay)/MIST.ease);mist.v+=sp*u*u*(3-2*u)*dt;}
   if(opt.nomist)mist.v=P.maxH-30;else mist.v=Math.max(mist.v,P.maxH-MIST.trail);
   for(const z of ZONES)if(P.maxH>=z.h&&!(z.n in ZT))ZT[z.n]=Math.round(P.t*10)/10;
+  updLightning();
   if(p.y<mist.v){if(!P.caught){P.mode='catch';P.catchAt=P.t;P.stats.catch++;}else die();}}
+ // lightning: one column per strike on a shelf ahead (seeded lane), lethal only during the strike; a hit knocks the climber off (loses grip, falls)
+ function updLightning(){const L=LIGHTNING;
+  for(let i=strikes.length-1;i>=0;i--){const k=strikes[i],a=P.t-k.t0;
+   if(a>=L.warn&&a<L.warn+L.strike&&!k.hit){const dx=P.pos.x-k.x,dz=P.pos.z-k.z;if(dx*dx+dz*dz<L.r*L.r&&P.pos.y>=k.y-0.2&&P.pos.y<=k.y+L.colH){k.hit=true;P.stats.struck++;
+     P.state='air';P.buffer=0;P.coyote=0;P.kickPlan=null;P.vel.y=Math.min(P.vel.y,L.knockVy);P.vel.z=L.knockVz;}}
+   if(a>=L.warn+L.strike+L.after)strikes.splice(i,1);}
+  const inBand=P.maxH>=L.from&&P.maxH<L.to;if(!inBand){nextStrike=null;return;}
+  if(nextStrike===null)nextStrike=P.t+2;if(P.t<nextStrike)return;
+  let c=null;for(const b of boxes){if(b.kind!=='shelf'||b.gone||b.brk||b.long||b.top==null||b.hz*2<6)continue;const d=P.pos.z-b.z;if(d<L.ahead[0]||d>L.ahead[1])continue;if(!c||b.z>c.z)c=b;}
+  if(!c){nextStrike=P.t+0.5;return;}
+  const x=L.lanes[(rL()*L.lanes.length)|0],z=c.z+(rL()-0.5)*(c.hz*2-3);strikes.push({id:sid++,x,y:c.top,z,t0:P.t,hit:false});P.stats.strikes++;
+  nextStrike=P.t+L.every*(1-L.jit/2+L.jit*rL());}
  function die(){P.mode='dead';P.stats.dead_at=Math.round(P.maxH*10)/10;}
  function doCatch(){P.caught=1;P.mode='play';const s=P.lastShelf; // back on your last solid shelf, mist 6 m below it. Free in ranked.
   const top=s?s.top:Math.max(0,P.maxH-6);P.pos.x=0;P.pos.y=top+1.2;if(s)P.pos.z=s.cz;P.vel.x=0;P.vel.y=0;P.vel.z=-T.runSpeed*0.5;P.state='air';
@@ -139,11 +156,12 @@ export function createSim(opt={}){
    else if(P.state==='wall'){const cb=P.lastWall;if(P.wallT>0.15&&(P.vel.y<1.5||P.wallT>0.5||(cb&&cb.crackAt!=null&&P.t-cb.crackAt>cb.dl-0.12)))jump=true;if(P.pos.z<m.z1+6&&P.pos.y<m.y0+m.rise+0.5)jump=true;}
    else tx=P.lastWall?-Math.sign(P.lastWall.x)*0.8:m.side*0.8;}
   if(P.state==='wall'&&jump&&opt.miss>0){if(P.kickPlan==null){const late=rM()<opt.miss;P.kickPlan=P.wallT+(late?0.3:0);if(late)P.stats.late++;}jump=P.wallT>=P.kickPlan;}
+  if(P.state!=='wall')for(const k of strikes){const a=P.t-k.t0;if(a>LIGHTNING.warn+LIGHTNING.strike)continue;const dz=P.pos.z-k.z;if(dz<-1.5||dz>14)continue;if(Math.abs(tx-k.x)<LIGHTNING.r+0.9)tx=k.x+(k.x>0?-1:k.x<0?1:(m.side||1))*2.6;} // bot sees the ring like a player would
   let pr=false;if(jump&&(!bWant||n-bLast>=12)){pr=true;bLast=n;}bWant=jump;
   return{press:pr,steer:clamp((tx-P.pos.x)/1.5,-1,1)};}
 
  ensureCourse();
- return{P,boxes,mods,mist,ZT,log,tick,decline,botInput,modAt,get ticks(){return n},get adapt(){return ADAPT}};
+ return{P,boxes,mods,mist,ZT,strikes,log,tick,decline,botInput,modAt,get ticks(){return n},get adapt(){return ADAPT}};
 }
 
 // Re-run a recorded log from scratch. Same seed + same inputs + same code => same height, on any device.
