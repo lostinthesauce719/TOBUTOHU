@@ -85,15 +85,15 @@ export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0') {
 // sky dome: vertical cyan gradient + soft procedural clouds; follows the camera, no fog, drawn first
 export function makeSky() {
   const m = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color(LOOK.skyTop) }, hor: { value: new THREE.Color(LOOK.skyHor) }, fogC: { value: new THREE.Color(LOOK.fog) } },
+    uniforms: { top: { value: new THREE.Color(LOOK.skyTop) }, hor: { value: new THREE.Color(LOOK.skyHor) }, fogC: { value: new THREE.Color(LOOK.fog) }, cloudK: { value: 0 } },
     vertexShader: `varying vec3 vD; void main(){ vD=position; gl_Position=(projectionMatrix*modelViewMatrix*vec4(position,1.)).xyww; }`,
-    fragmentShader: `uniform vec3 top,hor,fogC; varying vec3 vD;
+    fragmentShader: `uniform vec3 top,hor,fogC; uniform float cloudK; varying vec3 vD;
       float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
       float n2(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y); }
       float fbm(vec2 p){ float s=0.,a=.5; for(int i=0;i<5;i++){ s+=a*n2(p); p*=2.03; a*=.5; } return s; }
       void main(){ vec3 d=normalize(vD); float y=d.y;
         vec3 c=mix(hor,top,pow(clamp(y,0.,1.),0.55));
-        vec2 uv=d.xz/max(y+0.18,0.05)*1.4; float cl=smoothstep(0.52,0.78,fbm(uv+vec2(3.1,1.7)));
+        vec2 uv=d.xz/max(y+0.18,0.05)*1.4; float cl=smoothstep(0.52-cloudK,0.78-cloudK,fbm(uv+vec2(3.1,1.7))); /* cloudK: slow seeded density drift (scenery.js) */
         cl*=smoothstep(-0.05,0.12,y)*(1.-smoothstep(0.55,0.9,y));
         c=mix(c,vec3(0.86,0.9,0.99),cl*0.95);
         c=mix(c,fogC,1.-smoothstep(-0.05,0.16,y));   // horizon melts into the fog

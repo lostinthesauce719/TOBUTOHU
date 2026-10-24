@@ -22,8 +22,8 @@ export function createScenery(S, seed, reduceMotion) {
   const basic = (o = {}) => new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, ...o });
   // mountains: fog off (they sit past the linear fog far plane); colours are already the spec's atmospheric tints
   { // all 3 mountain rings merged into ONE mesh (saves 2 draws); per-vertex fog weight keeps far rings paler
-    const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { for (let i = 0; i < g.attributes.position.count; i++) fw.push(0.15 + L * 0.12); }); return mergeAll(gs); });
-    const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.88 }); }
+    const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const hk = THREE.MathUtils.clamp(1 - (p.getY(i) + 30) / [70, 110, 160][L], 0, 1); fw.push(Math.min(0.85, 0.28 + L * 0.17 + 0.3 * hk)); } }); return mergeAll(gs); });
+    const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.88, haze: 1 }); }
   // far cedars 80-150 from the lane, both sides, merged into one mesh; base well below the lane so trunks run out of frame
   { const r = mul(seed ^ 0xCEDA); const pos = [];
     for (let i = 0; i < 26; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (80 + r() * 70), -70 - r() * 20, 40 - i * 9 - r() * 6, 60 + r() * 40, 3 + r() * 2, (r() * 1e6) | 0]); }
@@ -34,13 +34,19 @@ export function createScenery(S, seed, reduceMotion) {
   const wfMat = waterfallMat(THREE, 'spring'); wfMat.fog = false;
   const wf = new THREE.Mesh(new THREE.BufferGeometry(), wfMat); wf.frustumCulled = false; root.add(wf); let wfBand = -1;
   // steam/mist: flattened icosahedra merged, below the lane only (mist floor 40 below + waterfall feet)
-  const stMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, depthWrite: false, fog: false });
+  const stMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false,
+    uniforms: { color: { value: new THREE.Color(0xffffff) }, opacity: { value: 0.25 } },
+    vertexShader: `attribute vec2 corner; attribute float rad; varying vec2 vC; void main(){ vC=corner;
+      vec4 mv=modelViewMatrix*vec4(position,1.); mv.xy+=corner*rad*vec2(1.,0.55); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader: `uniform vec3 color; uniform float opacity; varying vec2 vC; void main(){ float r=length(vC); float a=opacity*(1.-smoothstep(0.35,1.,r)); if(a<0.003) discard; gl_FragColor=vec4(color,a); }` });
+  Object.defineProperty(stMat, 'color', { get: () => stMat.uniforms.color.value });
   const steam = new THREE.Mesh(new THREE.BufferGeometry(), stMat); steam.frustumCulled = false; root.add(steam);
   // birds: one InstancedMesh
   const NB = 9, birds = new THREE.InstancedMesh(bird(THREE), new THREE.MeshBasicMaterial({ color: 0x6F7FA0, side: THREE.DoubleSide, fog: false }), NB);
   birds.frustumCulled = false; S.add(birds);
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
-  const _a = new THREE.Color(), _b = new THREE.Color(), fogC = new THREE.Color();
+  const _v = new THREE.Vector3(), _a = new THREE.Color(), _b = new THREE.Color(), fogC = new THREE.Color(), horC = new THREE.Color(), tint = new THREE.Color();
+  const ph1 = hash(seed, 1) * 6.283, ph2 = hash(seed, 2) * 6.283;
   let lastKey = '';
 
   function rebuildBand(band) { // deterministic from seed + band; rebuilt only when the climber crosses a 120 m band
@@ -49,43 +55,50 @@ export function createScenery(S, seed, reduceMotion) {
     for (let i = 0; i < n; i++) { const s = i === 0 ? (r() < 0.5 ? -1 : 1) : -fgSide, w = 6 + r() * 4, h = 60 + r() * 30; var fgSide = s;
       const x = s * (50 + r() * 40), y = 35 + r() * 15, z = -60 - r() * 60;
       const g = waterfall(THREE, w, h); g.rotateY(-s * 0.5); g.translate(x, y, z); fg.push(g);
-      for (let k = 0; k < 6; k++) { const p = new THREE.IcosahedronGeometry(3 + r() * 3, 0); p.scale(1, 0.3 + r() * 0.25, 1); p.translate(x + (r() - 0.5) * w * 1.6, y - h - 2 + r() * 3, z + (r() - 0.5) * 6); sg.push(p); } }
-    for (let k = 0; k < 8; k++) { const p = new THREE.IcosahedronGeometry(20, 0); p.scale(1, 0.3 + r() * 0.25, 1); p.translate((k % 2 ? 1 : -1) * (10 + r() * 40), -40 - r() * 8, 10 - k * 22); sg.push(p); }
-    wf.geometry.dispose(); wf.geometry = mergeAll(fg, true); steam.geometry.dispose(); steam.geometry = mergeAll(sg.map(g => { g.deleteAttribute('uv'); return g; }), false);
+      for (let k = 0; k < 6; k++) sg.push([x + (r() - 0.5) * w * 1.6, y - h - 2 + r() * 3, z + (r() - 0.5) * 6, 4 + r() * 4]); }
+    for (let k = 0; k < 14; k++) sg.push([(k % 2 ? 1 : -1) * (6 + r() * 45), -40 - r() * 8, 10 - k * 13, 16 + r() * 12]);
+    wf.geometry.dispose(); wf.geometry = mergeAll(fg, true); steam.geometry.dispose(); steam.geometry = puffs(sg);
   }
 
   return { root, birds,
     update(cam, h, t, fog, sky) {
-      const zm = zoneMix(Math.max(0, h)), A = ZONES[zm.a], B = ZONES[zm.b], st = stormK(h), dark = 1 - 0.38 * st;
+      const zm = zoneMix(Math.max(0, h)), A = ZONES[zm.a], B = ZONES[zm.b], st = stormK(h), dark = 1 - 0.26 * st;
       // atmosphere: lerp sky + fog colour by zone (env cycle replacement until env.js lands)
-      if (sky) { sky.material.uniforms.top.value.setHex(A.sky[0]).lerp(_b.setHex(B.sky[0]), zm.t).multiplyScalar(1 - 0.45 * st);
-        sky.material.uniforms.hor.value.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiplyScalar(1 - 0.3 * st); }
-      fog.setHex(A.fog).lerp(_b.setHex(B.fog), zm.t).multiplyScalar(1 - 0.22 * st); fogC.copy(fog);
+      if (sky) { horC.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiply(tint); sky.material.uniforms.top.value.setHex(A.sky[0]).lerp(_b.setHex(B.sky[0]), zm.t).multiplyScalar(1 - 0.38 * st);
+        sky.material.uniforms.hor.value.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiplyScalar(1 - 0.2 * st).multiply(tint); sky.material.uniforms.top.value.multiply(tint); } else horC.copy(fog);
+      // slow seeded drift: +-4% warm/cool, periods ~95 s and ~61 s, smooth (no snaps)
+      const wd = 0.04 * (0.7 * Math.sin(t * 0.066 + ph1) + 0.3 * Math.sin(t * 0.103 + ph2)); tint.setRGB(1 + wd, 1 + wd * 0.25, 1 - wd);
+      if (sky) sky.material.uniforms.cloudK.value = 0.05 * Math.sin(t * 0.041 + ph2) + 0.03 * Math.sin(t * 0.017 + ph1);
+      fog.setHex(A.fog).lerp(_b.setHex(B.fog), zm.t).multiplyScalar(1 - 0.08 * st).multiply(tint); fogC.copy(fog);
       if (sky) sky.material.uniforms.fogC.value.copy(fog);
       // the backdrop follows the camera (x pinned to the lane), with height parallax per layer
       root.position.set(0, cam.position.y, cam.position.z);
       for (const L of layers) L.m.position.y = -h * (1 - L.par) * 0.25;
-      const key = zm.a + zm.b + zm.t.toFixed(3) + st.toFixed(3);
+      const key = zm.a + zm.b + zm.t.toFixed(3) + st.toFixed(3) + wd.toFixed(4);
       if (key !== lastKey) { lastKey = key;
-        const fc = fogC.toArray(); for (const L of layers) { const c = L.m.geometry.getAttribute('color'), a = L.per[zm.a], b = L.per[zm.b], o = c.array;
-          for (let i = 0; i < o.length; i++) { const f = fc[i % 3], k = L.fogV ? L.fogV[(i / 3) | 0] : L.fog; o[i] = ((a[i] + (b[i] - a[i]) * zm.t) * dark) * (1 - k) + f * k; } c.needsUpdate = true; }
+        const fc = fogC.toArray(), hc = horC.toArray(); for (const L of layers) { const c = L.m.geometry.getAttribute('color'), a = L.per[zm.a], b = L.per[zm.b], o = c.array;
+          for (let i = 0; i < o.length; i++) { const f = (L.haze ? hc : fc)[i % 3], k = L.fogV ? L.fogV[(i / 3) | 0] : L.fog; o[i] = ((a[i] + (b[i] - a[i]) * zm.t) * dark) * (1 - k) + f * k; }
+          for (let i = 0; i < o.length; i += 3) { const y = 0.299 * o[i] + 0.587 * o[i + 1] + 0.114 * o[i + 2]; if (y > 0.78) { const q = 0.78 / y; o[i] *= q; o[i + 1] *= q; o[i + 2] *= q; } } // solid scenery luma <= 199 (spec band)
+          c.needsUpdate = true; }
         wfMat.uniforms.a.value.setHex(A.fall[0]).lerp(_b.setHex(B.fall[0]), zm.t).multiplyScalar(dark);
         wfMat.uniforms.b.value.setHex(A.fall[1]).lerp(_b.setHex(B.fall[1]), zm.t).multiplyScalar(dark);
-        stMat.color.setHex(A.steam[0]).lerp(_b.setHex(B.steam[0]), zm.t); stMat.opacity = A.steam[1] + (B.steam[1] - A.steam[1]) * zm.t;
+        stMat.color.setHex(A.steam[0]).lerp(_b.setHex(B.steam[0]), zm.t); stMat.uniforms.opacity.value = (A.steam[1] + (B.steam[1] - A.steam[1]) * zm.t) * (1 - 0.3 * st);
         birds.material.color.setHex(A.bird).lerp(_b.setHex(B.bird), zm.t); }
       const band = Math.floor(Math.max(0, h) / 120); if (band !== wfBand) { wfBand = band; rebuildBand(band); }
       const winter = zm.b === 'winter' && zm.t > 0.5 || zm.a === 'winter';
       wfMat.uniforms.t.value = t * (reduceMotion ? 0.25 : 1) * (winter ? 0.5 : 1);
       // birds: deterministic paths from seed + 20 s window + sim time; |x| >= 22, lane +15..30, 4-7 u/s along -z; storm thins them
-      const W = 20, w = Math.floor(t / W), ph = t - w * W, nZone = zm.b === 'autumn' ? 9 : zm.b === 'spring' ? 7 : 5, nOn = Math.round(nZone * (1 - 0.5 * st));
-      const r = mul(seed * 131 + w * 977), side = r() < 0.5 ? -1 : 1, x0 = side * (24 + r() * 20), y0 = cam.position.y + 15 + r() * 12, sp = 4 + r() * 3, show = r() < 0.7;
-      const tb = reduceMotion ? 6 : ph;
+      const W = 12, w = Math.floor(t / W), ph = t - w * W, nZone = zm.b === 'autumn' ? 9 : zm.b === 'spring' ? 7 : 5, nOn = Math.round(nZone * (1 - 0.5 * st));
+      // flock rides alongside 60 units ahead, drifting back at 4-7 u/s relative and despawns behind the camera
+      const r = mul(seed * 131 + w * 977), side = r() < 0.5 ? -1 : 1, x0 = side * (23 + r() * 5), y0 = h + 15 + r() * 7, sp = 4 + r() * 3, show = r() < 0.75;
+      const tb = reduceMotion ? 3 : ph; let vis = 0; cam.updateMatrixWorld();
       for (let i = 0; i < NB; i++) { const on = show && i < nOn; const row = Math.ceil(i / 2), lr = i % 2 ? 1 : -1;
-        _p.set(x0 + lr * row * 1.6 * side, y0 - row * 0.9, cam.position.z - 30 + 40 - tb * sp - row * 1.2);
+        _p.set(x0 + lr * row * 1.6 * side, y0 - row * 0.9, cam.position.z - 80 + tb * sp * 0.85 + row * 1.2);
         if (Math.abs(_p.x) < 22) _p.x = Math.sign(_p.x || side) * 22;
         const sc = on ? 1.2 + hash(seed + w, i) * 0.6 : 0, bob = reduceMotion ? 1 : 1 + 0.1 * Math.sin((t + i * 0.13) * Math.PI * 6);
-        _e.set(-Math.PI / 2 * 0.15, 0, 0); _q.setFromEuler(_e); _s.set(sc, sc * bob, sc); _m.compose(_p, _q, _s); birds.setMatrixAt(i, _m); }
-      birds.instanceMatrix.needsUpdate = true;
+        if (on) { _v.copy(_p).project(cam); if (Math.abs(_v.x) < 1 && Math.abs(_v.y) < 1 && _v.z < 1) vis++; }
+        _e.set(0, 0, 0); _q.setFromEuler(_e); _s.set(sc, sc * bob, sc); _m.compose(_p, _q, _s); birds.setMatrixAt(i, _m); }
+      birds.instanceMatrix.needsUpdate = true; this.birdsInView = vis; 
     } };
 }
 
@@ -94,4 +107,11 @@ function mergeAll(gs, uvs) { // non-indexed merge of position (+normal, +color o
   const out = new THREE.BufferGeometry(), names = ['position', 'normal', ...(uvs ? ['uv'] : gs[0] && gs[0].attributes.color ? ['color'] : [])];
   for (const nm of names) { const sz = gs[0].attributes[nm].itemSize, A = new Float32Array(n * sz); let o = 0; for (const g of gs) { A.set(g.attributes[nm].array, o); o += g.attributes[nm].array.length; } out.setAttribute(nm, new THREE.BufferAttribute(A, sz)); }
   return out;
+}
+
+function puffs(list) { // merged camera-facing quads: centre position + corner + radius (soft round puffs, no facets)
+  const n = list.length, P = new Float32Array(n * 18), C = new Float32Array(n * 12), Rr = new Float32Array(n * 6);
+  const cs = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
+  list.forEach(([x, y, z, r], i) => cs.forEach(([u, v], j) => { const k = i * 6 + j; P.set([x, y, z], k * 3); C.set([u, v], k * 2); Rr[k] = r; }));
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('corner', new THREE.BufferAttribute(C, 2)); g.setAttribute('rad', new THREE.BufferAttribute(Rr, 1)); return g;
 }
