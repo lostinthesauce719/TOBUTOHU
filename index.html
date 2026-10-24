@@ -39,10 +39,10 @@
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
-import {createHero} from './hero.js';import {kit} from './clipkit.js';
+import {createHero} from './hero.js';import {kit,cedarZone,zoneMix} from './clipkit.js';
 import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
-import {createSaves} from './saves.js';import {createFlashLimiter} from './flash.js';
+import {createSaves} from './saves.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
@@ -100,19 +100,18 @@ function merge(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;cons
 const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1],autumn:[0xABB8EB,0x858FD1],winter:[0xC7D6EB,0xABB8EB]}; // lavender cedars (clipstyle)
 // decor: placeholder forest (cylinder trunks + cone canopies, spring blossom puffs), merged into one draw per module
 function decor(z0,z1,y){const zc=zoneAt(y),fc=FC[zc.key],gs=[];
- for(let z=z0;z>z1;z-=6){for(const s of[-1,1]){if(rD()<0.6){const H=18+rD()*22,d=10+rD()*30,r=0.6+rD()*0.5,x=s*d,zz=z-rD()*6,yb=y-12;
-   const cd=kit.cedar(THREE,H,r*2.6);cd.translate(x,yb,zz);gs.push(cd); /* BRUSH clipkit cedar */
-   if(zc.key==='spring'){const pink=rD()<PAL.spring.blossom_pink_ratio,bl=colored(new THREE.IcosahedronGeometry(1.6+rD()*1.4,1),pink?fc[3]:fc[2]);
-    bl.translate(x+(rD()-.5)*2,yb+H*(0.55+rD()*0.35),zz+1.5);gs.push(bl);}}}}
- if(rD()<0.3){const s=rD()<.5?-1:1,t=kit.torii(THREE,10,9);t.rotateY(s*0.5);t.translate(s*(16+rD()*10),y-2,z1+rD()*(z0-z1));gs.push(t);} /* torii: background, no collider, pale lavender */
+ const zm=zoneMix(Math.max(0,y)),zk=zm.t>0.5?zm.b:zm.a; /* BRUSH scenery spec: mid cedars 25-70 from the lane, H 60-100, R 3-5, base y-70, gridded */
+ for(let z=z0;z>z1;z-=12){for(const s of[-1,1]){if(rD()<0.7){const H=60+rD()*40,R=3+rD()*2,x=s*(25+R*2.6+rD()*(45-R*2.6)),zz=z-rD()*10;
+   const cd=cedarZone(THREE,zk,H,R,1+(rD()*1e6|0));cd.translate(x,y-70,zz);gs.push(cd);}}}
+ if(rD()<0.3){const s=rD()<.5?-1:1,t=kit.torii(THREE,10,9);t.rotateY(s*0.5);t.translate(s*(28+rD()*10),y-2,z1+rD()*(z0-z1));gs.push(t);} /* torii: background, no collider, pale lavender */
  if(gs.length){const m=new THREE.Mesh(merge(gs),VC);m.position.z=0;m.userData.zEnd=z1;m.userData.zStart=z0;S.add(m);deco.push(m);}
  if(zc.n!=='Spring cedar'&&rD()<0.5){const wf=new THREE.Mesh(new THREE.PlaneGeometry(4+rD()*4,40),new THREE.MeshBasicMaterial({color:hx(G.waterfall.body),transparent:true,opacity:0.85,fog:true}));
-  const s=rD()<.5?-1:1;wf.position.set(s*(22+rD()*20),y+4,z1+rD()*(z0-z1));wf.rotation.y=-s*0.6;S.add(wf);deco.push(wf);}
+  const s=rD()<.5?-1:1;wf.position.set(s*(22+rD()*20),y+4,z1+rD()*(z0-z1));wf.rotation.y=-s*0.6;/* placeholder waterfall replaced by scenery.js (rD still drawn so cedar layout is unchanged) */wf.geometry.dispose();}
  if(zc.n==='Autumn steam'||rD()<0.15){const st=new THREE.Mesh(new THREE.SphereGeometry(3+rD()*3,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
-  st.position.set((rD()<.5?-1:1)*(9+rD()*10),y-3,z1+rD()*(z0-z1));st.userData.steam=1;S.add(st);deco.push(st);}}
+  st.position.set((rD()<.5?-1:1)*(9+rD()*10),y-3,z1+rD()*(z0-z1));st.geometry.dispose();}} /* steam now in scenery.js */
 const mtns=new THREE.Group();S.add(mtns);{const gs=[];
 for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0xC7D6EB);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
-mtns.add(new THREE.Mesh(merge(gs),VC));}
+/* cone mountains replaced by scenery.js backdrop */}
 // drop shadow: crisp dark disc on the highest surface under the climber (reads sim boxes, never writes)
 const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1C2438,transparent:true,opacity:0.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;S.add(shadow);
 function shadowTick(){let top=-1e9;for(const b of sim.boxes){const t=b.y+b.hy;if(t<=P.pos.y+0.05&&t>top&&Math.abs(P.pos.x-b.x)<=b.hx&&Math.abs(P.pos.z-b.z)<=b.hz)top=t;}
@@ -135,7 +134,7 @@ function mistDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_mv.set(
  const off=y<0,d=Math.max(0,P.pos.y-mistY.v);mRead.style.display=off&&P.mode!=='dead'?'block':'none';mRead.textContent='mist '+d.toFixed(0)+' m';mRead.classList.toggle('warn',mWarnA>0.5);}
 
 // ---------- lightning visuals: ring decal (3D) + column edges/bolt/flash (overlay). Visual only: reads sim.strikes. ----------
-const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const flashUntil=new Map();
+const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const scen=createScenery(S,SEED,RM); /* BRUSH scenery spec: mountains x3, far cedars, falls, steam, birds = 7 draws */const flashUntil=new Map();
 const ringMat=()=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3,uniforms:{R:{value:LT.r},prog:{value:0},ph:{value:1},fade:{value:1},px:{value:1}},
  vertexShader:`varying vec2 vP; void main(){ vP=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
  fragmentShader:`uniform float R,prog,ph,fade,px; varying vec2 vP; void main(){ float r=length(vP), fw=fwidth(r)/px; vec4 o=vec4(0.);
@@ -226,7 +225,7 @@ $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});cons
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();post.render(S,cam);}
+ else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);post.render(S,cam);}
 
 const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
 function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;

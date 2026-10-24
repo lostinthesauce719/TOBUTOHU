@@ -158,3 +158,58 @@ function fixWinding(THREE, g) { // make every face's normal point away from the 
   return g;
 }
 export const triCount = tris;
+
+// ---------------- C) scenery (backdrop, no colliders) — see ../scenery_spec.md ----------------
+// Role colours per zone. Atmosphere (sky, fog, steam) is exempt from the 105-200 scenery band; everything solid is inside it.
+export const ZONES = {
+  spring: { y0: 0,   sky: [0x4A86D0, 0xB4D8FA], fog: 0xCFE6FB, fogD: 0.0038, trunk: 0x9AA2D8, tierA: 0xC4C2DC, tierB: 0xCDB4CC, pinkShare: 0.4, mtn: [0x8E98CC, 0xA4B0DA, 0xBAC6E4], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE6F0FA, 0.25], bird: 0x6F7FA0 },
+  summer: { y0: 120, sky: [0x34609A, 0xA8D2F6], fog: 0xC9E2F6, fogD: 0.0042, trunk: 0x7F90B8, tierA: 0x5E8C8A, tierB: 0x6E9C98, mtn: [0x7486B4, 0x8E9ECC, 0xAEBEE0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE2EEF8, 0.35], bird: 0x6F7FA0 },
+  autumn: { y0: 250, sky: [0x4C7CC0, 0xB2D2F2], fog: 0xD0E2F2, fogD: 0.0040, trunk: 0x9298C8, tierA: 0x8E9A6A, tierB: 0xC8BC86, mtn: [0x8A90C4, 0xA2A8D4, 0xBCC2E2], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE4ECF6, 0.40], bird: 0x6F7FA0 },
+  winter: { y0: 400, sky: [0x6C9AD4, 0xC8E2FA], fog: 0xDCEBF8, fogD: 0.0048, trunk: 0x8E9CC8, tierA: 0xA6B4DC, tierB: 0xC0C6DE, snow: 0xC0C6DE, mtn: [0x9CA8D2, 0xB2BEDE, 0xBCC6E0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xEAF2FA, 0.30], bird: 0xFFFFFF },
+};
+export const XFADE_M = 15; // metres of cross-fade centred on each boundary
+export function zoneMix(y) { // -> {a, b, t}: blend from zone a to b by t (0..1)
+  const ks = Object.keys(ZONES); for (let i = ks.length - 1; i >= 0; i--) { const y0 = ZONES[ks[i]].y0;
+    if (i > 0 && Math.abs(y - y0) < XFADE_M / 2) return { a: ks[i - 1], b: ks[i], t: (y - y0 + XFADE_M / 2) / XFADE_M };
+    if (y >= y0) return { a: ks[i], b: ks[i], t: 0 }; }
+}
+// seasonal cedar: same silhouette as kit.cedar; tiers recoloured per zone (spring: 60% white / 40% pink per tier by hash; winter: snow caps on tier tops)
+export function cedarZone(THREE, zone, H = 60, R = 3, seed = 1) {
+  const z = ZONES[zone], gs = []; let s = seed;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const tr = new THREE.CylinderGeometry(R * 0.55, R, H, 8, 1); tr.translate(0, H / 2, 0); gs.push(paint(THREE, tr, () => z.trunk));
+  for (let i = 0; i < 4; i++) { const k = i / 4, rr = R * (2.6 - 1.5 * k), c = new THREE.CylinderGeometry(rr * 0.55, rr, R * 0.7, 8, 1);
+    c.translate(0, H * (0.6 + 0.12 * i), 0); const pinkTier = zone === 'spring' && rnd() < z.pinkShare;
+    gs.push(paint(THREE, c, (n) => n.y > 0.3 ? (zone === 'winter' ? z.snow : pinkTier ? z.tierB : z.tierA) : (pinkTier ? z.tierB : z.tierA))); }
+  const tip = new THREE.ConeGeometry(R * 1.2, R * 2.4, 8); tip.translate(0, H * 1.08 + R * 0.6, 0); gs.push(paint(THREE, tip, (n) => zone === 'winter' && n.y > 0.3 ? z.snow : z.tierA));
+  return merge(THREE, gs);
+}
+// mountain layer: a ring segment of flat-shaded faceted peaks (one merged geometry per layer). layer 0 near .. 2 far
+export function mountains(THREE, zone, layer, seed = 3) {
+  const z = ZONES[zone], dist = [180, 260, 360][layer], n = [9, 12, 15][layer], hMax = [70, 110, 160][layer], gs = []; let s = seed + layer * 97;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++) { const a = -Math.PI * 0.85 + (i / (n - 1)) * Math.PI * 1.7 + (rnd() - 0.5) * 0.15, h = hMax * (0.55 + rnd() * 0.45);
+    const g = new THREE.ConeGeometry(h * (0.8 + rnd() * 0.4), h, 5 + (rnd() * 2 | 0), 1); g.rotateY(rnd() * 6);
+    g.translate(Math.sin(a) * dist, h / 2 - 30, -Math.cos(a) * dist);
+    gs.push(paint(THREE, g, (nn) => { const lit = nn.x * 0.35 + nn.z * 0.4 > 0; const c = new THREE.Color(z.mtn[layer]); if (!lit) c.multiplyScalar(0.92); if (zone === 'winter' && nn.y > 0.55) c.setHex(z.snow); return c.getHex(); })); }
+  return merge(THREE, gs);
+}
+// waterfall: a vertical plane; colour bands scroll down in the shader (one shared material for all falls)
+export function waterfall(THREE, w = 6, h = 60) { const g = new THREE.PlaneGeometry(w, h, 1, 1); g.translate(0, -h / 2, 0); return g; }
+export function waterfallMat(THREE, zone) {
+  const z = ZONES[zone];
+  return new THREE.ShaderMaterial({ fog: true, transparent: false,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { a: { value: new THREE.Color(z.fall[0]) }, b: { value: new THREE.Color(z.fall[1]) }, t: { value: 0 } }]),
+    vertexShader: `#include <fog_pars_vertex>
+      varying vec2 vU; void main(){ vU=uv; vec4 mvPosition=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mvPosition;
+      #include <fog_vertex>
+      }`,
+    fragmentShader: `#include <fog_pars_fragment>
+      uniform vec3 a,b; uniform float t; varying vec2 vU;
+      void main(){ float k=step(0.5,fract(vU.y*9.+t*0.6+floor(vU.x*3.)*0.33)); gl_FragColor=vec4(mix(a,b,k),1.);
+      #include <fog_fragment>
+      }` });
+}
+// bird: flat chevron (2 tris), ~0.9 x 0.35 units; instance it (InstancedMesh, one draw for all birds)
+export function bird(THREE) { const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.45, 0.12, 0, 0, 0, 0, 0, -0.1, 0, 0, 0, 0, 0.45, 0.12, 0, 0, -0.1, 0], 3)); g.computeVertexNormals(); return g; }
