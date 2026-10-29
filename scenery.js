@@ -1,8 +1,7 @@
-// Tobu scenery (BRUSH scenery_spec.md 2026-10-23). VISUAL ONLY: reads camera, climber height, sim time and the run seed;
-// never writes sim state. No colliders. No Math.random / wall clock: everything comes from seed + height + sim time.
-// Layers: 3 mountain rings (180/260/360), far cedars (80-150), 2 waterfalls (50-90), steam/mist floor (below the lane),
-// instanced birds (|x|>=22, lane+15..30). Zones spring/summer/autumn/winter with 15 m cross-fades via CPU colour lerp
-// (same geometry every zone). Storm band 150-250 m darkens scenery. Draws: mountains 1 + far cedars 1 + falls 1 + steam 1 + birds 1 = 5.
+// Tobu scenery (BRUSH scenery_spec.md + seasons weather). VISUAL ONLY: reads camera, climber height, sim time and the
+// run seed; never writes sim state. No colliders. No Math.random / wall clock.
+// Layers: mountains (1), far cedars (1), waterfalls (1), steam (1), birds (1), weather particles (1) = 6 draws.
+// Weather is ONE InstancedMesh shared by all seasons; zoneMix cross-fades which particles show.
 import * as THREE from './vendor/three.module.min.js';
 import { ZONES, zoneMix, cedarZone, mountains, waterfall, waterfallMat, bird } from './clipkit.js';
 
@@ -11,7 +10,6 @@ function mul(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.im
 const hash = (s, i) => mul((s * 2654435761 ^ i * 40503) >>> 0)();
 export const stormK = h => THREE.MathUtils.smoothstep(h, 140, 160) * (1 - THREE.MathUtils.smoothstep(h, 240, 260));
 
-// one geometry per layer, a colour array per zone; recolour = lerp(zoneA, zoneB, t) * storm
 function zoned(build) { const per = {}; let geo = null;
   for (const z of ZK) { const g = build(z); if (!geo) geo = g; per[z] = Float32Array.from(g.getAttribute('color').array); }
   return { geo, per }; }
@@ -20,20 +18,19 @@ export function createScenery(S, seed, reduceMotion) {
   const root = new THREE.Group(); root.userData.scenery = 1; S.add(root);
   const layers = [];
   const basic = (o = {}) => new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, ...o });
-  // mountains: fog off (they sit past the linear fog far plane); colours are already the spec's atmospheric tints
-  { // all 3 mountain rings merged into ONE mesh (saves 2 draws); per-vertex fog weight keeps far rings paler
-    const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const hk = THREE.MathUtils.clamp(1 - (p.getY(i) + 30) / [70, 110, 160][L], 0, 1); fw.push(Math.min(0.85, 0.28 + L * 0.17 + 0.3 * hk)); } }); return mergeAll(gs); });
+  let farCedar = null;
+  // mountains: 3 rings merged; per-vertex haze toward horizon
+  { const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const hk = THREE.MathUtils.clamp(1 - (p.getY(i) + 30) / [70, 110, 160][L], 0, 1); fw.push(Math.min(0.85, 0.28 + L * 0.17 + 0.3 * hk)); } }); return mergeAll(gs); });
     const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.88, haze: 1 }); }
-  // far cedars 80-150 from the lane, both sides, merged into one mesh; base well below the lane so trunks run out of frame
+  // far cedars 80-150
   { const r = mul(seed ^ 0xCEDA); const pos = [];
     for (let i = 0; i < 26; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (80 + r() * 70), -70 - r() * 20, 40 - i * 9 - r() * 6, 60 + r() * 40, 3 + r() * 2, (r() * 1e6) | 0]); }
-    const z = zoned(zn => { const gs = pos.map(([x, y, zz, H, R, sd]) => { const g = cedarZone(THREE, zn, H, R, sd); g.translate(x, y, zz); return g; });
-      return mergeAll(gs); });
-    const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; root.add(m); layers.push({ m, ...z, fog: 0.3, par: 0.6 }); }
-  // waterfalls: at most 2, x 50-90, opaque fogged shader (one draw); placement re-seeded per 120 m band
+    const z = zoned(zn => mergeAll(pos.map(([x, y, zz, H, R, sd]) => { const g = cedarZone(THREE, zn, H, R, sd); g.translate(x, y, zz); return g; })));
+    farCedar = new THREE.Mesh(z.geo, basic()); farCedar.frustumCulled = false; root.add(farCedar); layers.push({ m: farCedar, ...z, fog: 0.15, par: 0.6 }); }
+  // waterfalls
   const wfMat = waterfallMat(THREE, 'spring'); wfMat.fog = false;
   const wf = new THREE.Mesh(new THREE.BufferGeometry(), wfMat); wf.frustumCulled = false; root.add(wf); let wfBand = -1;
-  // steam/mist: flattened icosahedra merged, below the lane only (mist floor 40 below + waterfall feet)
+  // steam / seasonal mist (below lane only)
   const stMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false,
     uniforms: { color: { value: new THREE.Color(0xffffff) }, opacity: { value: 0.25 } },
     vertexShader: `attribute vec2 corner; attribute float rad; varying vec2 vC; void main(){ vC=corner;
@@ -41,75 +38,192 @@ export function createScenery(S, seed, reduceMotion) {
     fragmentShader: `uniform vec3 color; uniform float opacity; varying vec2 vC; void main(){ float r=length(vC); float a=opacity*(1.-smoothstep(0.35,1.,r)); if(a<0.003) discard; gl_FragColor=vec4(color,a); }` });
   Object.defineProperty(stMat, 'color', { get: () => stMat.uniforms.color.value });
   const steam = new THREE.Mesh(new THREE.BufferGeometry(), stMat); steam.frustumCulled = false; root.add(steam);
-  // birds: one InstancedMesh
+  // birds
   const NB = 9, birds = new THREE.InstancedMesh(bird(THREE), new THREE.MeshBasicMaterial({ color: 0x6F7FA0, side: THREE.DoubleSide, fog: false }), NB);
   birds.frustumCulled = false; S.add(birds);
+  // ---- seasonal weather: ONE shared InstancedMesh (soft billboard quads) ----
+  // kinds by hash slot: drizzle / petal-leaf-snow / mote-firefly / flake. Scales to 0 when that season's weight is 0.
+  const NW = reduceMotion ? 48 : 96;
+  const wxGeo = new THREE.PlaneGeometry(1, 1);
+  const wxMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, fog: false, side: THREE.DoubleSide,
+    vertexColors: true,
+    vertexShader: `attribute vec3 instanceColor; varying vec2 vUv; varying vec3 vC; void main(){ vUv=uv; vC=instanceColor; vec4 mv=modelViewMatrix*instanceMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader: `varying vec2 vUv; varying vec3 vC; void main(){ vec2 p=vUv*2.-1.; float r=length(p); float a=0.95*(1.-smoothstep(0.15,1.,r)); if(a<0.02) discard; gl_FragColor=vec4(vC,a); }` });
+  const weather = new THREE.InstancedMesh(wxGeo, wxMat, NW); weather.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NW * 3), 3);
+  weather.frustumCulled = false; weather.renderOrder = 2; S.add(weather);
+  // per-particle seed state (fixed at create)
+  const px = new Float32Array(NW), py = new Float32Array(NW), pz = new Float32Array(NW), pph = new Float32Array(NW), pk = new Uint8Array(NW), psp = new Float32Array(NW);
+  { const r = mul(seed ^ 0xA7E471); for (let i = 0; i < NW; i++) {
+      pk[i] = (r() * 4) | 0; pph[i] = r() * 6.283; psp[i] = 0.6 + r() * 1.4;
+      const side = r() < 0.5 ? -1 : 1; px[i] = side * (22 + r() * 38); /* |x|>=22, outside play lane */
+      py[i] = (r() - 0.35) * 28; pz[i] = -55 + r() * 70; } }
+
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
   const _v = new THREE.Vector3(), _a = new THREE.Color(), _b = new THREE.Color(), fogC = new THREE.Color(), horC = new THREE.Color(), tint = new THREE.Color();
+  const col = new THREE.Color();
   const ph1 = hash(seed, 1) * 6.283, ph2 = hash(seed, 2) * 6.283;
   let lastKey = '';
 
-  function rebuildBand(band) { // deterministic from seed + band; rebuilt only when the climber crosses a 120 m band
+  function rebuildBand(band) {
     const r = mul(seed * 31 + band * 7919); const fg = [], sg = [];
-    const n = r() < 0.35 ? 1 : 2;
-    for (let i = 0; i < n; i++) { const s = i === 0 ? (r() < 0.5 ? -1 : 1) : -fgSide, w = 6 + r() * 4, h = 60 + r() * 30; var fgSide = s;
+    const n = r() < 0.35 ? 1 : 2; let fgSide = 1;
+    for (let i = 0; i < n; i++) { const s = i === 0 ? (r() < 0.5 ? -1 : 1) : -fgSide; fgSide = s; const w = 6 + r() * 4, h = 60 + r() * 30;
       const x = s * (50 + r() * 40), y = 35 + r() * 15, z = -60 - r() * 60;
       const g = waterfall(THREE, w, h); g.rotateY(-s * 0.5); g.translate(x, y, z); fg.push(g);
       for (let k = 0; k < 6; k++) sg.push([x + (r() - 0.5) * w * 1.6, y - h - 2 + r() * 3, z + (r() - 0.5) * 6, 4 + r() * 4]); }
     for (let k = 0; k < 14; k++) sg.push([(k % 2 ? 1 : -1) * (6 + r() * 45), -40 - r() * 8, 10 - k * 13, 16 + r() * 12]);
+    // winter breath puffs (extra soft spheres just below lane, rebuilt per band)
+    for (let k = 0; k < 6; k++) sg.push([(k % 2 ? 1 : -1) * (20 + r() * 25), -8 - r() * 6, -10 - k * 10, 5 + r() * 4]);
     wf.geometry.dispose(); wf.geometry = mergeAll(fg, true); steam.geometry.dispose(); steam.geometry = puffs(sg);
   }
 
-  return { root, birds,
+  // season palette accents (no red/orange/vermilion): olive / pale gold / cream / cool blue
+  const C_DRIZZLE = 0xB8D0E8, C_PETAL = 0xF2EEE0, C_PETAL2 = 0xE8D8E0, C_POLLEN = 0xD4E0B0;
+  const C_FIREFLY = 0xC8BC86, C_LEAF = 0x8E9A6A, C_LEAF2 = 0xC8BC86, C_SNOW = 0xEAF2FA, C_SNOW2 = 0xFFFFFF;
+
+  return { root, birds, weather,
     update(cam, h, t, fog, sky) {
       const zm = zoneMix(Math.max(0, h)), A = ZONES[zm.a], B = ZONES[zm.b], st = stormK(h), dark = 1 - 0.26 * st;
-      // atmosphere: lerp sky + fog colour by zone (env cycle replacement until env.js lands)
-      if (sky) { horC.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiply(tint); sky.material.uniforms.top.value.setHex(A.sky[0]).lerp(_b.setHex(B.sky[0]), zm.t).multiplyScalar(1 - 0.38 * st);
-        sky.material.uniforms.hor.value.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiplyScalar(1 - 0.2 * st).multiply(tint); sky.material.uniforms.top.value.multiply(tint); } else horC.copy(fog);
-      // slow seeded drift: +-4% warm/cool, periods ~95 s and ~61 s, smooth (no snaps)
+      const Wgt = { spring: 0, summer: 0, autumn: 0, winter: 0 }; Wgt[zm.a] += 1 - zm.t; Wgt[zm.b] += zm.t;
+      // summer→autumn crossfade was overbright: peak mid-fade dampener
+      const xfSA = (zm.a === 'summer' && zm.b === 'autumn') ? 4 * zm.t * (1 - zm.t) : 0;
+      // slow seeded drift
       const wd = 0.04 * (0.7 * Math.sin(t * 0.066 + ph1) + 0.3 * Math.sin(t * 0.103 + ph2)); tint.setRGB(1 + wd, 1 + wd * 0.25, 1 - wd);
-      if (sky) sky.material.uniforms.cloudK.value = 0.05 * Math.sin(t * 0.041 + ph2) + 0.03 * Math.sin(t * 0.017 + ph1);
-      fog.setHex(A.fog).lerp(_b.setHex(B.fog), zm.t).multiplyScalar(1 - 0.08 * st).multiply(tint); fogC.copy(fog);
+      // seasonal tint bias on top of drift (fresh green spring, clear autumn, cold winter, bright summer)
+      tint.r *= 1 - 0.03 * Wgt.spring + 0.02 * Wgt.summer - 0.02 * Wgt.winter;
+      tint.g *= 1 + 0.04 * Wgt.spring + 0.01 * Wgt.summer - 0.01 * Wgt.autumn;
+      tint.b *= 1 - 0.02 * Wgt.spring - 0.03 * Wgt.autumn + 0.05 * Wgt.winter;
+      if (sky) { horC.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiply(tint);
+        sky.material.uniforms.top.value.setHex(A.sky[0]).lerp(_b.setHex(B.sky[0]), zm.t).multiplyScalar(1 - 0.38 * st).multiply(tint);
+        sky.material.uniforms.hor.value.setHex(A.sky[1]).lerp(_b.setHex(B.sky[1]), zm.t).multiplyScalar(1 - 0.2 * st).multiply(tint);
+        // summer bright haze / spring morning softness / winter cloudier
+        sky.material.uniforms.cloudK.value = 0.05 * Math.sin(t * 0.041 + ph2) + 0.03 * Math.sin(t * 0.017 + ph1)
+          + 0.06 * Wgt.summer - 0.03 * Wgt.autumn + 0.04 * Wgt.winter; }
+      else horC.copy(fog);
+      fog.setHex(A.fog).lerp(_b.setHex(B.fog), zm.t).multiplyScalar(1 - 0.08 * st).multiply(tint);
+      if (Wgt.autumn > 0.2) fog.lerp(_b.setHex(0xD8DCC0), 0.12 * Wgt.autumn); // low clear autumn light, olive cast
+      if (Wgt.spring > 0.2) fog.lerp(_b.setHex(0xD8EBD8), 0.1 * Wgt.spring);
+      if (Wgt.winter > 0.2) fog.lerp(_b.setHex(0xC8D8F0), 0.12 * Wgt.winter);
+      fogC.copy(fog);
       if (sky) sky.material.uniforms.fogC.value.copy(fog);
-      // the backdrop follows the camera (x pinned to the lane), with height parallax per layer
+      // fog density feel via near/far (visual only): spring soft mist, summer haze, autumn clear, winter dense cold
+      const fNear = 10 + 4 * Wgt.autumn - 2 * Wgt.spring - 3 * Wgt.winter, fFar = 120 - 15 * Wgt.winter - 10 * Wgt.summer + 20 * Wgt.autumn;
+      if (fog.isColor) { /* fog is Color; near/far live on scene fog — set via side channel */ this.fogNear = fNear; this.fogFar = Math.max(80, fFar); }
+
       root.position.set(0, cam.position.y, cam.position.z);
       for (const L of layers) L.m.position.y = -h * (1 - L.par) * 0.25;
-      const key = zm.a + zm.b + zm.t.toFixed(3) + st.toFixed(3) + wd.toFixed(4);
+      // autumn cedar sway (gusty wind); reduce motion nearly still
+      if (farCedar) { const wind = Wgt.autumn * (reduceMotion ? 0.003 : 0.018) * Math.sin(t * 1.35 + ph1);
+        farCedar.rotation.z = wind; farCedar.rotation.x = wind * 0.35; }
+
+      const key = zm.a + zm.b + zm.t.toFixed(3) + st.toFixed(3) + wd.toFixed(4) + xfSA.toFixed(3);
       if (key !== lastKey) { lastKey = key;
-        const fc = fogC.toArray(), hc = horC.toArray(); for (const L of layers) { const c = L.m.geometry.getAttribute('color'), a = L.per[zm.a], b = L.per[zm.b], o = c.array;
-          for (let i = 0; i < o.length; i++) { const f = (L.haze ? hc : fc)[i % 3], k = L.fogV ? L.fogV[(i / 3) | 0] : L.fog; o[i] = ((a[i] + (b[i] - a[i]) * zm.t) * dark) * (1 - k) + f * k; }
-          for (let i = 0; i < o.length; i += 3) { const y = 0.299 * o[i] + 0.587 * o[i + 1] + 0.114 * o[i + 2]; if (y > 0.78) { const q = 0.78 / y; o[i] *= q; o[i + 1] *= q; o[i + 2] *= q; } } // solid scenery luma <= 199 (spec band)
+        const hazeMul = 1 - 0.35 * xfSA; // pull mountain haze back during 246 m fade
+        const fc = fogC.toArray(), hc = horC.toArray(), lumaCap = 0.78 - 0.1 * xfSA; // tighter cap at summer→autumn
+        for (const L of layers) { const c = L.m.geometry.getAttribute('color'), a = L.per[zm.a], b = L.per[zm.b], o = c.array;
+          for (let i = 0; i < o.length; i++) { const f = (L.haze ? hc : fc)[i % 3], k = (L.fogV ? L.fogV[(i / 3) | 0] : L.fog) * (L.haze ? hazeMul : 1);
+            o[i] = ((a[i] + (b[i] - a[i]) * zm.t) * dark) * (1 - k) + f * k; }
+          for (let i = 0; i < o.length; i += 3) { const y = 0.299 * o[i] + 0.587 * o[i + 1] + 0.114 * o[i + 2]; if (y > lumaCap) { const q = lumaCap / y; o[i] *= q; o[i + 1] *= q; o[i + 2] *= q; } }
           c.needsUpdate = true; }
         wfMat.uniforms.a.value.setHex(A.fall[0]).lerp(_b.setHex(B.fall[0]), zm.t).multiplyScalar(dark);
         wfMat.uniforms.b.value.setHex(A.fall[1]).lerp(_b.setHex(B.fall[1]), zm.t).multiplyScalar(dark);
-        stMat.color.setHex(A.steam[0]).lerp(_b.setHex(B.steam[0]), zm.t); stMat.uniforms.opacity.value = (A.steam[1] + (B.steam[1] - A.steam[1]) * zm.t) * (1 - 0.3 * st);
+        // steam: spring soft morning mist+, autumn lower, winter breath-like, dampened in storm and at 246 m fade
+        const stOp = (A.steam[1] + (B.steam[1] - A.steam[1]) * zm.t)
+          * (1 + 0.35 * Wgt.spring + 0.1 * Wgt.winter - 0.25 * Wgt.autumn) * (1 - 0.3 * st) * (1 - 0.5 * xfSA);
+        stMat.color.setHex(A.steam[0]).lerp(_b.setHex(B.steam[0]), zm.t);
+        if (Wgt.spring > 0.4) stMat.color.lerp(_b.setHex(0xE8F4E8), 0.15 * Wgt.spring); // soft green morning mist
+        if (Wgt.winter > 0.4) stMat.color.lerp(_b.setHex(0xEAF2FA), 0.25 * Wgt.winter);
+        stMat.uniforms.opacity.value = Math.min(0.55, stOp);
         birds.material.color.setHex(A.bird).lerp(_b.setHex(B.bird), zm.t); }
       const band = Math.floor(Math.max(0, h) / 120); if (band !== wfBand) { wfBand = band; rebuildBand(band); }
       const winter = zm.b === 'winter' && zm.t > 0.5 || zm.a === 'winter';
       wfMat.uniforms.t.value = t * (reduceMotion ? 0.25 : 1) * (winter ? 0.5 : 1);
-      // birds: deterministic paths from seed + 20 s window + sim time; |x| >= 22, lane +15..30, 4-7 u/s along -z; storm thins them
-      const W = 12, w = Math.floor(t / W), ph = t - w * W, nZone = zm.b === 'autumn' ? 9 : zm.b === 'spring' ? 7 : 5, nOn = Math.round(nZone * (1 - 0.5 * st));
-      // flock rides alongside 60 units ahead, drifting back at 4-7 u/s relative and despawns behind the camera
-      const r = mul(seed * 131 + w * 977), side = r() < 0.5 ? -1 : 1, x0 = side * (23 + r() * 5), y0 = h + 15 + r() * 7, sp = 4 + r() * 3, show = r() < 0.75;
-      const tb = reduceMotion ? 3 : ph; let vis = 0; cam.updateMatrixWorld();
+
+      // birds
+      const Wb = 12, wb = Math.floor(t / Wb), phb = t - wb * Wb, nZone = zm.b === 'autumn' ? 9 : zm.b === 'spring' ? 7 : 5, nOn = Math.round(nZone * (1 - 0.5 * st));
+      const rb = mul(seed * 131 + wb * 977), side = rb() < 0.5 ? -1 : 1, x0 = side * (23 + rb() * 5), y0 = h + 15 + rb() * 7, sp = 4 + rb() * 3, show = rb() < 0.75;
+      const tb = reduceMotion ? 3 : phb; let vis = 0; cam.updateMatrixWorld();
       for (let i = 0; i < NB; i++) { const on = show && i < nOn; const row = Math.ceil(i / 2), lr = i % 2 ? 1 : -1;
         _p.set(x0 + lr * row * 1.6 * side, y0 - row * 0.9, cam.position.z - 80 + tb * sp * 0.85 + row * 1.2);
         if (Math.abs(_p.x) < 22) _p.x = Math.sign(_p.x || side) * 22;
-        const sc = on ? 1.2 + hash(seed + w, i) * 0.6 : 0, bob = reduceMotion ? 1 : 1 + 0.1 * Math.sin((t + i * 0.13) * Math.PI * 6);
+        const sc = on ? 1.2 + hash(seed + wb, i) * 0.6 : 0, bob = reduceMotion ? 1 : 1 + 0.1 * Math.sin((t + i * 0.13) * Math.PI * 6);
         if (on) { _v.copy(_p).project(cam); if (Math.abs(_v.x) < 1 && Math.abs(_v.y) < 1 && _v.z < 1) vis++; }
         _e.set(0, 0, 0); _q.setFromEuler(_e); _s.set(sc, sc * bob, sc); _m.compose(_p, _q, _s); birds.setMatrixAt(i, _m); }
-      birds.instanceMatrix.needsUpdate = true; this.birdsInView = vis; 
+      birds.instanceMatrix.needsUpdate = true; this.birdsInView = vis;
+
+      // ---- weather particles (1 draw) ----
+      const rm = reduceMotion ? 0.35 : 1, gust = Wgt.autumn * (0.55 + 0.45 * Math.sin(t * 0.9 + ph2));
+      for (let i = 0; i < NW; i++) {
+        const kind = pk[i], ph = pph[i], life = (t * psp[i] * rm + ph * 10);
+        // which season owns this particle slot
+        let wgt = 0, sx = 0.35, sy = 0.35, hex = C_SNOW;
+        if (kind === 0) { // drizzle streaks — spring (thinned in other seasons)
+          wgt = Wgt.spring; hex = C_DRIZZLE; sx = 0.14; sy = 1.5 + 0.4 * Math.sin(ph);
+          _p.set(px[i] + Math.sin(life * 0.4) * 0.4, cam.position.y + ((py[i] + life * 4) % 30) - 12, cam.position.z + pz[i]);
+          _e.set(0, 0, -0.15); }
+        else if (kind === 1) { // petal / pollen / leaf / snow — multiplexed by strongest season
+          if (Wgt.spring >= Wgt.summer && Wgt.spring >= Wgt.autumn && Wgt.spring >= Wgt.winter) {
+            wgt = Wgt.spring; hex = (i & 1) ? C_PETAL : C_PETAL2; sx = sy = 0.45 + 0.18 * Math.sin(ph * 3);
+            _p.set(px[i] + Math.sin(life * 0.7 + ph) * 2.5, cam.position.y + ((py[i] - life * 1.1) % 26 + 26) % 26 - 10, cam.position.z + pz[i] + Math.cos(life * 0.5) * 1.5);
+            _e.set(life * 0.6, life * 0.4, ph); }
+          else if (Wgt.summer >= Wgt.autumn && Wgt.summer >= Wgt.winter) {
+            wgt = Wgt.summer * (1 - 0.7 * st); hex = C_POLLEN; sx = sy = 0.38 + 0.14 * Math.sin(life * 2 + ph);
+            _p.set(px[i] + Math.sin(life * 0.3 + ph) * 3, cam.position.y + py[i] * 0.6 + Math.sin(life * 0.8) * 2, cam.position.z + pz[i] + Math.sin(life * 0.2) * 2);
+            _e.set(0, 0, 0); }
+          else if (Wgt.autumn >= Wgt.winter) {
+            wgt = Wgt.autumn; hex = (i & 1) ? C_LEAF : C_LEAF2; sx = 0.55; sy = 0.35;
+            // gusty: angled fall, strong -x drift
+            _p.set(px[i] + ((life * (2.5 + 3 * gust)) % 50) - 25, cam.position.y + ((py[i] - life * (1.4 + gust)) % 28 + 28) % 28 - 12, cam.position.z + pz[i]);
+            _e.set(0.4, 0, -0.6 - 0.5 * gust + Math.sin(life) * 0.3); }
+          else {
+            wgt = Wgt.winter; hex = (i & 1) ? C_SNOW : C_SNOW2; sx = sy = 0.322 + 0.1 * Math.sin(ph * 2);
+            _p.set(px[i] + Math.sin(life * 0.5 + ph) * 1.8, cam.position.y + ((py[i] - life * 1.6) % 28 + 28) % 28 - 12, cam.position.z + pz[i]);
+            _e.set(0, life * 0.3, ph); } }
+        else if (kind === 2) { // fireflies (summer) / gust debris (autumn) / breath mote (winter) / spring mist speck
+          if (Wgt.summer > 0.25) {
+            wgt = Wgt.summer * (1 - 0.8 * st); hex = C_FIREFLY; const pulse = 0.55 + 0.45 * Math.sin(life * 3.2 + ph);
+            sx = sy = (0.18 + 0.12 * pulse) * (0.7 + 0.3 * Math.sin(ph)); col.setHex(hex); col.multiplyScalar(0.7 + 0.5 * pulse);
+            _p.set(px[i] * 0.7, cam.position.y + 2 + (py[i] % 14) + Math.sin(life * 0.9 + ph) * 1.5, cam.position.z + pz[i] * 0.7);
+            _e.set(0, 0, 0); weather.setColorAt(i, col);
+            const sc = wgt * rm; _q.setFromEuler(_e); _s.set(sx * sc, sy * sc, 1);
+            if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
+            _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m); continue; }
+          else if (Wgt.autumn > 0.25) {
+            wgt = Wgt.autumn; hex = C_LEAF2; sx = 0.4; sy = 0.24;
+            _p.set(px[i] + ((life * 4) % 40) - 20, cam.position.y + ((py[i] - life * 2) % 24 + 24) % 24 - 10, cam.position.z + pz[i]);
+            _e.set(0.3, 0, -0.9); }
+          else if (Wgt.winter > 0.25) {
+            wgt = Wgt.winter; hex = C_SNOW; sx = sy = 0.55 + 0.2 * Math.sin(life + ph);
+            _p.set(px[i] * 0.5, cam.position.y - 2 + Math.sin(life * 0.4) * 1.5, cam.position.z + ((pz[i] + life * 0.3) % 40) - 20);
+            _e.set(0, 0, 0); }
+          else { wgt = Wgt.spring; hex = C_PETAL; sx = sy = 0.2;
+            _p.set(px[i], cam.position.y + ((py[i] - life * 0.6) % 20 + 20) % 20 - 8, cam.position.z + pz[i]); _e.set(0, life, 0); } }
+        else { // kind 3: snow-heavy / spring drizzle side / summer haze speck / autumn leaf
+          if (Wgt.winter > 0.2) { wgt = Wgt.winter; hex = C_SNOW2; sx = sy = 0.3;
+            _p.set(px[i] + Math.cos(life * 0.4) * 2, cam.position.y + ((py[i] - life * 2.2) % 30 + 30) % 30 - 14, cam.position.z + pz[i]); _e.set(0, 0, ph); }
+          else if (Wgt.spring > 0.2) { wgt = Wgt.spring; hex = C_DRIZZLE; sx = 0.1; sy = 1.2;
+            _p.set(px[i], cam.position.y + ((py[i] + life * 5) % 28) - 12, cam.position.z + pz[i]); _e.set(0, 0, -0.2); }
+          else if (Wgt.autumn > 0.2) { wgt = Wgt.autumn; hex = C_LEAF; sx = 0.48; sy = 0.28;
+            _p.set(px[i] + ((life * 3) % 45) - 22, cam.position.y + ((py[i] - life * 1.8) % 26 + 26) % 26 - 11, cam.position.z + pz[i]); _e.set(0.5, 0, -0.7); }
+          else { wgt = Wgt.summer * (1 - st); hex = C_POLLEN; sx = sy = 0.18;
+            _p.set(px[i] + Math.sin(life * 0.25) * 4, cam.position.y + py[i] * 0.5, cam.position.z + pz[i]); _e.set(0, 0, 0); } }
+        const sc = Math.max(0, wgt) * rm * (0.75 + 0.25 * Math.sin(ph * 5));
+        if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
+        col.setHex(hex); weather.setColorAt(i, col);
+        _q.setFromEuler(_e); _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
+      }
+      weather.instanceMatrix.needsUpdate = true; if (weather.instanceColor) weather.instanceColor.needsUpdate = true; this.wxOn = (Wgt.spring + Wgt.summer + Wgt.autumn + Wgt.winter) > 0 ? NW : 0;
     } };
 }
 
-function mergeAll(gs, uvs) { // non-indexed merge of position (+normal, +color or +uv)
+function mergeAll(gs, uvs) {
   gs = gs.map(g => g.index ? g.toNonIndexed() : g); let n = 0; for (const g of gs) n += g.attributes.position.count;
   const out = new THREE.BufferGeometry(), names = ['position', 'normal', ...(uvs ? ['uv'] : gs[0] && gs[0].attributes.color ? ['color'] : [])];
   for (const nm of names) { const sz = gs[0].attributes[nm].itemSize, A = new Float32Array(n * sz); let o = 0; for (const g of gs) { A.set(g.attributes[nm].array, o); o += g.attributes[nm].array.length; } out.setAttribute(nm, new THREE.BufferAttribute(A, sz)); }
   return out;
 }
 
-function puffs(list) { // merged camera-facing quads: centre position + corner + radius (soft round puffs, no facets)
+function puffs(list) {
   const n = list.length, P = new Float32Array(n * 18), C = new Float32Array(n * 12), Rr = new Float32Array(n * 6);
   const cs = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
   list.forEach(([x, y, z, r], i) => cs.forEach(([u, v], j) => { const k = i * 6 + j; P.set([x, y, z], k * 3); C.set([u, v], k * 2); Rr[k] = r; }));

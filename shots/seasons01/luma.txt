@@ -1,0 +1,10 @@
+scenery pixels = differ from sky-only and match final; Rec.601; steam/waterfall/weather = atmosphere (spec-exempt from 126-199)
+spring_y84: 17.1% frame; luma p5 178 p50 197 p95 232 (min 165 max 233); in126-199 74% >199 26% <126 0%
+summer_y144: 20.7% frame; luma p5 152 p50 188 p95 227 (min 126 max 230); in126-199 85% >199 15% <126 0%
+summer_storm_y174: 12.3% frame; luma p5 143 p50 183 p95 214 (min 110 max 219); in126-199 80% >199 19% <126 1%
+autumn_y323: 26.5% frame; luma p5 171 p50 191 p95 224 (min 157 max 226); in126-199 68% >199 32% <126 0%
+winter_y442: 9.5% frame; luma p5 199 p50 199 p95 231 (min 188 max 234); in126-199 41% >199 59% <126 0%
+xfade_121m: 5.6% frame; luma p5 168 p50 199 p95 199 (min 126 max 231); in126-199 89% >199 11% <126 0%
+xfade_246m: 10.4% frame; luma p5 137 p50 179 p95 214 (min 127 max 217); in126-199 60% >199 40% <126 0%
+xfade_400m: 17.4% frame; luma p5 190 p50 199 p95 232 (min 167 max 233); in126-199 73% >199 27% <126 0%
+wide_seed1: 7.8% frame; luma p5 153 p50 183 p95 198 (min 136 max 217); in126-199 100% >199 0% <126 0%

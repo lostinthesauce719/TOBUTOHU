@@ -225,12 +225,12 @@ $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});cons
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);
+ else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
  /* thunder shake: one per strike, <=6 cm, fades over 0.4 s, render-only (camera follow state untouched), off with reduce motion */
  let sx=0,sy=0;if(!RM)for(const k of sim.strikes){if(!k)continue;const age=P.t-(k.t0+LT.warn);if(age<0||age>=0.4)continue;const a=0.06*(1-age/0.4);sx+=a*Math.sin(age*90+k.id*1.7);sy+=a*Math.sin(age*73+k.id*2.9);}
  const sh=Math.hypot(sx,sy);if(sh>0.06){sx*=0.06/sh;sy*=0.06/sh;}window.__shake=+Math.hypot(sx,sy).toFixed(3);
  const _cp=cam.position.clone();if(sx||sy){cam.updateMatrixWorld();cam.position.addScaledVector(_rt.setFromMatrixColumn(cam.matrixWorld,0),sx).addScaledVector(_a.setFromMatrixColumn(cam.matrixWorld,1),sy);cam.updateMatrixWorld();}
- if(SCENQ){for(const o of S.children)o.visible=o===sky||(SCENQ===1&&(o===scen.root||o===scen.birds));post.U.spd.value=0;post.U.mistY.value=-1e4;for(const v of post.U.cSt.value)v.set(0,0,0,0);}
+ if(SCENQ){for(const o of S.children)o.visible=o===sky||(SCENQ===1&&(o===scen.root||o===scen.birds||o===scen.weather));post.U.spd.value=0;post.U.mistY.value=-1e4;for(const v of post.U.cSt.value)v.set(0,0,0,0);}
  post.render(S,cam);cam.position.copy(_cp);cam.updateMatrixWorld();}
 
 const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
@@ -245,7 +245,7 @@ if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12==
   $('bCatch').click();tick();R2.push(['Catch button <0.5 s',P.mode]);catchShown=performance.now()-600;ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere >0.5 s',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button >0.5 s',P.mode]);window.__cw={...window.__cw,test:R2.map(r=>r.join('=')).join(';')};}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title="SIM "+JSON.stringify({stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
+ document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
 </script></body></html>
