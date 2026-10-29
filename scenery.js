@@ -43,20 +43,21 @@ export function createScenery(S, seed, reduceMotion) {
   birds.frustumCulled = false; S.add(birds);
   // ---- seasonal weather: ONE shared InstancedMesh (soft billboard quads) ----
   // kinds by hash slot: drizzle / petal-leaf-snow / mote-firefly / flake. Scales to 0 when that season's weight is 0.
-  const NW = reduceMotion ? 48 : 96;
+  const NW = reduceMotion ? 56 : 120;
   const wxGeo = new THREE.PlaneGeometry(1, 1);
   const wxMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, fog: false, side: THREE.DoubleSide,
     vertexColors: true,
     vertexShader: `attribute vec3 instanceColor; varying vec2 vUv; varying vec3 vC; void main(){ vUv=uv; vC=instanceColor; vec4 mv=modelViewMatrix*instanceMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; }`,
-    fragmentShader: `varying vec2 vUv; varying vec3 vC; void main(){ vec2 p=vUv*2.-1.; float r=length(p); float a=0.95*(1.-smoothstep(0.15,1.,r)); if(a<0.02) discard; gl_FragColor=vec4(vC,a); }` });
+    fragmentShader: `varying vec2 vUv; varying vec3 vC; void main(){ vec2 p=vUv*2.-1.; float r=length(p); float a=1.15*(1.-smoothstep(0.0,0.85,r)); a=clamp(a,0.,1.); if(a<0.04) discard; gl_FragColor=vec4(vC,a); }` });
   const weather = new THREE.InstancedMesh(wxGeo, wxMat, NW); weather.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NW * 3), 3);
   weather.frustumCulled = false; weather.renderOrder = 2; S.add(weather);
   // per-particle seed state (fixed at create)
   const px = new Float32Array(NW), py = new Float32Array(NW), pz = new Float32Array(NW), pph = new Float32Array(NW), pk = new Uint8Array(NW), psp = new Float32Array(NW);
   { const r = mul(seed ^ 0xA7E471); for (let i = 0; i < NW; i++) {
-      pk[i] = (r() * 4) | 0; pph[i] = r() * 6.283; psp[i] = 0.6 + r() * 1.4;
-      const side = r() < 0.5 ? -1 : 1; px[i] = side * (22 + r() * 38); /* |x|>=22, outside play lane */
-      py[i] = (r() - 0.35) * 28; pz[i] = -55 + r() * 70; } }
+      pk[i] = (r() * 4) | 0; pph[i] = r() * 6.283; psp[i] = 0.8 + r() * 1.6;
+      const side = r() < 0.5 ? -1 : 1;
+      // near-camera, mostly AHEAD (cam looks toward -z): |x| 19-28 outside lane, pz in [-48,-6]
+      px[i] = side * (19 + r() * 9); py[i] = (r() - 0.25) * 18; pz[i] = -48 + r() * 42; } }
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
   const _v = new THREE.Vector3(), _a = new THREE.Color(), _b = new THREE.Color(), fogC = new THREE.Color(), horC = new THREE.Color(), tint = new THREE.Color();
@@ -78,8 +79,8 @@ export function createScenery(S, seed, reduceMotion) {
   }
 
   // season palette accents (no red/orange/vermilion): olive / pale gold / cream / cool blue
-  const C_DRIZZLE = 0xB8D0E8, C_PETAL = 0xF2EEE0, C_PETAL2 = 0xE8D8E0, C_POLLEN = 0xD4E0B0;
-  const C_FIREFLY = 0xC8BC86, C_LEAF = 0x8E9A6A, C_LEAF2 = 0xC8BC86, C_SNOW = 0xEAF2FA, C_SNOW2 = 0xFFFFFF;
+  const C_DRIZZLE = 0x9EB8D8, C_PETAL = 0xFFF8EC, C_PETAL2 = 0xF0DCE8, C_POLLEN = 0xE0ECA0;
+  const C_FIREFLY = 0xD4C878, C_LEAF = 0x7A8A4A, C_LEAF2 = 0xD4C070, C_SNOW = 0xF4FAFF, C_SNOW2 = 0xFFFFFF;
 
   return { root, birds, weather,
     update(cam, h, t, fog, sky) {
@@ -153,64 +154,72 @@ export function createScenery(S, seed, reduceMotion) {
 
       // ---- weather particles (1 draw) ----
       const rm = reduceMotion ? 0.35 : 1, gust = Wgt.autumn * (0.55 + 0.45 * Math.sin(t * 0.9 + ph2));
+      // billboard toward camera so thin planes stay readable (tumble is roll-only)
+      const _bill = new THREE.Quaternion().copy(cam.quaternion);
       for (let i = 0; i < NW; i++) {
         const kind = pk[i], ph = pph[i], life = (t * psp[i] * rm + ph * 10);
         // which season owns this particle slot
         let wgt = 0, sx = 0.35, sy = 0.35, hex = C_SNOW;
         if (kind === 0) { // drizzle streaks — spring (thinned in other seasons)
-          wgt = Wgt.spring; hex = C_DRIZZLE; sx = 0.14; sy = 1.5 + 0.4 * Math.sin(ph);
+          wgt = Wgt.spring; hex = C_DRIZZLE; sx = 0.28; sy = 2.8 + 0.6 * Math.sin(ph);
           _p.set(px[i] + Math.sin(life * 0.4) * 0.4, cam.position.y + ((py[i] + life * 4) % 30) - 12, cam.position.z + pz[i]);
           _e.set(0, 0, -0.15); }
         else if (kind === 1) { // petal / pollen / leaf / snow — multiplexed by strongest season
           if (Wgt.spring >= Wgt.summer && Wgt.spring >= Wgt.autumn && Wgt.spring >= Wgt.winter) {
-            wgt = Wgt.spring; hex = (i & 1) ? C_PETAL : C_PETAL2; sx = sy = 0.45 + 0.18 * Math.sin(ph * 3);
+            wgt = Wgt.spring; hex = (i & 1) ? C_PETAL : C_PETAL2; sx = sy = 0.85 + 0.3 * Math.sin(ph * 3);
             _p.set(px[i] + Math.sin(life * 0.7 + ph) * 2.5, cam.position.y + ((py[i] - life * 1.1) % 26 + 26) % 26 - 10, cam.position.z + pz[i] + Math.cos(life * 0.5) * 1.5);
             _e.set(life * 0.6, life * 0.4, ph); }
           else if (Wgt.summer >= Wgt.autumn && Wgt.summer >= Wgt.winter) {
-            wgt = Wgt.summer * (1 - 0.7 * st); hex = C_POLLEN; sx = sy = 0.38 + 0.14 * Math.sin(life * 2 + ph);
+            wgt = Wgt.summer * (1 - 0.7 * st); hex = C_POLLEN; sx = sy = 0.7 + 0.25 * Math.sin(life * 2 + ph);
             _p.set(px[i] + Math.sin(life * 0.3 + ph) * 3, cam.position.y + py[i] * 0.6 + Math.sin(life * 0.8) * 2, cam.position.z + pz[i] + Math.sin(life * 0.2) * 2);
             _e.set(0, 0, 0); }
           else if (Wgt.autumn >= Wgt.winter) {
-            wgt = Wgt.autumn; hex = (i & 1) ? C_LEAF : C_LEAF2; sx = 0.55; sy = 0.35;
+            wgt = Wgt.autumn; hex = (i & 1) ? C_LEAF : C_LEAF2; sx = 1.1; sy = 0.7;
             // gusty: angled fall, strong -x drift
             _p.set(px[i] + ((life * (2.5 + 3 * gust)) % 50) - 25, cam.position.y + ((py[i] - life * (1.4 + gust)) % 28 + 28) % 28 - 12, cam.position.z + pz[i]);
             _e.set(0.4, 0, -0.6 - 0.5 * gust + Math.sin(life) * 0.3); }
           else {
-            wgt = Wgt.winter; hex = (i & 1) ? C_SNOW : C_SNOW2; sx = sy = 0.322 + 0.1 * Math.sin(ph * 2);
+            wgt = Wgt.winter; hex = (i & 1) ? C_SNOW : C_SNOW2; sx = sy = 0.7 + 0.2 * Math.sin(ph * 2);
             _p.set(px[i] + Math.sin(life * 0.5 + ph) * 1.8, cam.position.y + ((py[i] - life * 1.6) % 28 + 28) % 28 - 12, cam.position.z + pz[i]);
             _e.set(0, life * 0.3, ph); } }
         else if (kind === 2) { // fireflies (summer) / gust debris (autumn) / breath mote (winter) / spring mist speck
           if (Wgt.summer > 0.25) {
             wgt = Wgt.summer * (1 - 0.8 * st); hex = C_FIREFLY; const pulse = 0.55 + 0.45 * Math.sin(life * 3.2 + ph);
-            sx = sy = (0.18 + 0.12 * pulse) * (0.7 + 0.3 * Math.sin(ph)); col.setHex(hex); col.multiplyScalar(0.7 + 0.5 * pulse);
+            sx = sy = (0.45 + 0.25 * pulse) * (0.8 + 0.2 * Math.sin(ph)); col.setHex(hex); col.multiplyScalar(0.7 + 0.5 * pulse);
             _p.set(px[i] * 0.7, cam.position.y + 2 + (py[i] % 14) + Math.sin(life * 0.9 + ph) * 1.5, cam.position.z + pz[i] * 0.7);
             _e.set(0, 0, 0); weather.setColorAt(i, col);
-            const sc = wgt * rm; _q.setFromEuler(_e); _s.set(sx * sc, sy * sc, 1);
+            const sc = wgt * rm * 3.2; _q.copy(_bill); _s.set(sx * sc, sy * sc, 1);
             if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
             _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m); continue; }
           else if (Wgt.autumn > 0.25) {
-            wgt = Wgt.autumn; hex = C_LEAF2; sx = 0.4; sy = 0.24;
+            wgt = Wgt.autumn; hex = C_LEAF2; sx = 0.9; sy = 0.55;
             _p.set(px[i] + ((life * 4) % 40) - 20, cam.position.y + ((py[i] - life * 2) % 24 + 24) % 24 - 10, cam.position.z + pz[i]);
             _e.set(0.3, 0, -0.9); }
           else if (Wgt.winter > 0.25) {
-            wgt = Wgt.winter; hex = C_SNOW; sx = sy = 0.55 + 0.2 * Math.sin(life + ph);
+            wgt = Wgt.winter; hex = C_SNOW; sx = sy = 1.1 + 0.35 * Math.sin(life + ph);
             _p.set(px[i] * 0.5, cam.position.y - 2 + Math.sin(life * 0.4) * 1.5, cam.position.z + ((pz[i] + life * 0.3) % 40) - 20);
             _e.set(0, 0, 0); }
-          else { wgt = Wgt.spring; hex = C_PETAL; sx = sy = 0.2;
+          else { wgt = Wgt.spring; hex = C_PETAL; sx = sy = 0.55;
             _p.set(px[i], cam.position.y + ((py[i] - life * 0.6) % 20 + 20) % 20 - 8, cam.position.z + pz[i]); _e.set(0, life, 0); } }
         else { // kind 3: snow-heavy / spring drizzle side / summer haze speck / autumn leaf
-          if (Wgt.winter > 0.2) { wgt = Wgt.winter; hex = C_SNOW2; sx = sy = 0.3;
+          if (Wgt.winter > 0.2) { wgt = Wgt.winter; hex = C_SNOW2; sx = sy = 0.75;
             _p.set(px[i] + Math.cos(life * 0.4) * 2, cam.position.y + ((py[i] - life * 2.2) % 30 + 30) % 30 - 14, cam.position.z + pz[i]); _e.set(0, 0, ph); }
-          else if (Wgt.spring > 0.2) { wgt = Wgt.spring; hex = C_DRIZZLE; sx = 0.1; sy = 1.2;
+          else if (Wgt.spring > 0.2) { wgt = Wgt.spring; hex = C_DRIZZLE; sx = 0.22; sy = 2.4;
             _p.set(px[i], cam.position.y + ((py[i] + life * 5) % 28) - 12, cam.position.z + pz[i]); _e.set(0, 0, -0.2); }
-          else if (Wgt.autumn > 0.2) { wgt = Wgt.autumn; hex = C_LEAF; sx = 0.48; sy = 0.28;
+          else if (Wgt.autumn > 0.2) { wgt = Wgt.autumn; hex = C_LEAF; sx = 1.0; sy = 0.6;
             _p.set(px[i] + ((life * 3) % 45) - 22, cam.position.y + ((py[i] - life * 1.8) % 26 + 26) % 26 - 11, cam.position.z + pz[i]); _e.set(0.5, 0, -0.7); }
-          else { wgt = Wgt.summer * (1 - st); hex = C_POLLEN; sx = sy = 0.18;
+          else { wgt = Wgt.summer * (1 - st); hex = C_POLLEN; sx = sy = 0.5;
             _p.set(px[i] + Math.sin(life * 0.25) * 4, cam.position.y + py[i] * 0.5, cam.position.z + pz[i]); _e.set(0, 0, 0); } }
-        const sc = Math.max(0, wgt) * rm * (0.75 + 0.25 * Math.sin(ph * 5));
+        let sc = Math.max(0, wgt) * rm * (0.85 + 0.2 * Math.sin(ph * 5)) * 2.6; // readable size
+        // near-camera particles get a further boost (z close to cam)
+        const zd = Math.abs(_p.z - cam.position.z); if (zd < 30) sc *= 1.55;
         if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
+        // keep weather out of the play-lane volume in front of the hero (x within 18 and z ahead of climber by <8)
+        if (Math.abs(_p.x) < 18 && _p.z < cam.position.z - 5 && _p.z > cam.position.z - 14) _p.x = Math.sign(_p.x || 1) * 20;
         col.setHex(hex); weather.setColorAt(i, col);
-        _q.setFromEuler(_e); _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
+        _q.copy(_bill);
+        { const roll = _e.z || 0; if (roll) { _e.set(0, 0, roll); _q.multiply(new THREE.Quaternion().setFromEuler(_e)); } }
+        _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
       }
       weather.instanceMatrix.needsUpdate = true; if (weather.instanceColor) weather.instanceColor.needsUpdate = true; this.wxOn = (Wgt.spring + Wgt.summer + Wgt.autumn + Wgt.winter) > 0 ? NW : 0;
     } };

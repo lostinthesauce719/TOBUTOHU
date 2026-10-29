@@ -98,7 +98,8 @@ export function createHero(scene, P, boxes) {
     L.hipV = new THREE.Vector3(...L.hip); L.restV = new THREE.Vector3(...L.rest);
     L.plant = null; L.n = new THREE.Vector3(0, 1, 0); L.swing = 0; L.from = new THREE.Vector3(); L.foot = new THREE.Vector3(); L.hold = 0;
   }
-  const st = { prev: 'air', q: new THREE.Quaternion(), off: new THREE.Vector3(), latch: 9, land: 9, kick: 9, fwd: new THREE.Vector3(0, 0, -1), sq: 0, turn: 0 };
+  const st = { prev: 'air', q: new THREE.Quaternion(), off: new THREE.Vector3(), latch: 9, land: 9, kick: 9, fwd: new THREE.Vector3(0, 0, -1), sq: 0, turn: 0, gait: 0 };
+  const fx = { trail: 0, spark: 0, rim: 0.25, state: 'air', speed: 0, kick: 9 };
   const mat = new THREE.Matrix4(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const world = (v, out) => out.copy(v).applyMatrix4(root.matrixWorld);
 
@@ -146,65 +147,105 @@ export function createHero(scene, P, boxes) {
     root.updateMatrixWorld(true); _inv.copy(body.matrixWorld).invert();
     const delta = st.lastRoot ? root.position.clone().sub(st.lastRoot) : new THREE.Vector3(); st.lastRoot = root.position.clone();
 
-    // ---- feet: plant on real contact points, step when out of stride, pin through push-off ----
-    const swinging = [0, 0]; for (const L of LEGS) if (L.swing > 0) swinging[L.grp]++;
+    // ---- feet: speed-synced tripod gait (readable run / wall-run / jump / grab) ----
+    // Bones driven: root + front_{L|R}_s{1,2} + mid_{L|R}_s{1,2} + hind_{L|R}_s{1,2,3} (15 total)
     const bodyUp = tmp2.set(0, 1, 0).applyQuaternion(st.q), bodyBack = new THREE.Vector3(0, 0, -1).applyQuaternion(st.q);
+    const bodyFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(st.q);
+    const speed = Math.hypot(P.vel.x, P.vel.z, state === 'air' ? 0 : Math.min(Math.abs(P.vel.y), 8));
+    // gait phase advances with distance so stride rate tracks speed; idle still breathes
+    st.gait = (st.gait || 0) + dt * (state === 'air' ? 0 : (0.55 + speed * 0.42));
+    const swingT = Math.max(0.09, 0.16 - speed * 0.004); // longer, readable swing (~0.1–0.16 s)
     for (const L of LEGS) {
       const hipW = world(L.hipV, new THREE.Vector3()), restW = world(L.restV, new THREE.Vector3());
       const sideW = new THREE.Vector3(L.s, 0, 0).applyQuaternion(st.q);
       let contact = false;
-      const hindGrip = L.kind !== 'hind' || (state === 'ground' && st.land < 0.16) || (state === 'wall' && st.latch < 0.12); // hind legs grip on landing and latch, then ride cocked
-      if (state === 'ground') contact = hindGrip;
-      else if (state === 'wall') contact = sideW.x * sf.side > 0.1 && hindGrip; // wall-side legs grab; the far hind leg pushes
+      // hind legs now participate in the run gait (not just land/latch), so motion stays visible
+      if (state === 'ground') contact = true;
+      else if (state === 'wall') contact = sideW.x * sf.side > -0.05; // near-wall + far legs both animate
       L.hold -= dt;
       if (contact) {
-        const goal = project(restW.clone().addScaledVector(new THREE.Vector3(P.vel.x, 0, P.vel.z), 0.012), sf);
-        if (!L.plant && L.swing <= 0) { L.plant = goal.clone(); L.n.copy(sf.n); } // latch / landing: claws plant at once
-        else if (L.plant && L.swing <= 0) {
-          const far = L.plant.distanceTo(goal) > L.stride || hipW.distanceTo(L.plant) > (L.a + L.b + (L.t || 0)) * 0.98;
-          const frozen = (state === 'wall' && st.latch < 0.08) || (state === 'ground' && st.land < 0.12);
-          if (L.plant.distanceTo(goal) > 1.2) { L.plant = goal.clone(); L.n.copy(sf.n); }
-          else if (far && !frozen && L.grp === st.turn) { L.swing = 1e-6; L.from.copy(L.plant); L.plant = null; swinging[L.grp]++; }
+        // phase offset: tripod (grp) + kind stagger so all six legs read as walking
+        const kindOff = L.kind === 'front' ? 0 : L.kind === 'mid' ? 0.33 : 0.66;
+        const ph = (st.gait + L.grp * 0.5 + kindOff) % 1; // 0..1 cycle
+        const swingHalf = 0.42; // fraction of cycle spent swinging
+        const wantSwing = ph < swingHalf && speed > 0.4 && !(state === 'wall' && st.latch < 0.08) && !(state === 'ground' && st.land < 0.1);
+        // goal ahead of rest along travel, scaled by speed (bigger stride when fast)
+        const strideLen = (L.kind === 'hind' ? 0.18 : 0.22) + Math.min(0.2, speed * 0.012);
+        const ahead = new THREE.Vector3(P.vel.x, 0, P.vel.z);
+        if (ahead.lengthSq() < 1e-4) ahead.copy(bodyFwd); else ahead.normalize();
+        const goal = project(restW.clone().addScaledVector(ahead, strideLen * (0.5 - ph)), sf);
+        // idle micro-shift when nearly still
+        if (speed < 0.5) goal.addScaledVector(sideW, 0.012 * Math.sin(P.t * 1.7 + L.s + kindOff * 6));
+        if (wantSwing && L.swing <= 0 && L.hold <= 0) {
+          L.from.copy(L.plant || L.foot.lengthSq() ? L.foot : restW); L.plant = null; L.swing = 1e-6;
         }
-        if (L.swing > 0) { L.swing += dt / 0.045; const k = Math.min(1, L.swing); L.foot.lerpVectors(L.from, goal, k).addScaledVector(sf.n, 0.07 * Math.sin(Math.PI * k));
-          if (k >= 1) { L.swing = 0; L.plant = goal.clone(); L.n.copy(sf.n); } }
-        if (L.plant && L.kind === 'hind' && L.hold <= 0) { const dT = delta.clone().addScaledVector(sf.n, -delta.dot(sf.n)); L.plant.add(dT); } // hind claws skid with the body while the legs absorb
-        if (L.plant) L.foot.copy(L.plant);
+        if (L.swing > 0) {
+          L.swing += dt / swingT; const k = Math.min(1, L.swing);
+          const lift = (L.kind === 'hind' ? 0.14 : 0.09) * Math.sin(Math.PI * k);
+          L.foot.lerpVectors(L.from, goal, k).addScaledVector(sf.n, lift);
+          if (k >= 1) { L.swing = 0; L.plant = goal.clone(); L.n.copy(sf.n); }
+        } else {
+          if (!L.plant) { L.plant = goal.clone(); L.n.copy(sf.n); }
+          // soft plant follow: partial skid so stance still shows load (not locked rigid)
+          const dT = delta.clone().addScaledVector(sf.n, -delta.dot(sf.n));
+          L.plant.addScaledVector(dT, L.kind === 'hind' ? 0.55 : 0.35);
+          L.plant.lerp(goal, 1 - Math.exp(-dt / 0.18));
+          L.foot.copy(L.plant);
+        }
+        // landing / grab: reach then plant — front legs stab toward surface for ~0.15 s
+        if ((state === 'ground' && st.land < 0.15) || (state === 'wall' && st.latch < 0.12)) {
+          if (L.kind === 'front') L.foot.addScaledVector(sf.n, -0.04 * (1 - (state === 'ground' ? st.land : st.latch) / 0.15));
+        }
       } else {
+        // airborne / far-side: tuck, or pin through kick push-off
         if (state !== 'air' && L.hold <= 0) L.plant = null;
-        // push-off: keep the planted foot pinned while the body leaves, until the leg is fully extended
         if (L.plant && L.hold > 0 && hipW.distanceTo(L.plant) < (L.a + L.b + (L.t || 0)) * 0.99) L.foot.copy(L.plant);
         else {
           L.plant = null; L.swing = 0;
-          // air / far-side pose (local), blended toward a tucked or reaching shape
-          const fall = state === 'air' && P.vel.y < -6;
+          const fall = state === 'air' && P.vel.y < -4;
+          const kickOn = st.kick < 0.22; // big hind extension on launch
           const loc = L.restV.clone();
-          if (L.kind === 'hind') { const push = state === 'ground' ? 0.05 * Math.sin(P.t * 30 + (L.s > 0 ? Math.PI : 0)) : 0;
-            loc.set(L.s * (fall ? 0.3 : state === 'ground' ? 0.11 : 0.17), fall ? -0.2 : (state === 'ground' ? -RIDE + 0.03 : -0.12), (fall ? -0.55 : -0.46) + push); }
-          else loc.set(L.s * (fall ? 0.26 : 0.17), fall ? -0.12 : -0.14, L.kind === 'front' ? (fall ? 0.4 : 0.34) : 0.05);
+          if (L.kind === 'hind') {
+            if (kickOn) loc.set(L.s * 0.22, -0.35, -0.72); // fully extended back-down
+            else if (fall) loc.set(L.s * 0.28, -0.08, -0.28); // tuck under belly
+            else loc.set(L.s * 0.18, -0.1, -0.4);
+          } else {
+            if (kickOn) loc.set(L.s * 0.14, -0.06, L.kind === 'front' ? 0.38 : 0.1); // reach forward on launch
+            else if (fall) loc.set(L.s * 0.12, -0.02, L.kind === 'front' ? 0.18 : 0.02); // tuck
+            else loc.set(L.s * 0.17, -0.12, L.kind === 'front' ? 0.34 : 0.05);
+          }
           if (state === 'wall') loc.y += 0.05;
-          world(loc, tmp); L.foot.add(delta).lerp(tmp, 1 - Math.exp(-dt / 0.04));
+          world(loc, tmp); L.foot.add(delta).lerp(tmp, 1 - Math.exp(-dt / (kickOn ? 0.025 : 0.05)));
         }
       }
-      // pose the leg: knees up and back for the hind V, out and up for the small legs
       let ankle = L.foot;
       if (L.t) { const n = L.plant ? L.n : bodyUp; ankle = L.foot.clone().addScaledVector(n, 0.05).addScaledVector(bodyBack, -0.06); }
       const gnd = state === 'ground';
-      const pole = L.kind === 'hind' ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, gnd ? 0.8 : 0.35).addScaledVector(sideW, gnd ? 0.18 : 0.7) /* on shelves and landings the knees tip back and up, staying above the back (KAMI/Art); on walls they splay ~35° */ /* femurs splay ~35° out from vertical in front/back view (Art) */ : sideW.clone().addScaledVector(bodyUp, 0.8);
+      const pole = L.kind === 'hind'
+        ? bodyUp.clone().multiplyScalar(1.0).addScaledVector(bodyBack, gnd ? 0.8 : 0.35).addScaledVector(sideW, gnd ? 0.18 : 0.7)
+        : sideW.clone().addScaledVector(bodyUp, 0.8);
       const dA = ankle.distanceTo(hipW), maxA = L.a + L.b - 1e-3;
-      if (dA > maxA && L.plant) { L.plant = null; L.hold = 0; if (contact) { L.swing = 1e-6; L.from.copy(L.foot); } } // out of reach: lift and re-plant, never drag a planted claw off its spot
-      if (dA > maxA) { const k = maxA / dA; const f = L.foot.clone().sub(ankle); ankle = hipW.clone().lerp(ankle, k); L.foot.copy(ankle).add(f); } // never draw a stretched leg
+      if (dA > maxA && L.plant) { L.plant = null; L.hold = 0; if (contact) { L.swing = 1e-6; L.from.copy(L.foot); } }
+      if (dA > maxA) { const k = maxA / dA; const f = L.foot.clone().sub(ankle); ankle = hipW.clone().lerp(ankle, k); L.foot.copy(ankle).add(f); }
       const { knee } = ik(hipW, ankle, L.a, L.b, pole);
       bone(L, 1, hipW, knee); bone(L, 2, knee, ankle); if (L.t) bone(L, 3, ankle, L.foot);
     }
 
-    if (swinging[st.turn] === 0) st.turn ^= 1; // tripod gait: groups take turns stepping
-
-    // ---- contact patch on the surface under / beside the hero ----
+    // ---- contact patch ----
     patch.visible = state !== 'air';
     if (state === 'ground') { patch.position.set(P.pos.x, sf.d + 0.01, P.pos.z); patch.rotation.set(-Math.PI / 2, 0, -yaw); }
     if (state === 'wall') { patch.position.set(sf.d - sf.side * 0.01, P.pos.y - 0.1, P.pos.z); patch.rotation.set(0, sf.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0); }
+
+    // ---- enchantments (read by index → post overlay; 0 extra draws) ----
+    // soft sash ribbon during fast moves/jumps; faint motes on launch + Catch save; small rim glow
+    const fast = speed > 8 || (state === 'air' && Math.abs(P.vel.y) > 6);
+    fx.trail = Math.max(0, Math.min(1, fx.trail + (fast ? 1 : -1) * dt * 3.5));
+    if (st.kick < 0.35) fx.spark = Math.max(fx.spark, 1 - st.kick / 0.35);
+    fx.spark = Math.max(0, fx.spark - dt * 1.8);
+    fx.rim = 0.25 + 0.35 * fx.trail + 0.4 * fx.spark;
+    fx.state = state; fx.speed = speed; fx.kick = st.kick;
+
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
-  return { legs: LEGS, update, root, parts: [body], mesh: body };
+  return { legs: LEGS, update, root, parts: [body], mesh: body, bones: [...boneBy.keys()], fx };
 }

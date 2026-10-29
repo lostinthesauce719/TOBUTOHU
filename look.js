@@ -110,9 +110,11 @@ export function createPost(R, pal) {
       mLinePx: { value: M.top_line_px_1080 }, mBandPx: { value: M.band_min_px_1080 }, mWarnPx: { value: M.warning_line_px_1080 },
       spd: { value: 0 }, sT: { value: 0 }, sC: { value: new THREE.Vector2(0.5, 0.55) },
       // lightning columns (screen px): ends a->b, radius px at each end, state x=phase(0 off,1 warn,2 strike,3 after) y=progress z=flash w=glow alpha
-      cA: { value: [new THREE.Vector4(), new THREE.Vector4()] }, cRad: { value: [new THREE.Vector2(), new THREE.Vector2()] }, cSt: { value: [new THREE.Vector4(), new THREE.Vector4()] }, edgePx: { value: 6 } },
+      cA: { value: [new THREE.Vector4(), new THREE.Vector4()] }, cRad: { value: [new THREE.Vector2(), new THREE.Vector2()] }, cSt: { value: [new THREE.Vector4(), new THREE.Vector4()] }, edgePx: { value: 6 },
+      // grasshopper enchantments (0 draws — same overlay): sash ribbon, launch/Catch motes, soft rim
+      hUV: { value: new THREE.Vector2(0.5, 0.55) }, hTrail: { value: 0 }, hSpark: { value: 0 }, hRim: { value: 0 }, hCatch: { value: 0 } },
     vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
-    fragmentShader: `uniform vec2 res,sC; uniform float px,mistY,warn,mistT,mLinePx,mBandPx,mWarnPx,spd,sT; uniform vec3 mLine,mBand,mBody,mWarn; varying vec2 vUv; uniform vec4 cA[2]; uniform vec2 cRad[2]; uniform vec4 cSt[2]; uniform float edgePx;
+    fragmentShader: `uniform vec2 res,sC,hUV; uniform float px,mistY,warn,mistT,mLinePx,mBandPx,mWarnPx,spd,sT,hTrail,hSpark,hRim,hCatch,edgePx; uniform vec3 mLine,mBand,mBody,mWarn; varying vec2 vUv; uniform vec4 cA[2]; uniform vec2 cRad[2]; uniform vec4 cSt[2];
       vec4 over(vec4 o, vec3 c, float a){ return vec4(mix(o.rgb,c,a/max(a+o.a*(1.-a),1e-4)), a+o.a*(1.-a)); }
       float h1(float x){ return fract(sin(x*91.7)*43758.5453); }
       void main(){ vec2 p=vUv*res; vec4 o=vec4(0.);
@@ -123,6 +125,24 @@ export function createPost(R, pal) {
           float line=1.-smoothstep(0.,w,abs(fb-0.5)*2.-0.0); line=step(abs(fb-0.5),w*0.5);
           float rr=smoothstep(0.28,0.55,r)*(1.-smoothstep(0.95,1.2,r));
           float s=on*line*rr*spd*0.9; o=vec4(1.,1.,1.,s); }
+        // ---- enchantments (subtle; BRUSH greens #6E9A42 / sash #FFD23F) ----
+        { vec2 hv=hUV*res; float asp=res.x/res.y;
+          // soft rim glow around hero
+          if(hRim>0.01){ float d=length((p-hv)/res.y); float g=smoothstep(0.11,0.02,d)*hRim*0.35;
+            o=over(o,vec3(0.431,0.604,0.259),g); /* #6E9A42 */ }
+          // sash ribbon trail: short gold streaks below/behind hero when trailing
+          if(hTrail>0.02){ for(int i=0;i<5;i++){ float fi=float(i);
+            vec2 tp=hv+vec2((h1(fi*3.1+floor(sT*8.))-0.5)*18.*px, -(10.+fi*9.)*px);
+            float td=length(p-tp); float tw=(3.5-fi*0.4)*px; float ta=smoothstep(tw,0.,td)*hTrail*(0.55-fi*0.08);
+            o=over(o,vec3(1.0,0.824,0.247),ta); /* #FFD23F */ } }
+          // launch / Catch motes (gold + soft green sparkles)
+          float spk=max(hSpark,hCatch);
+          if(spk>0.02){ for(int i=0;i<8;i++){ float fi=float(i); float ang=fi*0.785+sT*2.1; float rad=(18.+fi*7.)*px*spk;
+            vec2 mp=hv+vec2(cos(ang)*rad*asp,sin(ang)*rad*(0.7+0.3*h1(fi)));
+            float md=length(p-mp); float ma=smoothstep(3.2*px,0.,md)*spk*0.7;
+            vec3 mc=mix(vec3(1.0,0.824,0.247),vec3(0.525,0.682,0.345),step(0.5,h1(fi*7.3)));
+            o=over(o,mc,ma); } }
+        }
         // lightning (D_kit summer §4): vermilion edge lines >= 2 px at 360, ink both sides, bolt core/glow, local column flash only
         for(int i=0;i<2;i++){ vec4 st=cSt[i]; if(st.x<0.5) continue; vec2 a=cA[i].xy, b=cA[i].zw; vec2 ab=b-a; float L=length(ab); if(L<1.) continue; vec2 t=ab/L, nrm=vec2(-t.y,t.x);
           float u=dot(p-a,t), v=dot(p-a,nrm); if(u<-40.||u>L+40.) continue; float uc=clamp(u/L,0.,1.); float R=mix(cRad[i].x,cRad[i].y,uc);
