@@ -44,7 +44,7 @@ import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';co
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
-const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),MISS=+Q.get('miss')||0;
+const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),CLIP=Q.get('clip'),MISS=+Q.get('miss')||0; /* clip=t0,secs,fps capture-only */
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
 let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
 if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
@@ -57,7 +57,7 @@ const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
 const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); R.setPixelRatio(Math.min(2,devicePixelRatio));
-R.setSize(innerWidth,innerHeight);document.body.appendChild(R.domElement);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
+const CAPW=+Q.get('capw')||0,CAPH=+Q.get('caph')||0;R.setSize(CAPW||innerWidth,CAPH||innerHeight);document.body.appendChild(R.domElement); /* ?capw/?caph capture-only size */perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
 const S=new THREE.Scene();const sky=makeSky();S.add(sky);S.fog=new THREE.Fog(LOOK.fog,LOOK.fogNear,LOOK.fogFar);
 const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
 
@@ -238,14 +238,22 @@ function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1
  _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
 const STK=new Map(); /* ?strikelog: strike start times for capture planning */let catchShown=0,MANUAL=false; /* catchtest only: hand input back to the player */function tick(){if(P.mode==='catch'&&!catchShown)catchShown=performance.now();if((!AUTO||MANUAL)&&P.mode==='catch'&&performance.now()-catchShown<500)pending=false; /* 0.5 s guard so a climbing tap can't take the Catch */
  const inp=AUTO&&!MANUAL?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);if(SIM&&Q.has('strikelog'))for(const k of sim.strikes)if(k&&!STK.has(k.id))STK.set(k.id,+(k.t0+LT.warn).toFixed(3));flushBrk();updateCam(DT);shadowTick();mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
-if(SIM){let t=0,TR=[],tk=0;for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;if(Q.has('catchshot')&&P.mode==='catch')break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
+if(SIM){let t=0,TR=[],tk=0;
+ if(CLIP){ // capture-only: real-time frame dump as JPEG b64 list (seasons clips)
+  const [c0,csecs,cfps]=CLIP.split(',').map(Number), step=1/cfps, n=Math.round(csecs*cfps), frames=[];
+  for(;t<c0&&P.mode!=='dead';t+=DT)tick();
+  for(let i=0;i<n&&P.mode!=='dead';i++){const target=c0+i*step;while(t<target-1e-9&&P.mode!=='dead'){tick();t+=DT;}render();
+   frames.push(R.domElement.toDataURL('image/jpeg',0.82).slice(23));}
+  const pre=document.createElement('pre');pre.id='clip';pre.textContent=JSON.stringify({n:frames.length,fps:cfps,t0:c0,secs:csecs,w:R.domElement.width,h:R.domElement.height,shake:window.__shake,py:+P.pos.y.toFixed(1),t:+t.toFixed(2),draws:post.U.draws,frames});document.body.appendChild(pre);
+  document.title="CLIP "+JSON.stringify({n:frames.length,fps:cfps,t0:c0,py:+P.pos.y.toFixed(1),draws:post.U.draws,shake:window.__shake});}
+ else{for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;if(Q.has('catchshot')&&P.mode==='catch')break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
  if(Q.has('catchtest')&&P.mode==='catch'){MANUAL=true;const R2=[];const ev=(t,el=window)=>el.dispatchEvent(new PointerEvent(t,{bubbles:true,clientX:100,clientY:100}));
   catchShown=performance.now();ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button <0.5 s',P.mode]);catchShown=performance.now()-600;ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere >0.5 s',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button >0.5 s',P.mode]);window.__cw={...window.__cw,test:R2.map(r=>r.join('=')).join(';')};}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}
+ document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
 </script></body></html>
