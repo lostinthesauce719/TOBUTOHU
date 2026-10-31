@@ -1,6 +1,6 @@
 // Tobu scenery (BRUSH scenery_spec.md + seasons weather). VISUAL ONLY: reads camera, climber height, sim time and the
 // run seed; never writes sim state. No colliders. No Math.random / wall clock.
-// Kamishibai layers (render-only): far=sky+mountains, mid=cedars/falls/steam/birds, play=climbables+hero+mist,
+// Kamishibai layers (render-only): far=sky+mountains, mtn=mountains-only, mid=cedars/falls/steam/birds, play=climbables+hero+mist,
 // fg=near-camera weather framing. Draws: mountains(1)+cedars(1)+falls(1)+steam(1)+birds(1)+weather(1)=6.
 // Weather is ONE InstancedMesh shared by all seasons; zoneMix cross-fades which particles show.
 // Parallax is camera-driven only; never writes sim state.
@@ -45,12 +45,12 @@ export function createScenery(S, seed, reduceMotion) {
   birds.frustumCulled = false; birds.userData.layer = 'mid'; S.add(birds);
   // ---- seasonal weather: ONE shared InstancedMesh (soft billboard quads) ----
   // kinds by hash slot: drizzle / petal-leaf-snow / mote-firefly / flake. Scales to 0 when that season's weight is 0.
-  const NW = reduceMotion ? 56 : 120;
+  const NW = reduceMotion ? 96 : 220;
   const wxGeo = new THREE.PlaneGeometry(1, 1);
   const wxMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, fog: false, side: THREE.DoubleSide,
     vertexColors: true,
     vertexShader: `varying vec2 vUv; varying vec3 vC; void main(){ vUv=uv; vC=instanceColor; vec4 mv=modelViewMatrix*instanceMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; }`, /* instanceColor provided by Three when InstancedMesh.instanceColor is set */
-    fragmentShader: `varying vec2 vUv; varying vec3 vC; void main(){ vec2 p=vUv*2.-1.; float r=length(p); float a=1.15*(1.-smoothstep(0.0,0.85,r)); a=clamp(a,0.,1.); if(a<0.04) discard; gl_FragColor=vec4(vC,a); }` });
+    fragmentShader: `varying vec2 vUv; varying vec3 vC; void main(){ vec2 p=vUv*2.-1.; float r=length(p); float a=1.55*(1.-smoothstep(0.0,0.92,r)); a=clamp(a,0.,1.); if(a<0.03) discard; gl_FragColor=vec4(vC,a); }` });
   const weather = new THREE.InstancedMesh(wxGeo, wxMat, NW); weather.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NW * 3), 3);
   weather.frustumCulled = false; weather.renderOrder = 2; weather.userData.layer = 'fg'; S.add(weather);
   // per-particle seed state (fixed at create)
@@ -89,7 +89,11 @@ export function createScenery(S, seed, reduceMotion) {
     // capture helper: 'far'|'mid'|'fg' visibility on scenery-owned meshes (play tagged in index)
     applyLayer(name) {
       const all = !name || name === 'all';
-      for (const L of layers) L.m.visible = all || L.layer === name;
+      const mtn = name === 'mtn'; // mountains-only (far ring with haze); sky toggled by index
+      for (const L of layers) {
+        if (mtn) L.m.visible = !!(L.haze); // mountains have haze:1; far cedars do not
+        else L.m.visible = all || L.layer === name;
+      }
       wf.visible = all || name === 'mid'; steam.visible = all || name === 'mid';
       birds.visible = all || name === 'mid'; weather.visible = all || name === 'fg';
     },
@@ -205,7 +209,7 @@ export function createScenery(S, seed, reduceMotion) {
             sx = sy = (0.45 + 0.25 * pulse) * (0.8 + 0.2 * Math.sin(ph)); col.setHex(hex); col.multiplyScalar(0.7 + 0.5 * pulse);
             _p.set(px[i] * 0.7, cam.position.y + 2 + (py[i] % 14) + Math.sin(life * 0.9 + ph) * 1.5, cam.position.z + pz[i] * 0.7);
             _e.set(0, 0, 0); weather.setColorAt(i, col);
-            const sc = wgt * rm * 3.2; _q.copy(_bill); _s.set(sx * sc, sy * sc, 1);
+            const sc = wgt * rm * 4.2; _q.copy(_bill); _s.set(sx * sc, sy * sc, 1);
             if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
             _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m); continue; }
           else if (Wgt.autumn > 0.25) {
@@ -227,9 +231,9 @@ export function createScenery(S, seed, reduceMotion) {
             _p.set(px[i] + ((life * 3) % 45) - 22, cam.position.y + ((py[i] - life * 1.8) % 26 + 26) % 26 - 11, cam.position.z + pz[i]); _e.set(0.5, 0, -0.7); }
           else { wgt = Wgt.summer * (1 - st); hex = C_POLLEN; sx = sy = 0.5;
             _p.set(px[i] + Math.sin(life * 0.25) * 4, cam.position.y + py[i] * 0.5, cam.position.z + pz[i]); _e.set(0, 0, 0); } }
-        let sc = Math.max(0, wgt) * rm * (0.85 + 0.2 * Math.sin(ph * 5)) * 2.6; // readable size
+        let sc = Math.max(0, wgt) * rm * (0.95 + 0.25 * Math.sin(ph * 5)) * 3.6; // denser / still-readable
         // near-camera particles get a further boost (z close to cam)
-        const zd = Math.abs(_p.z - cam.position.z); if (zd < 30) sc *= 1.55;
+        const zd = Math.abs(_p.z - cam.position.z); if (zd < 30) sc *= 1.85;
         if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
         // keep weather out of the play-lane volume in front of the hero (x within 18 and z ahead of climber by <8)
         if (Math.abs(_p.x) < 18 && _p.z < cam.position.z - 5 && _p.z > cam.position.z - 14) _p.x = Math.sign(_p.x || 1) * 20;

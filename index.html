@@ -1,6 +1,12 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Tobu 3D greybox</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none}
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2A3B55">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<title>Tobu</title>
+<style>html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;-webkit-overflow-scrolling:auto;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 #hud{position:fixed;left:12px;top:10px;color:#fff;text-shadow:0 1px 3px #000;white-space:pre;pointer-events:none;font-weight:600}
 #h{font-size:34px}#zone{position:fixed;left:0;right:0;top:38%;text-align:center;color:#fff;font-size:30px;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none}
 #ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
@@ -44,7 +50,7 @@ import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';co
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
-const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),CLIP=Q.get('clip'),MISS=+Q.get('miss')||0,LAYER=Q.get('layer'); /* clip=t0,secs,fps capture-only; layer=far|mid|play|fg|all for kamishibai PNG dumps */
+const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),CLIP=Q.get('clip'),MISS=+Q.get('miss')||0,LAYER=Q.get('layer'); /* clip=t0,secs,fps capture-only; layer=far|mid|play|fg|mtn|all for kamishibai PNG dumps */
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
 let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
 if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
@@ -98,17 +104,20 @@ function merge(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;cons
  for(const g of gs){P.set(g.attributes.position.array,o*3);N.set(g.attributes.normal.array,o*3);C.set(g.attributes.color.array,o*3);o+=g.attributes.position.count;}
  const m=new THREE.BufferGeometry();m.setAttribute('position',new THREE.BufferAttribute(P,3));m.setAttribute('normal',new THREE.BufferAttribute(N,3));m.setAttribute('color',new THREE.BufferAttribute(C,3));return m;}
 const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1],autumn:[0xABB8EB,0x858FD1],winter:[0xC7D6EB,0xABB8EB]}; // lavender cedars (clipstyle)
-// decor: placeholder forest (cylinder trunks + cone canopies, spring blossom puffs), merged into one draw per module
-function decor(z0,z1,y){const zc=zoneAt(y),fc=FC[zc.key],gs=[];
- const zm=zoneMix(Math.max(0,y)),zk=zm.t>0.5?zm.b:zm.a; /* BRUSH scenery spec: mid cedars 25-70 from the lane, H 60-100, R 3-5, base y-70, gridded */
+// decor: mid cedars (BRUSH spec). Layout stream unchanged; per-zone colour buffers so season blends fade live.
+function decor(z0,z1,y){const zc=zoneAt(y),places=[];
  for(let z=z0;z>z1;z-=12){for(const s of[-1,1]){if(rD()<0.7){const H=60+rD()*40,R=3+rD()*2,x=s*(25+R*2.6+rD()*(45-R*2.6)),zz=z-rD()*10;
-   const cd=cedarZone(THREE,zk,H,R,1+(rD()*1e6|0));cd.translate(x,y-70,zz);gs.push(cd);}}}
- if(rD()<0.3){const s=rD()<.5?-1:1,t=kit.torii(THREE,10,9);t.rotateY(s*0.5);t.translate(s*(28+rD()*10),y-2,z1+rD()*(z0-z1));gs.push(t);} /* torii: background, no collider, pale lavender */
- if(gs.length){const m=new THREE.Mesh(merge(gs),VC);m.position.z=0;m.userData.zEnd=z1;m.userData.zStart=z0;m.userData.layer='mid';m.userData.par=0.5;S.add(m);deco.push(m);}
- if(zc.n!=='Spring cedar'&&rD()<0.5){const wf=new THREE.Mesh(new THREE.PlaneGeometry(4+rD()*4,40),new THREE.MeshBasicMaterial({color:hx(G.waterfall.body),transparent:true,opacity:0.85,fog:true}));
-  const s=rD()<.5?-1:1;wf.position.set(s*(22+rD()*20),y+4,z1+rD()*(z0-z1));wf.rotation.y=-s*0.6;/* placeholder waterfall replaced by scenery.js (rD still drawn so cedar layout is unchanged) */wf.geometry.dispose();}
- if(zc.n==='Autumn steam'||rD()<0.15){const st=new THREE.Mesh(new THREE.SphereGeometry(3+rD()*3,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
-  st.position.set((rD()<.5?-1:1)*(9+rD()*10),y-3,z1+rD()*(z0-z1));st.geometry.dispose();}} /* steam now in scenery.js */
+  places.push([x,y-70,zz,H,R,1+(rD()*1e6|0)]);}}} /* mid cedars 25-70 from lane, H 60-100, R 3-5, base y-70 */
+ let toriiP=null;if(rD()<0.3){const s=rD()<.5?-1:1;toriiP=[s,s*(28+rD()*10),y-2,z1+rD()*(z0-z1)];} /* torii: background, no collider */
+ if(zc.n!=='Spring cedar'&&rD()<0.5){rD();rD();rD();rD();} /* consume waterfall rDs — scenery.js owns falls */
+ if(zc.n==='Autumn steam'||rD()<0.15){rD();rD();rD();rD();} /* consume steam rDs — scenery.js owns steam */
+ if(!places.length&&!toriiP)return;
+ const ZK=['spring','summer','autumn','winter'],per={};let geo=null;
+ for(const zn of ZK){const gs=places.map(([x,yy,zz,H,R,sd])=>{const g=cedarZone(THREE,zn,H,R,sd);g.translate(x,yy,zz);return g;});
+  if(toriiP){const[s,tx,ty,tz]=toriiP,tg=kit.torii(THREE,10,9);tg.rotateY(s*0.5);tg.translate(tx,ty,tz);gs.push(tg);}
+  if(!gs.length)continue;const g=merge(gs);per[zn]=Float32Array.from(g.getAttribute('color').array);if(!geo)geo=g;}
+ if(!geo)return;
+ const m=new THREE.Mesh(geo,VC);m.position.z=0;m.userData.zEnd=z1;m.userData.zStart=z0;m.userData.layer='mid';m.userData.par=0.5;m.userData.per=per;m.userData.y0=y;m.userData.fadeKey='';S.add(m);deco.push(m);}
 const mtns=new THREE.Group();S.add(mtns);{const gs=[];
 for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0xC7D6EB);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
 /* cone mountains replaced by scenery.js backdrop */}
@@ -133,10 +142,10 @@ function mistDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_mv.set(
  U.mistY.value=_mv.z<1?y:-1e4;U.warn.value=mWarnA;U.mistT.value=P.t;
  const off=y<0,d=Math.max(0,P.pos.y-mistY.v);mRead.style.display=off&&P.mode!=='dead'?'block':'none';mRead.textContent='mist '+d.toFixed(0)+' m';mRead.classList.toggle('warn',mWarnA>0.5);}
 
-// ---------- lightning visuals: ring decal (3D) + column edges/bolt/flash (overlay). Visual only: reads sim.strikes. ----------
-const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const scen=createScenery(S,SEED,RM);const SCENQ=Q.has('scenonly')?1:Q.has('noscen')?2:0; /* luma capture only: 1 = sky+scenery, 2 = sky alone */ /* kamishibai: ?layer=far|mid|play|fg|all */const flashUntil=new Map();
-function applyCaptureLayer(){const name=LAYER;if(!name||name==='all'){scen.applyLayer('all');sky.visible=true;S.traverse(o=>{if(o.userData&&o.userData.layer&&o!==sky)o.visible=true;});return;}scen.applyLayer(name);sky.visible=name==='far';S.traverse(o=>{if(o===S||o===scen.root||o===sky)return;if(o.isLight)return;const L=o.userData&&o.userData.layer;if(L){o.visible=L===name;return;}/* untagged mesh → play (climb leftovers) */if(o.isMesh||o.isInstancedMesh){if(o.parent===scen.root)return;o.visible=name==='play';}});} 
-const ringMat=()=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3,uniforms:{R:{value:LT.r},prog:{value:0},ph:{value:1},fade:{value:1},px:{value:1}},
+// ---------- lightning visuals: ring decal (3D) + depth-tested 3D bolt column (walls occlude). Visual only: reads sim.strikes. ----------
+const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const scen=createScenery(S,SEED,RM);const SCENQ=Q.has('scenonly')?1:Q.has('noscen')?2:0; /* luma capture only: 1 = sky+scenery, 2 = sky alone */ /* kamishibai: ?layer=far|mid|play|fg|mtn|all */const flashUntil=new Map();
+function applyCaptureLayer(){const name=LAYER;if(!name||name==='all'){scen.applyLayer('all');sky.visible=true;S.traverse(o=>{if(o.userData&&o.userData.layer&&o!==sky)o.visible=true;});return;}scen.applyLayer(name);sky.visible=name==='far'; /* mtn=mountains-only (scenery.applyLayer); no sky */S.traverse(o=>{if(o===S||o===scen.root||o===sky)return;if(o.isLight)return;/* never override scenery-owned meshes */let p=o.parent;while(p){if(p===scen.root)return;p=p.parent;}if(o===scen.birds||o===scen.weather)return;const L=o.userData&&o.userData.layer;if(L){o.visible=L===name;return;}if(o.isMesh||o.isInstancedMesh)o.visible=name==='play';});} 
+const ringMat=()=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,depthTest:true,polygonOffset:true,polygonOffsetFactor:-3,uniforms:{R:{value:LT.r},prog:{value:0},ph:{value:1},fade:{value:1},px:{value:1}},
  vertexShader:`varying vec2 vP; void main(){ vP=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
  fragmentShader:`uniform float R,prog,ph,fade,px; varying vec2 vP; void main(){ float r=length(vP), fw=fwidth(r)/px; vec4 o=vec4(0.);
   float ang=fract(atan(vP.x,vP.y)/6.2832+1.); /* 0 at 12 o'clock (far side), clockwise */
@@ -146,19 +155,38 @@ const ringMat=()=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,po
   else { if(abs(r-R)/fw<2.) o=vec4(0.749,0.847,0.894,fade); }
   if(o.a<0.01) discard; gl_FragColor=o; }`});
 const rings=[0,1].map(()=>{const m=new THREE.Mesh(new THREE.CircleGeometry(LT.r+0.15,48),ringMat());m.rotation.x=-Math.PI/2;m.visible=false;m.userData.layer='play';S.add(m);return m;});
+/* 3D bolt billboards: depthTest so climbable walls occlude the column (fixes lightning-through-walls) */
+const boltMat=()=>new THREE.ShaderMaterial({transparent:true,depthTest:true,depthWrite:false,fog:false,side:THREE.DoubleSide,
+ uniforms:{ph:{value:0},prog:{value:1},flash:{value:0},glow:{value:1},t:{value:0},R:{value:LT.r}},
+ vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+ fragmentShader:`uniform float ph,prog,flash,glow,t,R; varying vec2 vUv;
+  void main(){ if(ph<0.5) discard; float u=vUv.y; float v=(vUv.x-0.5)*2.0*R; /* lateral metres */
+   vec3 col=vec3(0.749,0.847,0.894); float a=0.0;
+   if(flash>0.5 && abs(v)<R){ col=vec3(0.749,0.847,0.894); a=max(a,0.5); }
+   if(ph>1.5){ float fr=floor(t/0.12); float q=u*9.0; float j0=floor(q);
+    float h0=fract(sin((j0+fr*17.0)*91.7)*43758.5)-0.5; float h1=fract(sin((j0+1.0+fr*17.0)*91.7)*43758.5)-0.5;
+    float w=mix(h0,h1,fract(q))*R*0.9*(1.0-0.6*u*u); float d=abs(v-w);
+    a=max(a,glow*0.45*(1.0-smoothstep(0.0,0.45*R,d)));
+    if(ph<2.5){ if(d<0.12*R){ col=vec3(0.118,0.149,0.188); a=1.0; } if(d<0.07*R){ col=vec3(0.957,0.969,0.976); a=1.0; } } }
+   if(ph<2.5){ float e=abs(abs(v)-R); float filled=step(u,prog)+step(1.5,ph); float dash=step(mod(u*20.0,2.6),1.2);
+    float on=max(min(filled,1.0),dash*0.999); if(e<0.14*R && on>0.0){ col=e<0.07*R?vec3(0.769,0.282,0.204):vec3(0.118,0.149,0.188); a=1.0; } }
+   if(a<0.01) discard; gl_FragColor=vec4(col,a); }`});
+const bolts=[0,1].map(()=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(LT.r*2.6,LT.colH,1,1),boltMat());m.visible=false;m.frustumCulled=false;m.renderOrder=1;m.userData.layer='play';S.add(m);return m;});
 const _a=new THREE.Vector3(),_b=new THREE.Vector3(),_rt=new THREE.Vector3();
 function toPx(v,o){v.project(cam);o.x=(v.x*0.5+0.5)*_sz.x;o.y=(v.y*0.5+0.5)*_sz.y;return v.z<1&&v.z>-1;}
 function lightDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_rt.setFromMatrixColumn(cam.matrixWorld,0);const U=post.U,pxs=_sz.x/1080;U.edgePx.value=Math.max(4*pxs,2*_sz.x/360);
- for(let i=0;i<2;i++){const k=sim.strikes[i],st=U.cSt.value[i],ring=rings[i];if(!k){st.set(0,0,0,0);ring.visible=false;continue;}
+ for(let i=0;i<2;i++){const k=sim.strikes[i],st=U.cSt.value[i],ring=rings[i],bolt=bolts[i];
+  st.set(0,0,0,0); /* overlay lightning retired — 3D depth-tested bolts replace it */
+  if(!k){ring.visible=false;bolt.visible=false;continue;}
   const a=P.t-k.t0,W=LT.warn,Sd=LT.strike;let ph,prog;if(a<W){ph=1;prog=a/W;}else if(a<W+Sd){ph=2;prog=1;}else{ph=3;prog=1;}
   if(ph===2&&FL.request(k.id,P.t))flashUntil.set(k.id,P.t+0.066); // one flash per strike, <=3/s across all strikes, none with reduce motion
   const fl=(flashUntil.get(k.id)||0)>P.t?1:0;
   let glow=1;if(ph===3){const s3=Math.min(2,Math.floor((a-W-Sd)/0.17));glow=[0.6,0.35,0.15][s3]*(RM?0.4:1);} // afterglow steps; reduce motion dims it
-  const okA=toPx(_a.set(k.x,k.y,k.z),{x:0,y:0}),pa={x:0,y:0},pb={x:0,y:0},ra={x:0,y:0},rb={x:0,y:0};
-  const v1=toPx(_a.set(k.x,k.y,k.z),pa),v2=toPx(_b.set(k.x,k.y+LT.colH,k.z),pb);toPx(_a.set(k.x,k.y,k.z).addScaledVector(_rt,LT.r),ra);toPx(_b.set(k.x,k.y+LT.colH,k.z).addScaledVector(_rt,LT.r),rb);
-  if(!(v1&&v2)){st.set(0,0,0,0);}else{U.cA.value[i].set(pa.x,pa.y,pb.x,pb.y);U.cRad.value[i].set(Math.hypot(ra.x-pa.x,ra.y-pa.y),Math.hypot(rb.x-pb.x,rb.y-pb.y));st.set(ph,prog,fl,glow);}
   ring.visible=true;ring.position.set(k.x,k.y+0.02,k.z);const u=ring.material.uniforms;u.prog.value=prog;u.ph.value=ph;u.px.value=pxs;u.fade.value=ph===3?Math.max(0,1-(a-W-Sd)/LT.after):1;
-  const pulse=(!RM&&ph===1&&a>W-0.2)?1+0.04*Math.sin((a-(W-0.2))*Math.PI*10):1;ring.scale.setScalar(pulse);}}
+  const pulse=(!RM&&ph===1&&a>W-0.2)?1+0.04*Math.sin((a-(W-0.2))*Math.PI*10):1;ring.scale.setScalar(pulse);
+  bolt.visible=true;bolt.position.set(k.x,k.y+LT.colH*0.5,k.z);
+  bolt.quaternion.copy(cam.quaternion); /* billboard so column faces the lens; depth still tested vs walls */
+  const bu=bolt.material.uniforms;bu.ph.value=ph;bu.prog.value=prog;bu.flash.value=fl;bu.glow.value=glow;bu.t.value=P.t;bu.R.value=LT.r;}}
 
 // ---------- input: auto-run, tap = jump / wall-kick, drag = steer. Applied only at the next fixed tick. ----------
 const K={};let steer=0,ptr=null,pending=false;
@@ -189,7 +217,9 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  spdK+=((P.state==='wall'?1:THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-12.5)/5,0,1))-spdK)*(1-Math.exp(-5*dt));post.U.spd.value=spdK;post.U.sT.value=P.t;
  cam.fov=THREE.MathUtils.lerp(cam.fov,THREE.MathUtils.lerp(T.fovBase,T.tightFov,tightK)+(T.fovMax-T.fovBase)*(1-tightK)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
  mtns.position.set(0,P.pos.y*0.85,P.pos.z);
- deco.forEach(d=>{const par=d.userData.par??0.5;d.position.x=-cam.position.x*(1-par)*0.2; /* mid-layer lateral parallax */ if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}});
+ deco.forEach(d=>{const par=d.userData.par??0.5;d.position.x=-cam.position.x*(1-par)*0.2; /* mid-layer lateral parallax */ if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}
+  /* live season colour cross-fade (visual only; same as scenery far cedars) */
+  if(d.userData.per){const zm=zoneMix(Math.max(0,d.userData.y0)),key=zm.a+zm.b+zm.t.toFixed(3);if(key!==d.userData.fadeKey){d.userData.fadeKey=key;const a=d.userData.per[zm.a],b=d.userData.per[zm.b],c=d.geometry.getAttribute('color'),o=c.array,tt=zm.t;for(let i=0;i<o.length;i++)o[i]=a[i]+(b[i]-a[i])*tt;c.needsUpdate=true;}}});
  for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+60){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-70;} /* cull mid cedars past 70 m — was fogFar+10 (~130), caused 41 draws in long clips */
  while(deco.length>4){const d=deco.shift();S.remove(d);d.geometry.dispose();} /* hard cap 4 mid-cedar draws */
  /* cull fully-fogged kit meshes (one merged draw per module) so long clips stay ≤40 */
@@ -243,7 +273,7 @@ function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAV
  const _cp=cam.position.clone();if(sx||sy){cam.updateMatrixWorld();cam.position.addScaledVector(_rt.setFromMatrixColumn(cam.matrixWorld,0),sx).addScaledVector(_a.setFromMatrixColumn(cam.matrixWorld,1),sy);cam.updateMatrixWorld();}
  if(SCENQ){for(const o of S.children)o.visible=o===sky||(SCENQ===1&&(o===scen.root||o===scen.birds||o===scen.weather));post.U.spd.value=0;post.U.mistY.value=-1e4;for(const v of post.U.cSt.value)v.set(0,0,0,0);}
  if(LAYER){applyCaptureLayer();post.U.spd.value=0;if(LAYER!=='play'&&LAYER!=='all'){post.U.mistY.value=-1e4;for(const v of post.U.cSt.value)v.set(0,0,0,0);post.U.hTrail.value=0;post.U.hSpark.value=0;post.U.hRim.value=0;post.U.hCatch.value=0;}}
- if(LAYER&&LAYER!=='all'&&LAYER!=='play'){R.info.autoReset=false;R.info.reset();R.autoClear=true;R.render(S,cam);post.U.draws=R.info.render.calls;}
+ if(LAYER&&LAYER!=='all'&&LAYER!=='play'){R.info.autoReset=false;R.info.reset();R.autoClear=true;R.render(S,cam);post.U.draws=R.info.render.calls;} /* mtn/far/mid/fg: no post overlay */
  else post.render(S,cam);cam.position.copy(_cp);cam.updateMatrixWorld();}
 
 const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
@@ -270,4 +300,5 @@ if(SIM){let t=0,TR=[],tk=0;
  document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
+if('serviceWorker' in navigator&&!SIM&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{}); /* PWA: Add to Home Screen on iPhone Safari over https */
 </script></body></html>

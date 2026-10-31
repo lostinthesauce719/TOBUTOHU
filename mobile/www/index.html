@@ -1,0 +1,304 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2A3B55">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<title>Tobu</title>
+<style>html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;-webkit-overflow-scrolling:auto;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#hud{position:fixed;left:12px;top:10px;color:#fff;text-shadow:0 1px 3px #000;white-space:pre;pointer-events:none;font-weight:600}
+#h{font-size:34px}#zone{position:fixed;left:0;right:0;top:38%;text-align:center;color:#fff;font-size:30px;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none}
+#ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
+#ov b{font-size:40px}#help{position:fixed;right:10px;bottom:10px;color:#fff;text-shadow:0 1px 3px #000;text-align:right;pointer-events:none;font-size:12px}
+#mread{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));text-align:center;color:#F2E8CC;font-weight:700;font-size:16px;text-shadow:0 0 2px #1E2630,0 0 2px #1E2630,0 1px 3px #1E2630;pointer-events:none;display:none}#mread.warn{color:#C44834}
+#hint{position:fixed;left:0;right:0;bottom:14%;text-align:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000;pointer-events:none;transition:opacity .8s}
+/* BRUSH style-D game-over / Catch screens (menus/README.md, locked 2026-10-18): 1080x1920 layout scaled to the viewport. BRUSH restyles later */
+#cw{position:fixed;inset:0;display:none;z-index:5;background:rgba(42,59,85,.45)}#cw.on{display:block}
+#cb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--u,1));font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#F2E8CC;font-weight:900}
+#cb .pn{position:absolute;left:80px;top:250px;width:920px;height:1450px;border-radius:56px;background:#2A3B55;box-shadow:0 0 0 4px #1E2630;box-sizing:border-box}
+#cb .c{position:absolute;left:0;width:1080px;text-align:center;transform:translateY(-50%);white-space:nowrap}
+#cb .t2{color:#B9C2CC}#cb .best{position:absolute;left:330px;top:690px;width:420px;height:100px;border-radius:50px;box-shadow:inset 0 0 0 3px #D8B76A;color:#D8B76A;font-size:48px;line-height:100px;text-align:center}
+#cb .btn{position:absolute;top:1030px;width:400px;height:190px;border-radius:40px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;cursor:pointer;padding:0}
+#cb .btn b{position:absolute;left:0;right:0;top:70px;transform:translateY(-50%);font-weight:900}#cb .btn i{position:absolute;left:0;right:0;top:140px;transform:translateY(-50%);font-style:normal;font-size:36px;font-weight:800}
+#cb .btn[disabled]{cursor:default}
+#cb .dis{position:absolute;left:130px;top:960px;width:820px;height:230px;border-radius:40px;background:#3A4458;color:#B9C2CC}
+#pips{position:absolute;top:990px;height:45px;transform:translateY(-50%);display:flex;align-items:center;gap:12px}
+#pips .p{width:var(--pip,45px);height:var(--pip,45px);border-radius:50%;box-sizing:border-box;flex:none}
+#pips .p.f{background:#F2E8CC;box-shadow:inset 0 0 0 3px #F2E8CC,inset 0 0 0 6px #3E5C76}#pips .p.e{box-shadow:inset 0 0 0 3px #808588}
+#pips span{margin-left:6px;font-size:30px;font-weight:800;color:#F2E8CC}
+#cb .retry{position:absolute;left:330px;top:1310px;width:420px;height:150px;border-radius:75px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;font-size:84px;cursor:pointer}
+#cb .home{position:absolute;left:470px;top:1500px;width:140px;height:110px;border-radius:30px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;border:0;color:#F2E8CC;font:inherit;font-size:30px;cursor:pointer}
+</style></head>
+<body><div id="hud"><span id="h">0 m</span>
+<span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · drag to steer</div>
+<div id="ov"><b id="ovT"></b><div id="ovS"></div></div>
+<div id="cw"><div id="cb"><div class="pn"></div>
+<div class="c" style="top:350px;font-size:70px">INTO THE MIST</div><div class="c t2" style="top:470px;font-size:40px;font-weight:800">HEIGHT</div>
+<div class="c" id="cH" style="top:580px;font-size:150px">0 m</div><div class="best" id="cBest">BEST 0 m</div>
+<div id="cOffer"><div class="c" style="top:870px;font-size:52px">Second chance?</div><div class="c t2" id="cSub" style="top:930px;font-size:34px;font-weight:700"></div>
+<div id="pips"></div>
+<button class="btn" id="bCatch" style="left:130px"><b id="bCatch1">Catch</b><i id="bCatch2"></i></button><button class="btn" id="bNo" style="left:550px"><b id="bNo1">No thanks</b><i>end this run</i></button></div>
+<div id="cUsed" style="display:none"><div class="c t2" style="top:880px;font-size:52px">Second chance</div><div class="dis"></div><div class="c" style="top:1030px;font-size:50px;color:#B9C2CC">Catch used</div><div class="c" style="top:1092px;font-size:40px;color:#B9C2CC;font-weight:700">one per run</div></div>
+<button class="retry" id="bRetry">&#x21BB; RETRY</button><button class="home" id="bHome">&#x2302;<br>HOME</button>
+</div></div>
+<div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+import {createHero} from './hero.js';import {kit,cedarZone,zoneMix} from './clipkit.js';
+import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';const CLS={};
+const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
+import {createSaves} from './saves.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
+import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
+const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),CLIP=Q.get('clip'),MISS=+Q.get('miss')||0,LAYER=Q.get('layer'); /* clip=t0,secs,fps capture-only; layer=far|mid|play|fg|mtn|all for kamishibai PNG dumps */
+const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
+let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
+if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
+const rD=mul(SEED^0xDEC0); // decor stream: visuals only, never read by sim.js
+// camera tuning (visual only; physics tuning lives in sim.js)
+const T={camDist:1.55,camHeight:0.95,camPitch:14,camLag:7,camLagY:3.5,fovBase:88,fovMax:98,tightDist:1.05,tightHeight:1.0,tightFov:78,tightRate:2.2,camRollMax:0.2,camRollRate:3.5,camWallOff:0.55}; /* closer chase: hero ~8% frame width (render-only; hitbox untouched) */
+const hx=c=>parseInt(c.slice(1),16);
+const ZONES=['spring','summer','autumn','winter'].map((k,i)=>{const p=PAL[k];return {...ZN[i],key:k,p,sky:hx(p.sky_top),fog:hx(p.fog)};}); // names/heights from sim.js, colours from palettes.json
+const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
+
+// ---------- scene ----------
+const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:!!LAYER}); R.setPixelRatio(Math.min(2,devicePixelRatio)); if(LAYER){R.setClearColor(0x000000,0);} 
+const CAPW=+Q.get('capw')||0,CAPH=+Q.get('caph')||0;R.setSize(CAPW||innerWidth,CAPH||innerHeight);document.body.appendChild(R.domElement); /* ?capw/?caph capture-only size */perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
+const S=new THREE.Scene();const sky=makeSky();sky.userData.layer='far';S.add(sky);S.fog=new THREE.Fog(LOOK.fog,LOOK.fogNear,LOOK.fogFar);
+const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
+
+// ---------- course meshes mirror sim boxes ----------
+const meshes=new Map(),cracked=new Set();
+// batched course: plain trunks/ledges go into one InstancedMesh per material (unit box scaled per instance); breakables stay
+// separate meshes because each carries its own tear uniform. Mirrors sim boxes only.
+const UB=new THREE.BoxGeometry(1,1,1),_m4=new THREE.Matrix4(),_q0=new THREE.Quaternion(),_v1=new THREE.Vector3(),_v2=new THREE.Vector3();
+const pools=new Map();function pool(mat){let p=pools.get(mat);if(!p){const im=new THREE.InstancedMesh(UB,mat,400);im.count=0;im.frustumCulled=false;im.userData.layer='play';S.add(im);p={im,ids:[]};pools.set(mat,p);}return p;}
+function poolAdd(b,mat){const p=pool(mat),i=p.im.count++;p.ids[i]=b;_m4.compose(_v1.set(b.x,b.y,b.z),_q0,_v2.set(b.hx*2,b.hy*2,b.hz*2));p.im.setMatrixAt(i,_m4);p.im.instanceMatrix.needsUpdate=true;meshes.set(b.id,{pool:p,b});}
+function poolDel(e){const p=e.pool,i=p.ids.indexOf(e.b),l=--p.im.count;if(i<0)return;if(i!==l){p.im.getMatrixAt(l,_m4);p.im.setMatrixAt(i,_m4);p.ids[i]=p.ids[l];}p.ids.length=l;p.im.instanceMatrix.needsUpdate=true;}
+function meshFor(b,mat){const m=new THREE.Mesh(UB,mat);m.scale.set(b.hx*2,b.hy*2,b.hz*2);m.position.set(b.x,b.y,b.z);m.userData.b=b;m.userData.layer='play';S.add(m);meshes.set(b.id,m);return m;}
+const hooks={
+ add(b){pendKit.push(b);}, // built when the module closes (brk flags are set by then): merged kit geometry per module // breakable flag may arrive after add (flushed after each tick)
+ crack(b){flushKit();let m=meshes.get(b.id);if(!m)return;if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));}m.material.uniforms.tearK.value=0;cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ remove(b){const m=meshes.get(b.id);if(!m)return;if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
+ module(m){flushKit();decor(m.z0,m.z1,m.y0);}};
+// BRUSH clipkit: branch ledges + curved bark walls (visual only; contact faces sit on the flat sim colliders), one merged draw per module
+const KM=gridMat(0xffffff,{vc:1}),pendKit=[];
+function flushKit(){if(!pendKit.length)return;const gs=[],ent={n:0,mesh:null};
+ for(const b of pendKit){if(b.gone)continue;if(b.brk){meshFor(b,climbMat(b,zoneAt(b.y)));continue;}
+  gs.push(b.kind==='shelf'?kit.ledge(THREE,b):kit.wall(THREE,b,Math.sign(b.x)||1));ent.n++;meshes.set(b.id,{kit:ent,b});}
+ pendKit.length=0;if(!gs.length)return;const g=mergeKit(gs);ent.mesh=new THREE.Mesh(g,KM);ent.mesh.frustumCulled=false;ent.mesh.userData.layer='play';S.add(ent.mesh);}
+function mergeKit(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;const o=new THREE.BufferGeometry();for(const a of['position','normal','color']){const arr=new Float32Array(n*3);let k=0;for(const g of gs){arr.set(g.attributes[a].array,k);k+=g.attributes[a].array.length;}o.setAttribute(a,new THREE.BufferAttribute(arr,3));}return o;}
+
+// climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
+const pendBrk=[];function flushBrk(){flushKit();for(const [b,zc] of pendBrk){const m=meshes.get(b.id);if(b.brk&&m&&m.pool){poolDel(m);meshFor(b,climbMat(b,zc));}}pendBrk.length=0;}
+// look reset placeholders: trunk walls bark-brown, ledge shelves moss, winter ice pale; breakables warm with perforations
+const LC={bark:0x516384,moss:0x5476A2,ice:0x858FD1,brk:0xABB8EB}; // BRUSH clipstyle v2: slate climbables, lavender ice, pale lavender breakables (dark perforations)
+function climbMat(b,zc){
+ if(b.brk)return perfMat(LC.brk,[b.hx,b.hy,b.hz],CB.perforation,CB.breakable_tear);
+ if(b.kind==='shelf')return gridMat(zc.key==='winter'?LC.ice:LC.moss);
+ return gridMat(LC.bark);}
+// ---------- decor (separate seeded stream, no collision) ----------
+const deco=[];const VC=gridMat(0xffffff,{vc:1,gA:0.3});const _c=new THREE.Color();
+function colored(g,hex){g=g.index?g.toNonIndexed():g;const n=g.attributes.position.count,a=new Float32Array(n*3);_c.setHex(hex);for(let i=0;i<n;i++){a[i*3]=_c.r;a[i*3+1]=_c.g;a[i*3+2]=_c.b;}g.setAttribute('color',new THREE.BufferAttribute(a,3));g.deleteAttribute('uv');return g;}
+function merge(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;const P=new Float32Array(n*3),N=new Float32Array(n*3),C=new Float32Array(n*3);let o=0;
+ for(const g of gs){P.set(g.attributes.position.array,o*3);N.set(g.attributes.normal.array,o*3);C.set(g.attributes.color.array,o*3);o+=g.attributes.position.count;}
+ const m=new THREE.BufferGeometry();m.setAttribute('position',new THREE.BufferAttribute(P,3));m.setAttribute('normal',new THREE.BufferAttribute(N,3));m.setAttribute('color',new THREE.BufferAttribute(C,3));return m;}
+const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1],autumn:[0xABB8EB,0x858FD1],winter:[0xC7D6EB,0xABB8EB]}; // lavender cedars (clipstyle)
+// decor: mid cedars (BRUSH spec). Layout stream unchanged; per-zone colour buffers so season blends fade live.
+function decor(z0,z1,y){const zc=zoneAt(y),places=[];
+ for(let z=z0;z>z1;z-=12){for(const s of[-1,1]){if(rD()<0.7){const H=60+rD()*40,R=3+rD()*2,x=s*(25+R*2.6+rD()*(45-R*2.6)),zz=z-rD()*10;
+  places.push([x,y-70,zz,H,R,1+(rD()*1e6|0)]);}}} /* mid cedars 25-70 from lane, H 60-100, R 3-5, base y-70 */
+ let toriiP=null;if(rD()<0.3){const s=rD()<.5?-1:1;toriiP=[s,s*(28+rD()*10),y-2,z1+rD()*(z0-z1)];} /* torii: background, no collider */
+ if(zc.n!=='Spring cedar'&&rD()<0.5){rD();rD();rD();rD();} /* consume waterfall rDs — scenery.js owns falls */
+ if(zc.n==='Autumn steam'||rD()<0.15){rD();rD();rD();rD();} /* consume steam rDs — scenery.js owns steam */
+ if(!places.length&&!toriiP)return;
+ const ZK=['spring','summer','autumn','winter'],per={};let geo=null;
+ for(const zn of ZK){const gs=places.map(([x,yy,zz,H,R,sd])=>{const g=cedarZone(THREE,zn,H,R,sd);g.translate(x,yy,zz);return g;});
+  if(toriiP){const[s,tx,ty,tz]=toriiP,tg=kit.torii(THREE,10,9);tg.rotateY(s*0.5);tg.translate(tx,ty,tz);gs.push(tg);}
+  if(!gs.length)continue;const g=merge(gs);per[zn]=Float32Array.from(g.getAttribute('color').array);if(!geo)geo=g;}
+ if(!geo)return;
+ const m=new THREE.Mesh(geo,VC);m.position.z=0;m.userData.zEnd=z1;m.userData.zStart=z0;m.userData.layer='mid';m.userData.par=0.5;m.userData.per=per;m.userData.y0=y;m.userData.fadeKey='';S.add(m);deco.push(m);}
+const mtns=new THREE.Group();S.add(mtns);{const gs=[];
+for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0xC7D6EB);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
+/* cone mountains replaced by scenery.js backdrop */}
+// drop shadow: crisp dark disc on the highest surface under the climber (reads sim boxes, never writes)
+const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1C2438,transparent:true,opacity:0.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;shadow.userData.layer='play';S.add(shadow);
+function shadowTick(){let top=-1e9;for(const b of sim.boxes){const t=b.y+b.hy;if(t<=P.pos.y+0.05&&t>top&&Math.abs(P.pos.x-b.x)<=b.hx&&Math.abs(P.pos.z-b.z)<=b.hz)top=t;}
+ if(P.state==='wall'&&P.lastWall){const b=P.lastWall,sd=P.wallSide;shadow.visible=true;shadow.position.set(b.x-sd*b.hx-sd*0.02,P.pos.y-0.05,P.pos.z);shadow.rotation.set(0,-sd*Math.PI/2,0);shadow.scale.set(0.8,0.4,1);shadow.material.opacity=0.85;return;} /* wall-run: hard shadow projected onto the wall plane */
+ shadow.rotation.set(-Math.PI/2,0,0);const h=P.pos.y-top;shadow.visible=top>-1e8&&h<12;if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.85*k;} /* hard edge #1C2438 85% (clipstyle) */
+// ---------- the run ----------
+const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here; forced 1 on daily/weekly */,nobrk:Q.has('nobrk'),nomist:Q.has('nomist'),miss:MISS,hooks});
+const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
+
+// ---------- player: style D grasshopper, contact-driven poses (visual only, hero.js) ----------
+const hero=createHero(S,P,sim.boxes);hero.parts.forEach(o=>post.tag(o,CLS.hero)); // hero row is 0 px: its own hull draws it
+// mist: drawn by the post pass as a scalloped edge (line over band over body); warning line inside 3 s, off past 3.5 s
+const MW=G.mist;let mSp=0,mLast=null,mWarn=false,mWarnA=0;const mRead=document.createElement('div');mRead.id='mread';document.body.appendChild(mRead);
+function mistTick(dt){if(mLast!==null)mSp+=((mistY.v-mLast)/dt-mSp)*(1-Math.exp(-dt/0.5));mLast=mistY.v;
+ const tt=(P.pos.y-mistY.v)/Math.max(mSp-(P.state==='air'?Math.min(0,P.vel.y):0),0.05); /* closing speed: mist rise plus any fall */ if(!mWarn&&tt<MW.warning_on_s)mWarn=true;else if(mWarn&&tt>MW.warning_off_s)mWarn=false;
+ mWarnA=THREE.MathUtils.clamp(mWarnA+(mWarn?1:-1)*dt/MW.warning_fade_s,0,1);}
+const _mv=new THREE.Vector3(),_sz=new THREE.Vector2();
+function mistDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_mv.set(P.pos.x,mistY.v,Math.min(P.pos.z,cam.position.z-6)).project(cam); /* edge at the hero's depth, never closer than 6 m */const y=(_mv.y*0.5+0.5)*_sz.y,U=post.U;
+ U.mistY.value=_mv.z<1?y:-1e4;U.warn.value=mWarnA;U.mistT.value=P.t;
+ const off=y<0,d=Math.max(0,P.pos.y-mistY.v);mRead.style.display=off&&P.mode!=='dead'?'block':'none';mRead.textContent='mist '+d.toFixed(0)+' m';mRead.classList.toggle('warn',mWarnA>0.5);}
+
+// ---------- lightning visuals: ring decal (3D) + depth-tested 3D bolt column (walls occlude). Visual only: reads sim.strikes. ----------
+const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const scen=createScenery(S,SEED,RM);const SCENQ=Q.has('scenonly')?1:Q.has('noscen')?2:0; /* luma capture only: 1 = sky+scenery, 2 = sky alone */ /* kamishibai: ?layer=far|mid|play|fg|mtn|all */const flashUntil=new Map();
+function applyCaptureLayer(){const name=LAYER;if(!name||name==='all'){scen.applyLayer('all');sky.visible=true;S.traverse(o=>{if(o.userData&&o.userData.layer&&o!==sky)o.visible=true;});return;}scen.applyLayer(name);sky.visible=name==='far'; /* mtn=mountains-only (scenery.applyLayer); no sky */S.traverse(o=>{if(o===S||o===scen.root||o===sky)return;if(o.isLight)return;/* never override scenery-owned meshes */let p=o.parent;while(p){if(p===scen.root)return;p=p.parent;}if(o===scen.birds||o===scen.weather)return;const L=o.userData&&o.userData.layer;if(L){o.visible=L===name;return;}if(o.isMesh||o.isInstancedMesh)o.visible=name==='play';});} 
+const ringMat=()=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,depthTest:true,polygonOffset:true,polygonOffsetFactor:-3,uniforms:{R:{value:LT.r},prog:{value:0},ph:{value:1},fade:{value:1},px:{value:1}},
+ vertexShader:`varying vec2 vP; void main(){ vP=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+ fragmentShader:`uniform float R,prog,ph,fade,px; varying vec2 vP; void main(){ float r=length(vP), fw=fwidth(r)/px; vec4 o=vec4(0.);
+  float ang=fract(atan(vP.x,vP.y)/6.2832+1.); /* 0 at 12 o'clock (far side), clockwise */
+  if(ph<2.5){ float base=abs(r-R)/fw; float arc=abs(r-(R-4.*px*fw))/fw;
+   if(base<1.+2. || (ang<=prog && arc<3.+2.)) o=vec4(0.118,0.149,0.188,1.);
+   if(base<1. || (ang<=prog && arc<3.)) o=vec4(0.769,0.282,0.204,1.); }
+  else { if(abs(r-R)/fw<2.) o=vec4(0.749,0.847,0.894,fade); }
+  if(o.a<0.01) discard; gl_FragColor=o; }`});
+const rings=[0,1].map(()=>{const m=new THREE.Mesh(new THREE.CircleGeometry(LT.r+0.15,48),ringMat());m.rotation.x=-Math.PI/2;m.visible=false;m.userData.layer='play';S.add(m);return m;});
+/* 3D bolt billboards: depthTest so climbable walls occlude the column (fixes lightning-through-walls) */
+const boltMat=()=>new THREE.ShaderMaterial({transparent:true,depthTest:true,depthWrite:false,fog:false,side:THREE.DoubleSide,
+ uniforms:{ph:{value:0},prog:{value:1},flash:{value:0},glow:{value:1},t:{value:0},R:{value:LT.r}},
+ vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+ fragmentShader:`uniform float ph,prog,flash,glow,t,R; varying vec2 vUv;
+  void main(){ if(ph<0.5) discard; float u=vUv.y; float v=(vUv.x-0.5)*2.0*R; /* lateral metres */
+   vec3 col=vec3(0.749,0.847,0.894); float a=0.0;
+   if(flash>0.5 && abs(v)<R){ col=vec3(0.749,0.847,0.894); a=max(a,0.5); }
+   if(ph>1.5){ float fr=floor(t/0.12); float q=u*9.0; float j0=floor(q);
+    float h0=fract(sin((j0+fr*17.0)*91.7)*43758.5)-0.5; float h1=fract(sin((j0+1.0+fr*17.0)*91.7)*43758.5)-0.5;
+    float w=mix(h0,h1,fract(q))*R*0.9*(1.0-0.6*u*u); float d=abs(v-w);
+    a=max(a,glow*0.45*(1.0-smoothstep(0.0,0.45*R,d)));
+    if(ph<2.5){ if(d<0.12*R){ col=vec3(0.118,0.149,0.188); a=1.0; } if(d<0.07*R){ col=vec3(0.957,0.969,0.976); a=1.0; } } }
+   if(ph<2.5){ float e=abs(abs(v)-R); float filled=step(u,prog)+step(1.5,ph); float dash=step(mod(u*20.0,2.6),1.2);
+    float on=max(min(filled,1.0),dash*0.999); if(e<0.14*R && on>0.0){ col=e<0.07*R?vec3(0.769,0.282,0.204):vec3(0.118,0.149,0.188); a=1.0; } }
+   if(a<0.01) discard; gl_FragColor=vec4(col,a); }`});
+const bolts=[0,1].map(()=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(LT.r*2.6,LT.colH,1,1),boltMat());m.visible=false;m.frustumCulled=false;m.renderOrder=1;m.userData.layer='play';S.add(m);return m;});
+const _a=new THREE.Vector3(),_b=new THREE.Vector3(),_rt=new THREE.Vector3();
+function toPx(v,o){v.project(cam);o.x=(v.x*0.5+0.5)*_sz.x;o.y=(v.y*0.5+0.5)*_sz.y;return v.z<1&&v.z>-1;}
+function lightDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_rt.setFromMatrixColumn(cam.matrixWorld,0);const U=post.U,pxs=_sz.x/1080;U.edgePx.value=Math.max(4*pxs,2*_sz.x/360);
+ for(let i=0;i<2;i++){const k=sim.strikes[i],st=U.cSt.value[i],ring=rings[i],bolt=bolts[i];
+  st.set(0,0,0,0); /* overlay lightning retired — 3D depth-tested bolts replace it */
+  if(!k){ring.visible=false;bolt.visible=false;continue;}
+  const a=P.t-k.t0,W=LT.warn,Sd=LT.strike;let ph,prog;if(a<W){ph=1;prog=a/W;}else if(a<W+Sd){ph=2;prog=1;}else{ph=3;prog=1;}
+  if(ph===2&&FL.request(k.id,P.t))flashUntil.set(k.id,P.t+0.066); // one flash per strike, <=3/s across all strikes, none with reduce motion
+  const fl=(flashUntil.get(k.id)||0)>P.t?1:0;
+  let glow=1;if(ph===3){const s3=Math.min(2,Math.floor((a-W-Sd)/0.17));glow=[0.6,0.35,0.15][s3]*(RM?0.4:1);} // afterglow steps; reduce motion dims it
+  ring.visible=true;ring.position.set(k.x,k.y+0.02,k.z);const u=ring.material.uniforms;u.prog.value=prog;u.ph.value=ph;u.px.value=pxs;u.fade.value=ph===3?Math.max(0,1-(a-W-Sd)/LT.after):1;
+  const pulse=(!RM&&ph===1&&a>W-0.2)?1+0.04*Math.sin((a-(W-0.2))*Math.PI*10):1;ring.scale.setScalar(pulse);
+  bolt.visible=true;bolt.position.set(k.x,k.y+LT.colH*0.5,k.z);
+  bolt.quaternion.copy(cam.quaternion); /* billboard so column faces the lens; depth still tested vs walls */
+  const bu=bolt.material.uniforms;bu.ph.value=ph;bu.prog.value=prog;bu.flash.value=fl;bu.glow.value=glow;bu.t.value=P.t;bu.R.value=LT.r;}}
+
+// ---------- input: auto-run, tap = jump / wall-kick, drag = steer. Applied only at the next fixed tick. ----------
+const K={};let steer=0,ptr=null,pending=false;
+addEventListener('keydown',e=>{K[e.code]=1;if(e.code==='Space'){e.preventDefault();press();}});addEventListener('keyup',e=>K[e.code]=0);
+addEventListener('pointerdown',e=>{ptr={x:e.clientX,t:performance.now(),moved:false};});
+addEventListener('pointermove',e=>{if(!ptr)return;const dx=e.clientX-ptr.x;if(Math.abs(dx)>14)ptr.moved=true;if(ptr.moved)steer=THREE.MathUtils.clamp(dx/110,-1,1);});
+addEventListener('pointerup',()=>{if(ptr&&!ptr.moved&&performance.now()-ptr.t<350)press();ptr=null;steer=0;});
+function press(){if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
+// No thanks: end the run where it stands. Nothing is spent; the log simply ends on the Catch screen and the server replays it as declined.
+function declineCatch(){if(P.mode!=='catch')return;pending=false;sim.decline();}
+window.declineCatch=declineCatch;addEventListener('keydown',e=>{if(e.code==='KeyN')declineCatch();});
+let hinted=localStorage.getItem('tobu3d_hint')==='1';const hintEl=document.getElementById('hint');if(hinted||AUTO)hintEl.style.opacity=0;
+function hideHint(){if(!hinted&&P.t>4){hinted=true;localStorage.setItem('tobu3d_hint','1');hintEl.style.opacity=0;}}
+function restart(){location.reload();}
+
+// ---------- camera: lagged chase from behind & above, FOV kick, roll into walls ----------
+const V=(o)=>new THREE.Vector3(o.x,o.y,o.z);
+let roll=0,spdK=0,tightK=0;
+// chimney framing: how enclosed the climber is (both sides walled within ~2.6 m). Reads sim boxes only, eased in and out.
+function tightness(){let L=99,Rr=99;for(const b of sim.boxes){if(b.kind==='shelf'||Math.abs(P.pos.z-b.z)>b.hz+1.5||P.pos.y<b.y-b.hy-1||P.pos.y>b.y+b.hy+2)continue;const dx=b.x-P.pos.x;if(dx>0)Rr=Math.min(Rr,dx-b.hx);else L=Math.min(L,-dx-b.hx);}return THREE.MathUtils.clamp((5.2-(L+Rr))/1.6,0,1);}const wallOff=new THREE.Vector3(),V0=new THREE.Vector3();const camPos=new THREE.Vector3(0,5,20);
+function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
+ wallOff.lerp(P.state==='wall'?V(P.wallN).multiplyScalar(T.camWallOff):V0,1-Math.exp(-4*dt)); /* eased, never snaps (KAMI) */
+ tightK+=(tightness()-tightK)*(1-Math.exp(-T.tightRate*dt));const cD=THREE.MathUtils.lerp(T.camDist,T.tightDist,tightK),cH=THREE.MathUtils.lerp(T.camHeight,T.tightHeight,tightK);
+ const off=new THREE.Vector3(-P.vel.x*0.04,cH,cD).add(wallOff);
+ const want=V(P.pos).add(off);want.y=Math.max(want.y,mistY.v+1.5);const ox=camPos.x,oy=camPos.y;camPos.lerp(want,1-Math.exp(-T.camLag*dt));camPos.y=oy+(want.y-oy)*(1-Math.exp(-T.camLagY*dt)); /* smoothed vertical follow */camPos.x=ox+(want.x-ox)*(1-Math.exp(-16*dt)); /* keep hopper centred */camPos.y=Math.min(camPos.y,P.pos.y+cH+0.6);camPos.y=Math.max(camPos.y,P.pos.y+cH-THREE.MathUtils.lerp(2.5,1.0,tightK));camPos.z=Math.max(Math.min(camPos.z,P.pos.z+cD+2),P.pos.z+cD-2); /* KAMI: hero always in frame, incl. long falls and the death frame; lag stays inside this leash */cam.position.copy(camPos);
+ cam.rotation.order='YXZ';cam.rotation.set(-T.camPitch*Math.PI/180,0,0); // Art/KAMI: fixed ~22deg down chase
+ const rt=P.state==='wall'?-P.wallSide*T.camRollMax:-P.vel.x*0.006;roll+=(rt-roll)*(1-Math.exp(-T.camRollRate*dt));cam.rotation.z=roll; /* eased bank into wall-runs */ sky.position.copy(cam.position);
+ spdK+=((P.state==='wall'?1:THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-12.5)/5,0,1))-spdK)*(1-Math.exp(-5*dt));post.U.spd.value=spdK;post.U.sT.value=P.t;
+ cam.fov=THREE.MathUtils.lerp(cam.fov,THREE.MathUtils.lerp(T.fovBase,T.tightFov,tightK)+(T.fovMax-T.fovBase)*(1-tightK)*THREE.MathUtils.clamp((Math.hypot(sp,P.vel.y)-10)/8,0,1),1-Math.exp(-4*dt));cam.updateProjectionMatrix();
+ mtns.position.set(0,P.pos.y*0.85,P.pos.z);
+ deco.forEach(d=>{const par=d.userData.par??0.5;d.position.x=-cam.position.x*(1-par)*0.2; /* mid-layer lateral parallax */ if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}
+  /* live season colour cross-fade (visual only; same as scenery far cedars) */
+  if(d.userData.per){const zm=zoneMix(Math.max(0,d.userData.y0)),key=zm.a+zm.b+zm.t.toFixed(3);if(key!==d.userData.fadeKey){d.userData.fadeKey=key;const a=d.userData.per[zm.a],b=d.userData.per[zm.b],c=d.geometry.getAttribute('color'),o=c.array,tt=zm.t;for(let i=0;i<o.length;i++)o[i]=a[i]+(b[i]-a[i])*tt;c.needsUpdate=true;}}});
+ for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+60){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-70;} /* cull mid cedars past 70 m — was fogFar+10 (~130), caused 41 draws in long clips */
+ while(deco.length>4){const d=deco.shift();S.remove(d);d.geometry.dispose();} /* hard cap 4 mid-cedar draws */
+ /* cull fully-fogged kit meshes (one merged draw per module) so long clips stay ≤40 */
+ for(const [id,m] of [...meshes]){if(!m||!m.kit||!m.kit.mesh)continue;const z=m.b.z+(m.b.hz||0);const mesh=m.kit.mesh;if(z>P.pos.z+50){mesh.visible=false;continue;}mesh.visible=(m.b.z-(m.b.hz||0))>P.pos.z-65;}
+ for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
+const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
+if(SIM&&Q.has('demo')){const [n,fu]=Q.get('demo').split(',');localStorage.setItem('tobu_saves_v1',JSON.stringify({n:+n,zones:[],daily:'',free:fu==='1'?new Date(Date.now()-7*3600e3).toISOString().slice(0,10):''}));} // capture states only
+const SAVES=createSaves();const EVERY=BOARD!=='free'||Q.has('u13')||localStorage.getItem('tobu_noads')==='1';let catchSrc=null,catchDone=false; // earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
+function toast(t){const z=document.getElementById('zone');z.textContent=t;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,2200);}
+function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
+ const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.fog.color.setHex(LOOK.fog).lerp(_cb.setHex(b.fog),0.18*t*0); /* single pale-blue fog for the reset */
+ if(a.n!==lastZone){if(lastZone&&!AUTO&&SAVES.zone(a.n))toast('+1 save · first time in '+a.n);lastZone=a.n;const z=document.getElementById('zone');z.textContent=a.n;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,1800);}}
+
+const hE=document.getElementById('h'),sE=document.getElementById('sub'),ov=document.getElementById('ov');
+let best=+(localStorage.getItem('tobu3d_best')||0),verdict='',sent=false;
+function onDeath(){if(sent)return;sent=true;if(BOARD==='daily'&&!AUTO&&SAVES.daily())toast('+1 save · daily run done');const h=Math.round(P.maxH*10)/10;window.__run={log:packLog(sim.log),claim:{height:h}};
+ if(VERIFY&&!AUTO){verdict='checking run…';fetch(VERIFY+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(window.__run)})
+  .then(r=>r.json()).then(j=>verdict=j.ok?`verified ${j.height} m`:`not accepted: ${j.reason}`).catch(()=>verdict='offline: run not submitted');}}
+// ---- Catch screens (README priority: used -> free every run -> daily free -> save -> ad loaded -> no-ad free fallback) ----
+const cwEl=document.getElementById("cw"),cbEl=document.getElementById("cb"),$=id=>document.getElementById(id);
+const AD_READY=Q.has('adready'); // no ad SDK in this build: an ad never loads, so the shipping fallback (free this time, no save used) applies
+function fitCW(){const u=Math.min(innerWidth/1080,innerHeight/1750); /* width-driven on phones: 45 px pips at 1080, 15 px at 360 */cbEl.style.setProperty('--u',u);cbEl.style.setProperty('--pip',Math.max(45,15/u)+'px'); /* never under 15 px on screen */}addEventListener('resize',fitCW);fitCW();
+function catchState(){const src=catchSrc;if(src==='free')return EVERY?'every':'daily';if(src==='save')return 'save';return AD_READY?'ad':'noad';}
+const CS={every:['Your Catch is free this run','Catch','(free this run)',null],daily:['Your free Catch for today','Catch','(free today)',1],save:['Saves come from daily runs and new seasons','Catch','(use 1 save)',1],
+ ad:['Optional: watch a short ad (about 30 s) to use your Catch','Watch ad to Catch','(about 30 s)',1],noad:['Free this time  ·  no save used','Catch','(free this time)',1]};
+function pipsHTML(n){let h='';for(let i=0;i<3;i++)h+=`<div class="p ${i<n?'f':'e'}"></div>`;return h+`<span>Saves ${n}/3</span>`;}
+let cwKey='';function showCW(mode){const st=mode==='catch'?catchState():P.caught?'used':'over',key=mode+st+SAVES.n+(P.maxH|0)+best;if(key===cwKey)return;cwKey=key;
+ cwEl.classList.add('on');$('cH').textContent=(P.maxH|0)+' m';$('cBest').textContent='BEST  '+(Math.max(best,P.maxH)|0)+' m';
+ $('cOffer').style.display=mode==='catch'?'':'none';$('cUsed').style.display=mode!=='catch'&&P.caught?'':'none';
+ if(mode==='catch'){const c=CS[st];$('cSub').textContent=c[0];$('cSub').style.fontSize=(c[0].length<48?34:31)+'px';$('bCatch1').textContent=c[1];$('bCatch2').textContent=c[2];
+  const sz=st==='ad'?40:50;$('bCatch1').style.fontSize=$('bNo1').style.fontSize=sz+'px'; // one shared label size per screen (ad screen 40 px)
+  const pe=$('pips');if(c[3]&&BOARD==='free'){pe.style.display='flex';pe.innerHTML=pipsHTML(SAVES.n);pe.style.left=(330-(3*parseFloat(getComputedStyle(cbEl).getPropertyValue('--pip')||45)+2*12+pe.querySelector('span').offsetWidth+6)/2)+'px';}else pe.style.display='none';}
+ window.__cw={state:st,pip:(()=>{const p=document.querySelector('#pips .p');return p&&$('pips').style.display!=='none'?+p.getBoundingClientRect().width.toFixed(2):0})(),catchBtn:+$('bCatch').getBoundingClientRect().width.toFixed(1),noBtn:+$('bNo').getBoundingClientRect().width.toFixed(1)};}
+const stopEv=e=>{e.stopPropagation();};for(const id of['bCatch','bNo','bRetry','bHome']){const b=$(id);b.addEventListener('pointerdown',stopEv);b.addEventListener('pointerup',stopEv);}
+$('bCatch').addEventListener('click',e=>{e.stopPropagation();if(P.mode!=='catch'||performance.now()-catchShown<500)return; /* 0.5 s guard: a climbing tap can't take the Catch */pending=true;});
+$('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});const leave=e=>{e.stopPropagation();if(P.mode==='catch')declineCatch();restart();}; /* Retry / Home on the offer = decline (never costs anything) */$('bRetry').addEventListener('click',leave);$('bHome').addEventListener('click',leave);
+function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
+ if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
+ else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
+ else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
+ // grasshopper enchantments → post overlay (0 draws)
+ const _hv=_mv.set(hero.root.position.x,hero.root.position.y,hero.root.position.z).project(cam);
+ post.U.hUV.value.set(_hv.x*0.5+0.5,_hv.y*0.5+0.5);
+ post.U.hTrail.value=hero.fx.trail; post.U.hSpark.value=hero.fx.spark; post.U.hRim.value=hero.fx.rim;
+ if(P.mode==='catch'||(P.caught&&hero.fx._catchPulse==null)){if(hero.fx._catchPulse==null)hero.fx._catchPulse=P.t;}
+ if(hero.fx._catchPulse!=null){const a=P.t-hero.fx._catchPulse; post.U.hCatch.value=a<0.7?1-a/0.7:0; if(a>0.7)hero.fx._catchPulse=-1;}
+ else post.U.hCatch.value=0;
+ /* thunder shake: one per strike, <=8 cm, fades over 0.6 s, render-only, off with reduce motion */
+ let sx=0,sy=0;if(!RM)for(const k of sim.strikes){if(!k)continue;const age=P.t-(k.t0+LT.warn);if(age<0||age>=0.6)continue;const a=0.08*(1-age/0.6);sx+=a*Math.sin(age*70+k.id*1.7);sy+=a*Math.sin(age*55+k.id*2.9);}
+ const sh=Math.hypot(sx,sy);if(sh>0.08){sx*=0.08/sh;sy*=0.08/sh;}window.__shake=+Math.hypot(sx,sy).toFixed(3);
+ const _cp=cam.position.clone();if(sx||sy){cam.updateMatrixWorld();cam.position.addScaledVector(_rt.setFromMatrixColumn(cam.matrixWorld,0),sx).addScaledVector(_a.setFromMatrixColumn(cam.matrixWorld,1),sy);cam.updateMatrixWorld();}
+ if(SCENQ){for(const o of S.children)o.visible=o===sky||(SCENQ===1&&(o===scen.root||o===scen.birds||o===scen.weather));post.U.spd.value=0;post.U.mistY.value=-1e4;for(const v of post.U.cSt.value)v.set(0,0,0,0);}
+ if(LAYER){applyCaptureLayer();post.U.spd.value=0;if(LAYER!=='play'&&LAYER!=='all'){post.U.mistY.value=-1e4;for(const v of post.U.cSt.value)v.set(0,0,0,0);post.U.hTrail.value=0;post.U.hSpark.value=0;post.U.hRim.value=0;post.U.hCatch.value=0;}}
+ if(LAYER&&LAYER!=='all'&&LAYER!=='play'){R.info.autoReset=false;R.info.reset();R.autoClear=true;R.render(S,cam);post.U.draws=R.info.render.calls;} /* mtn/far/mid/fg: no post overlay */
+ else post.render(S,cam);cam.position.copy(_cp);cam.updateMatrixWorld();}
+
+const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vector3(1.5,1.7,-1.7);const _cv=new THREE.Vector3();
+function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;
+ _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
+const STK=new Map(); /* ?strikelog: strike start times for capture planning */let catchShown=0,MANUAL=false; /* catchtest only: hand input back to the player */function tick(){if(P.mode==='catch'&&!catchShown)catchShown=performance.now();if((!AUTO||MANUAL)&&P.mode==='catch'&&performance.now()-catchShown<500)pending=false; /* 0.5 s guard so a climbing tap can't take the Catch */
+ const inp=AUTO&&!MANUAL?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);if(SIM&&Q.has('strikelog'))for(const k of sim.strikes)if(k&&!STK.has(k.id))STK.set(k.id,+(k.t0+LT.warn).toFixed(3));flushBrk();updateCam(DT);shadowTick();mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
+if(SIM){let t=0,TR=[],tk=0;
+ if(CLIP){ // capture-only: real-time frame dump as JPEG b64 list (seasons clips)
+  const [c0,csecs,cfps]=CLIP.split(',').map(Number), step=1/cfps, n=Math.round(csecs*cfps), frames=[]; let maxDraws=0,maxShake=0;
+  for(;t<c0&&P.mode!=='dead';t+=DT)tick();
+  for(let i=0;i<n&&P.mode!=='dead';i++){const target=c0+i*step;while(t<target-1e-9&&P.mode!=='dead'){tick();t+=DT;}render();
+   maxDraws=Math.max(maxDraws,post.U.draws|0);maxShake=Math.max(maxShake,window.__shake||0);
+   frames.push(R.domElement.toDataURL('image/jpeg',0.82).slice(23));}
+  const pre=document.createElement('pre');pre.id='clip';pre.textContent=JSON.stringify({n:frames.length,fps:cfps,t0:c0,secs:csecs,w:R.domElement.width,h:R.domElement.height,shake:maxShake,py:+P.pos.y.toFixed(1),t:+t.toFixed(2),draws:post.U.draws,maxDraws,frames});document.body.appendChild(pre);
+  document.title="CLIP "+JSON.stringify({n:frames.length,fps:cfps,t0:c0,py:+P.pos.y.toFixed(1),draws:post.U.draws,maxDraws,shake:maxShake});}
+ else{for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;if(Q.has('catchshot')&&P.mode==='catch')break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
+ if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
+ if(Q.has('catchtest')&&P.mode==='catch'){MANUAL=true;const R2=[];const ev=(t,el=window)=>el.dispatchEvent(new PointerEvent(t,{bubbles:true,clientX:100,clientY:100}));
+  catchShown=performance.now();ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere',P.mode]);
+  $('bCatch').click();tick();R2.push(['Catch button <0.5 s',P.mode]);catchShown=performance.now()-600;ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere >0.5 s',P.mode]);
+  $('bCatch').click();tick();R2.push(['Catch button >0.5 s',P.mode]);window.__cw={...window.__cw,test:R2.map(r=>r.join('=')).join(';')};}
+ if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
+ document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}}
+else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
+if('serviceWorker' in navigator&&!SIM&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{}); /* PWA: Add to Home Screen on iPhone Safari over https */
+</script></body></html>

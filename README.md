@@ -1,6 +1,6 @@
 # Tobu 3D greybox
 Run: `python3 -m http.server` in this folder, open index.html (needs a local server for ES modules).
-Flags: ?seed=N  ?bot (autoplay)  ?debug  ?sim=SECONDS (headless bot run; result JSON in document.title)  &trace  ?layer=far|mid|play|fg|all (kamishibai layer PNG dump, transparent bg)  ?clip=t0,secs,fps  ?cam=close
+Flags: ?seed=N  ?bot (autoplay)  ?debug  ?sim=SECONDS (headless bot run; result JSON in document.title)  &trace  ?layer=far|mid|play|fg|mtn|all (kamishibai layer PNG dump; mtn=mountains-only)  ?clip=t0,secs,fps  ?cam=close
 Controls: auto-run; tap = jump / wall-kick; drag = steer. Keys: A/D or arrows, Space.
 Modules (seeded): step, wallrun (single trunk), chimney (two trunks, kick wall-to-wall). Rising mist = bottom; one Catch.
 Tuning tables: T (movement), MIST (rising bottom), ZONES.
@@ -12,3 +12,7 @@ Tuning tables: T (movement), MIST (rising bottom), ZONES.
 - Rejected: wrong height, edited inputs, a seed that isn't the current period's, adaptation not set to 1 on daily or weekly, a run cut before death, tapping faster than 25/s, or an old sim version.
 - `node server/test.mjs` runs the tests. Play in the browser with `?verify=http://localhost:8787&board=daily`.
 - Any change to physics or tuning must bump `SIM_VERSION`.
+
+## iOS / PWA
+- Capacitor wrapper: `mobile/` (see `mobile/IOS_README.md`). Needs Apple Developer + GitHub secrets for TestFlight.
+- PWA: serve over https, Safari Share → Add to Home Screen (`manifest.webmanifest` + `sw.js`).

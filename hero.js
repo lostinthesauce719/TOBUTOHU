@@ -93,14 +93,7 @@ export function createHero(scene, P, boxes) {
   const root = new THREE.Group(); const HM = heroMesh(THREE, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })); const body = HM.mesh; body.bindMode = 'attached'; /* bones are children of the mesh: attached keeps them out of double model transforms */ root.add(body); root.userData.layer = 'play'; scene.add(root);
   const boneBy = new Map(HM.bones.map(b => [b.name, b])), _inv = new THREE.Matrix4(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
   const bone = (L, i, a, b) => placeBone(THREE, boneBy.get(legName(L, i)), _a.copy(a).applyMatrix4(_inv), _b.copy(b).applyMatrix4(_inv)); // IK points (world) -> body-local
-  // render-only antenna props (sway in idle); 0 extra draws when baked into... keep as 2 thin meshes — still under budget with closer framing
-  const ants = [];
-  for (const s of [-1, 1]) {
-    const ag = new THREE.Group();
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.01, 0.22, 5), new THREE.MeshBasicMaterial({ color: C.base, fog: true }));
-    rod.position.y = 0.11; ag.add(rod);
-    ag.position.set(s * 0.028, 0.06, 0.34); ag.rotation.set(0.55, 0, s * -0.3); root.add(ag); ants.push({ g: ag, s, base: ag.rotation.clone() });
-  }
+  // antennas are baked into clipkit heroMesh (1 SkinnedMesh draw) — no extra antenna props
   const patch = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), new THREE.MeshBasicMaterial({ color: C.patch, transparent: true, opacity: 0.35, depthWrite: false }));
   patch.scale.set(0.36, 0.72, 1); patch.userData.layer = 'play'; scene.add(patch);
   for (const L of LEGS) {
@@ -161,13 +154,7 @@ export function createHero(scene, P, boxes) {
     const sy = VIS * (1 - 0.13 * squash * Math.abs(nl.y)) * (1 + breath);
     const sz = VIS * (1 + breath * 0.35);
     body.scale.set(sx, sy, sz);
-    // antenna sway (seeded-feel from P.t only)
-    for (const A of ants) {
-      const w = idle ? 1 : 0.35;
-      A.g.scale.setScalar(VIS);
-      A.g.rotation.x = A.base.x + w * 0.18 * Math.sin(P.t * 2.8 + A.s * 1.3);
-      A.g.rotation.z = A.base.z + w * 0.22 * Math.sin(P.t * 2.1 + A.s * 0.7) + w * 0.08 * Math.sin(P.t * 0.55);
-    }
+    // antenna sway retired: baked into skinned mesh (saves 2 draws)
     root.updateMatrixWorld(true); _inv.copy(body.matrixWorld).invert();
     const delta = st.lastRoot ? root.position.clone().sub(st.lastRoot) : new THREE.Vector3(); st.lastRoot = root.position.clone();
 

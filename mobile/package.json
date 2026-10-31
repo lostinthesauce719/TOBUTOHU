@@ -1,0 +1,25 @@
+{
+  "name": "tobu-mobile",
+  "version": "1.0.0",
+  "description": "Tobu Capacitor iOS wrapper (com.apollo.tobu)",
+  "main": "index.js",
+  "scripts": {
+    "sync": "bash ./sync-www.sh",
+    "cap:sync": "npx cap sync ios",
+    "cap:open": "npx cap open ios",
+    "build:www": "bash ./sync-www.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^7.6.10",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
+  }
+}

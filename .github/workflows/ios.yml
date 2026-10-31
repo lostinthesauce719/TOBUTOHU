@@ -1,0 +1,168 @@
+# Tobu iOS — Capacitor
+# - simulator: unsigned Debug for iOS Simulator (no secrets)
+# - testflight: archive + App Store Connect upload (needs Apple secrets)
+#
+# Secrets (see mobile/IOS_README.md):
+#   APPLE_TEAM_ID, APP_STORE_CONNECT_API_KEY_ID,
+#   APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_API_KEY_P8
+# Optional later (fastlane match): MATCH_PASSWORD, MATCH_GIT_URL
+name: ios
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+  # tag builds: git tag ios-0.1.0 && git push origin ios-0.1.0
+  # (tag push also hits `push:` without a paths filter when using the dual trigger below via workflow_dispatch preferred)
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: Simulator (unsigned)
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install JS deps
+        run: npm ci
+      - name: Sync web → ios
+        run: bash ./sync-www.sh
+      - name: CocoaPods
+        run: |
+          cd ios/App
+          pod install --repo-update
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tobu-simulator-app
+          path: mobile/build/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: warn
+
+  testflight:
+    name: TestFlight (signed)
+    needs: simulator
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/ios-')
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Require App Store Connect secrets
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+        run: |
+          missing=0
+          [ -n "$APPLE_TEAM_ID" ] || { echo "Missing APPLE_TEAM_ID"; missing=1; }
+          [ -n "$KEY_ID" ] || { echo "Missing APP_STORE_CONNECT_API_KEY_ID"; missing=1; }
+          [ -n "$ISSUER" ] || { echo "Missing APP_STORE_CONNECT_ISSUER_ID"; missing=1; }
+          [ -n "$P8" ] || { echo "Missing APP_STORE_CONNECT_API_KEY_P8"; missing=1; }
+          if [ "$missing" = 1 ]; then
+            echo "::error::Add the secrets listed in mobile/IOS_README.md, then re-run."
+            exit 1
+          fi
+      - name: Install JS deps
+        run: npm ci
+      - name: Sync web → ios
+        run: bash ./sync-www.sh
+      - name: CocoaPods
+        run: |
+          cd ios/App
+          pod install --repo-update
+      - name: Write App Store Connect API key
+        env:
+          P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p "$HOME/private_keys"
+          printf '%s\n' "$P8" > "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
+          chmod 600 "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
+          echo "KEY_PATH=$HOME/private_keys/AuthKey_${KEY_ID}.p8" >> "$GITHUB_ENV"
+          echo "KEY_ID=$KEY_ID" >> "$GITHUB_ENV"
+      - name: Archive (App Store distribution)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Tobu.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" \
+            archive
+      - name: Export + upload IPA to App Store Connect
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          cat > build/ExportOptions.plist << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath build/Tobu.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER"
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tobu-ipa
+          path: mobile/build/export/*.ipa
+          if-no-files-found: warn
+      # Install via TestFlight on Apollo's iPhone after ASC processing (~5–30 min).
+      # Optional later: fastlane match — set MATCH_GIT_URL + MATCH_PASSWORD and
+      # switch CODE_SIGN_STYLE to manual profiles.
