@@ -1,0 +1,17 @@
+{
+  "branch": "art-final",
+  "picks": {
+    "hero": "C",
+    "walls": "C",
+    "scenery": "B",
+    "menus": "A frost"
+  },
+  "draws": {
+    "spring": 20,
+    "summer": 25,
+    "autumn": 24,
+    "winter": 26,
+    "hero_clip_max": 14
+  },
+  "sim_version": "tobu-sim-5"
+}

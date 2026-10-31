@@ -1,0 +1,6 @@
+artfinal01 luma (heuristic mid-band 110-210; atmosphere/sky often >199)
+
+spring: mid-pixels 53.8% luma p5=139 p50=182 p95=199; in126-199=87% >199=11% <126=3%; warm/redish=0.00%
+summer: mid-pixels 57.5% luma p5=120 p50=180 p95=197; in126-199=88% >199=5% <126=8%; warm/redish=0.02%
+autumn: mid-pixels 72.9% luma p5=149 p50=189 p95=199; in126-199=91% >199=7% <126=2%; warm/redish=0.26%
+winter: mid-pixels 40.8% luma p5=148 p50=182 p95=199; in126-199=87% >199=11% <126=2%; warm/redish=0.00%

@@ -13,22 +13,40 @@
 #ov b{font-size:40px}#help{position:fixed;right:10px;bottom:10px;color:#fff;text-shadow:0 1px 3px #000;text-align:right;pointer-events:none;font-size:12px}
 #mread{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom));text-align:center;color:#F2E8CC;font-weight:700;font-size:16px;text-shadow:0 0 2px #1E2630,0 0 2px #1E2630,0 1px 3px #1E2630;pointer-events:none;display:none}#mread.warn{color:#C44834}
 #hint{position:fixed;left:0;right:0;bottom:14%;text-align:center;color:#fff;font-size:22px;text-shadow:0 1px 4px #000;pointer-events:none;transition:opacity .8s}
-/* BRUSH style-D game-over / Catch screens (menus/README.md, locked 2026-10-18): 1080x1920 layout scaled to the viewport. BRUSH restyles later */
-#cw{position:fixed;inset:0;display:none;z-index:5;background:rgba(42,59,85,.45)}#cw.on{display:block}
-#cb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--u,1));font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#F2E8CC;font-weight:900}
-#cb .pn{position:absolute;left:80px;top:250px;width:920px;height:1450px;border-radius:56px;background:#2A3B55;box-shadow:0 0 0 4px #1E2630;box-sizing:border-box}
+/* Menus A frosted (Apollo pick 2026-10-31): HF frost look + exact copy/layout from menus/*_frost_1080x1920.png */
+#cw{position:fixed;inset:0;display:none;z-index:5;background:linear-gradient(180deg,#9EC9D8 0%,#B8C8E4 45%,#C4B8D8 100%)}#cw.on{display:block}
+#cw::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 18% 22%,rgba(180,160,220,.45) 0 140px,transparent 180px),radial-gradient(circle at 82% 18%,rgba(140,180,220,.4) 0 160px,transparent 210px),radial-gradient(circle at 70% 70%,rgba(160,150,210,.35) 0 180px,transparent 240px),radial-gradient(circle at 25% 78%,rgba(150,190,220,.35) 0 150px,transparent 200px);pointer-events:none}
+#cb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--u,1));font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#1E2A3A;font-weight:900}
+#cb .pn{position:absolute;left:80px;top:250px;width:920px;height:1450px;border-radius:56px;background:rgba(210,228,240,.55);box-shadow:inset 0 0 0 3px rgba(255,255,255,.65),0 12px 40px rgba(40,60,90,.18);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-sizing:border-box}
 #cb .c{position:absolute;left:0;width:1080px;text-align:center;transform:translateY(-50%);white-space:nowrap}
-#cb .t2{color:#B9C2CC}#cb .best{position:absolute;left:330px;top:690px;width:420px;height:100px;border-radius:50px;box-shadow:inset 0 0 0 3px #D8B76A;color:#D8B76A;font-size:48px;line-height:100px;text-align:center}
-#cb .btn{position:absolute;top:1030px;width:400px;height:190px;border-radius:40px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;cursor:pointer;padding:0}
-#cb .btn b{position:absolute;left:0;right:0;top:70px;transform:translateY(-50%);font-weight:900}#cb .btn i{position:absolute;left:0;right:0;top:140px;transform:translateY(-50%);font-style:normal;font-size:36px;font-weight:800}
+#cb .t2{color:#5A6A7A}#cb .best{position:absolute;left:330px;top:690px;width:420px;height:100px;border-radius:50px;box-shadow:inset 0 0 0 3px #D8B76A;color:#C9A84A;font-size:48px;line-height:100px;text-align:center;background:rgba(255,255,255,.25)}
+#cb .btn{position:absolute;top:1030px;width:400px;height:190px;border-radius:40px;background:rgba(180,190,210,.45);box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);color:#1E2A3A;border:0;font:inherit;cursor:pointer;padding:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#cb .btn b{position:absolute;left:0;right:0;top:70px;transform:translateY(-50%);font-weight:900}#cb .btn i{position:absolute;left:0;right:0;top:140px;transform:translateY(-50%);font-style:normal;font-size:36px;font-weight:800;color:#4A5A6A}
 #cb .btn[disabled]{cursor:default}
-#cb .dis{position:absolute;left:130px;top:960px;width:820px;height:230px;border-radius:40px;background:#3A4458;color:#B9C2CC}
+#cb .dis{position:absolute;left:130px;top:960px;width:820px;height:230px;border-radius:40px;background:rgba(160,175,195,.4);color:#5A6A7A}
 #pips{position:absolute;top:990px;height:45px;transform:translateY(-50%);display:flex;align-items:center;gap:12px}
 #pips .p{width:var(--pip,45px);height:var(--pip,45px);border-radius:50%;box-sizing:border-box;flex:none}
-#pips .p.f{background:#F2E8CC;box-shadow:inset 0 0 0 3px #F2E8CC,inset 0 0 0 6px #3E5C76}#pips .p.e{box-shadow:inset 0 0 0 3px #808588}
-#pips span{margin-left:6px;font-size:30px;font-weight:800;color:#F2E8CC}
-#cb .retry{position:absolute;left:330px;top:1310px;width:420px;height:150px;border-radius:75px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;font-size:84px;cursor:pointer}
-#cb .home{position:absolute;left:470px;top:1500px;width:140px;height:110px;border-radius:30px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;border:0;color:#F2E8CC;font:inherit;font-size:30px;cursor:pointer}
+#pips .p.f{background:#F2EEE0;box-shadow:inset 0 0 0 3px #1E2A3A,inset 0 0 0 6px #F2EEE0}#pips .p.e{box-shadow:inset 0 0 0 3px #1E2A3A;background:transparent}
+#pips span{margin-left:6px;font-size:30px;font-weight:800;color:#1E2A3A}
+#cb .retry{position:absolute;left:330px;top:1310px;width:420px;height:150px;border-radius:75px;background:#6A7E96;box-shadow:inset 0 0 0 3px #1E2630;color:#F2E8CC;border:0;font:inherit;font-size:84px;cursor:pointer}
+#cb .home{position:absolute;left:470px;top:1500px;width:140px;height:110px;border-radius:30px;background:rgba(180,190,210,.5);box-shadow:inset 0 0 0 2px rgba(30,40,55,.5);border:0;color:#1E2A3A;font:inherit;font-size:30px;cursor:pointer}
+/* Title A frost (title_frost_1080x1920.png layout) */
+#title{position:fixed;inset:0;display:none;z-index:6;background:linear-gradient(180deg,#9EC9D8 0%,#B8C8E4 45%,#C4B8D8 100%);font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#1E2A3A;font-weight:900}
+#title.on{display:block}
+#title::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 25%,rgba(180,160,220,.45) 0 160px,transparent 210px),radial-gradient(circle at 80% 20%,rgba(140,180,220,.4) 0 170px,transparent 220px),radial-gradient(circle at 65% 65%,rgba(160,150,210,.35) 0 190px,transparent 250px),radial-gradient(circle at 30% 80%,rgba(150,190,220,.35) 0 160px,transparent 210px),radial-gradient(circle at 50% 45%,rgba(170,180,220,.25) 0 200px,transparent 280px);pointer-events:none}
+#tb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--tu,1))}
+#tb .saves{position:absolute;left:48px;top:48px;height:64px;padding:0 22px 0 14px;border-radius:32px;background:rgba(210,228,240,.55);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6);display:flex;align-items:center;gap:10px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#tb .saves .p{width:36px;height:36px;border-radius:50%;box-sizing:border-box}
+#tb .saves .p.f{background:#3A4555;box-shadow:inset 0 0 0 3px #D8B76A}#tb .saves .p.e{box-shadow:inset 0 0 0 2px #8A95A5;background:transparent}
+#tb .saves span{font-size:28px;font-weight:800;color:#1E2A3A;margin-left:4px}
+#tb .gear{position:absolute;right:48px;top:48px;width:64px;height:64px;border-radius:16px;background:rgba(210,228,240,.55);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6);border:0;font-size:32px;color:#1E2A3A;cursor:pointer}
+#tb .logo{position:absolute;left:0;right:0;top:520px;text-align:center;font-size:140px;letter-spacing:4px;transform:translateY(-50%)}
+#tb .tag{position:absolute;left:0;right:0;top:640px;text-align:center;font-size:42px;font-weight:700;color:#5A6A7A;transform:translateY(-50%)}
+#tb .play{position:absolute;left:190px;top:820px;width:700px;height:160px;border-radius:36px;background:rgba(200,218,235,.6);box-shadow:inset 0 0 0 3px #1E2A3A;border:0;font:inherit;font-size:72px;font-weight:900;color:#1E2A3A;cursor:pointer;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+#tb .row{position:absolute;left:140px;top:1040px;width:800px;display:flex;gap:24px}
+#tb .row button{flex:1;height:110px;border-radius:28px;background:rgba(200,218,235,.55);box-shadow:inset 0 0 0 2px #1E2A3A;border:0;font:inherit;font-size:36px;font-weight:800;color:#1E2A3A;cursor:pointer}
+#tb .hud{position:absolute;left:48px;bottom:80px;padding:14px 28px;border-radius:20px;background:rgba(200,218,235,.5);box-shadow:inset 0 0 0 2px #1E2A3A;font-size:32px;font-weight:800}
+#tb .ver{position:absolute;left:0;right:0;bottom:40px;text-align:center;font-size:22px;font-weight:700;color:#7A8A9A}
 </style></head>
 <body><div id="hud"><span id="h">0 m</span>
 <span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · drag to steer</div>
@@ -41,6 +59,15 @@
 <button class="btn" id="bCatch" style="left:130px"><b id="bCatch1">Catch</b><i id="bCatch2"></i></button><button class="btn" id="bNo" style="left:550px"><b id="bNo1">No thanks</b><i>end this run</i></button></div>
 <div id="cUsed" style="display:none"><div class="c t2" style="top:880px;font-size:52px">Second chance</div><div class="dis"></div><div class="c" style="top:1030px;font-size:50px;color:#B9C2CC">Catch used</div><div class="c" style="top:1092px;font-size:40px;color:#B9C2CC;font-weight:700">one per run</div></div>
 <button class="retry" id="bRetry">&#x21BB; RETRY</button><button class="home" id="bHome">&#x2302;<br>HOME</button>
+</div></div>
+<div id="title"><div id="tb">
+<div class="saves" id="tSaves"></div>
+<button class="gear" id="tGear" aria-label="settings">&#x2699;</button>
+<div class="logo">TOBU</div><div class="tag">climb the forest</div>
+<button class="play" id="tPlay">PLAY</button>
+<div class="row"><button id="tDaily">Daily</button><button id="tWeekly">Weekly</button><button id="tFriends">Friends</button></div>
+<div class="hud" id="tHud">HUD 0 m</div>
+<div class="ver">Tobu 0.1.0 (art-final)</div>
 </div></div>
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
@@ -106,8 +133,8 @@ function merge(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;cons
 const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1],autumn:[0xABB8EB,0x858FD1],winter:[0xC7D6EB,0xABB8EB]}; // lavender cedars (clipstyle)
 // decor: mid cedars (BRUSH spec). Layout stream unchanged; per-zone colour buffers so season blends fade live.
 function decor(z0,z1,y){const zc=zoneAt(y),places=[];
- for(let z=z0;z>z1;z-=12){for(const s of[-1,1]){if(rD()<0.7){const H=60+rD()*40,R=3+rD()*2,x=s*(25+R*2.6+rD()*(45-R*2.6)),zz=z-rD()*10;
-  places.push([x,y-70,zz,H,R,1+(rD()*1e6|0)]);}}} /* mid cedars 25-70 from lane, H 60-100, R 3-5, base y-70 */
+ for(let z=z0;z>z1;z-=8){for(const s of[-1,1]){if(rD()<0.88){const H=55+rD()*50,R=2.8+rD()*2.4,x=s*(25+R*2.4+rD()*(48-R*2.4)),zz=z-rD()*8;
+  places.push([x,y-70,zz,H,R,1+(rD()*1e6|0)]);}}} /* Scenery B denser mid cedars 25-70 from lane */
  let toriiP=null;if(rD()<0.3){const s=rD()<.5?-1:1;toriiP=[s,s*(28+rD()*10),y-2,z1+rD()*(z0-z1)];} /* torii: background, no collider */
  if(zc.n!=='Spring cedar'&&rD()<0.5){rD();rD();rD();rD();} /* consume waterfall rDs — scenery.js owns falls */
  if(zc.n==='Autumn steam'||rD()<0.15){rD();rD();rD();rD();} /* consume steam rDs — scenery.js owns steam */
@@ -194,7 +221,7 @@ addEventListener('keydown',e=>{K[e.code]=1;if(e.code==='Space'){e.preventDefault
 addEventListener('pointerdown',e=>{ptr={x:e.clientX,t:performance.now(),moved:false};});
 addEventListener('pointermove',e=>{if(!ptr)return;const dx=e.clientX-ptr.x;if(Math.abs(dx)>14)ptr.moved=true;if(ptr.moved)steer=THREE.MathUtils.clamp(dx/110,-1,1);});
 addEventListener('pointerup',()=>{if(ptr&&!ptr.moved&&performance.now()-ptr.t<350)press();ptr=null;steer=0;});
-function press(){if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
+function press(){const te=document.getElementById('title');if(te&&te.classList.contains('on'))return;if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
 // No thanks: end the run where it stands. Nothing is spent; the log simply ends on the Catch screen and the server replays it as declined.
 function declineCatch(){if(P.mode!=='catch')return;pending=false;sim.decline();}
 window.declineCatch=declineCatch;addEventListener('keydown',e=>{if(e.code==='KeyN')declineCatch();});
@@ -227,7 +254,9 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
 if(SIM&&Q.has('demo')){const [n,fu]=Q.get('demo').split(',');localStorage.setItem('tobu_saves_v1',JSON.stringify({n:+n,zones:[],daily:'',free:fu==='1'?new Date(Date.now()-7*3600e3).toISOString().slice(0,10):''}));} // capture states only
-const SAVES=createSaves();const EVERY=BOARD!=='free'||Q.has('u13')||localStorage.getItem('tobu_noads')==='1';let catchSrc=null,catchDone=false; // earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
+const SAVES=createSaves();const EVERY=BOARD!=='free'||Q.has('u13')||localStorage.getItem('tobu_noads')==='1';let catchSrc=null,catchDone=false;
+const MENUQ=Q.get('menu'); // title/gameover capture + cold-start gate
+// earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
 function toast(t){const z=document.getElementById('zone');z.textContent=t;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,2200);}
 function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
  const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.fog.color.setHex(LOOK.fog).lerp(_cb.setHex(b.fog),0.18*t*0); /* single pale-blue fog for the reset */
@@ -253,13 +282,25 @@ let cwKey='';function showCW(mode){const st=mode==='catch'?catchState():P.caught
   const sz=st==='ad'?40:50;$('bCatch1').style.fontSize=$('bNo1').style.fontSize=sz+'px'; // one shared label size per screen (ad screen 40 px)
   const pe=$('pips');if(c[3]&&BOARD==='free'){pe.style.display='flex';pe.innerHTML=pipsHTML(SAVES.n);pe.style.left=(330-(3*parseFloat(getComputedStyle(cbEl).getPropertyValue('--pip')||45)+2*12+pe.querySelector('span').offsetWidth+6)/2)+'px';}else pe.style.display='none';}
  window.__cw={state:st,pip:(()=>{const p=document.querySelector('#pips .p');return p&&$('pips').style.display!=='none'?+p.getBoundingClientRect().width.toFixed(2):0})(),catchBtn:+$('bCatch').getBoundingClientRect().width.toFixed(1),noBtn:+$('bNo').getBoundingClientRect().width.toFixed(1)};}
+// Title A frost (visual only). Hidden for sim/shot/bot/clip; ?menu=title forces; ?menu=gameover forces catch panel.
+function fitTitle(){const u=Math.min(innerWidth/1080,innerHeight/1920);const tb=$('tb');if(tb)tb.style.setProperty('--tu',u);}
+function showTitle(){const te=$('title');if(!te)return;te.classList.add('on');const n=SAVES.n;let h='';for(let i=0;i<3;i++)h+=`<div class="p ${i<n?'f':'e'}"></div>`;h+=`<span>Saves ${n}/3</span>`;$('tSaves').innerHTML=h;$('tHud').textContent='HUD '+(best|0)+' m';fitTitle();}
+function hideTitle(){const te=$('title');if(te)te.classList.remove('on');}
+const TITLE_ON=MENUQ==='title'||(!SIM&&!AUTO&&!SHOT&&!CLIP&&!LAYER&&MENUQ!=='off'&&MENUQ!=='gameover');
+if(TITLE_ON){showTitle();addEventListener('resize',fitTitle);
+ $('tPlay').addEventListener('click',e=>{e.stopPropagation();hideTitle();});
+ for(const id of['tDaily','tWeekly','tFriends','tGear']){const b=$(id);if(b)b.addEventListener('click',e=>e.stopPropagation());}}
+if(MENUQ==='gameover'){P.mode='dead';P.maxH=Math.max(P.maxH||0,482);best=Math.max(best,649);P.caught=false;showCW('dead');hideTitle();}
+if(MENUQ==='title'){showTitle();}
+if(MENUQ==='catch'){ /* force frost Catch offer for capture: Free Catch today, 45px cream pips, No thanks */
+  P.mode='catch'; catchSrc='free'; P.maxH=Math.max(P.maxH||0,482); best=Math.max(best,649); showCW('catch'); hideTitle(); }
 const stopEv=e=>{e.stopPropagation();};for(const id of['bCatch','bNo','bRetry','bHome']){const b=$(id);b.addEventListener('pointerdown',stopEv);b.addEventListener('pointerup',stopEv);}
 $('bCatch').addEventListener('click',e=>{e.stopPropagation();if(P.mode!=='catch'||performance.now()-catchShown<500)return; /* 0.5 s guard: a climbing tap can't take the Catch */pending=true;});
 $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});const leave=e=>{e.stopPropagation();if(P.mode==='catch')declineCatch();restart();}; /* Retry / Home on the offer = decline (never costs anything) */$('bRetry').addEventListener('click',leave);$('bHome').addEventListener('click',leave);
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
+ else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
  // grasshopper enchantments → post overlay (0 draws)
  const _hv=_mv.set(hero.root.position.x,hero.root.position.y,hero.root.position.z).project(cam);
  post.U.hUV.value.set(_hv.x*0.5+0.5,_hv.y*0.5+0.5);

@@ -24,9 +24,9 @@ export function createScenery(S, seed, reduceMotion) {
   // mountains: 3 rings merged; per-vertex haze toward horizon
   { const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const hk = THREE.MathUtils.clamp(1 - (p.getY(i) + 30) / [70, 110, 160][L], 0, 1); fw.push(Math.min(0.85, 0.28 + L * 0.17 + 0.3 * hk)); } }); return mergeAll(gs); });
     const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; m.userData.layer = 'far'; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.92, haze: 1, layer: 'far' }); }
-  // far cedars 80-150
+  // far cedars 80-150 — Scenery B denser packing (more columns, tighter spacing)
   { const r = mul(seed ^ 0xCEDA); const pos = [];
-    for (let i = 0; i < 26; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (80 + r() * 70), -70 - r() * 20, 40 - i * 9 - r() * 6, 60 + r() * 40, 3 + r() * 2, (r() * 1e6) | 0]); }
+    for (let i = 0; i < 42; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (78 + r() * 72), -70 - r() * 22, 48 - i * 6.2 - r() * 4, 55 + r() * 50, 2.6 + r() * 2.4, (r() * 1e6) | 0]); }
     const z = zoned(zn => mergeAll(pos.map(([x, y, zz, H, R, sd]) => { const g = cedarZone(THREE, zn, H, R, sd); g.translate(x, y, zz); return g; })));
     farCedar = new THREE.Mesh(z.geo, basic()); farCedar.frustumCulled = false; farCedar.userData.layer = 'mid'; root.add(farCedar); layers.push({ m: farCedar, ...z, fog: 0.15, par: 0.55, layer: 'mid' }); }
   // waterfalls
