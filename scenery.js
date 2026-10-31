@@ -1,7 +1,9 @@
 // Tobu scenery (BRUSH scenery_spec.md + seasons weather). VISUAL ONLY: reads camera, climber height, sim time and the
 // run seed; never writes sim state. No colliders. No Math.random / wall clock.
-// Layers: mountains (1), far cedars (1), waterfalls (1), steam (1), birds (1), weather particles (1) = 6 draws.
+// Kamishibai layers (render-only): far=sky+mountains, mid=cedars/falls/steam/birds, play=climbables+hero+mist,
+// fg=near-camera weather framing. Draws: mountains(1)+cedars(1)+falls(1)+steam(1)+birds(1)+weather(1)=6.
 // Weather is ONE InstancedMesh shared by all seasons; zoneMix cross-fades which particles show.
+// Parallax is camera-driven only; never writes sim state.
 import * as THREE from './vendor/three.module.min.js';
 import { ZONES, zoneMix, cedarZone, mountains, waterfall, waterfallMat, bird } from './clipkit.js';
 
@@ -21,15 +23,15 @@ export function createScenery(S, seed, reduceMotion) {
   let farCedar = null;
   // mountains: 3 rings merged; per-vertex haze toward horizon
   { const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const hk = THREE.MathUtils.clamp(1 - (p.getY(i) + 30) / [70, 110, 160][L], 0, 1); fw.push(Math.min(0.85, 0.28 + L * 0.17 + 0.3 * hk)); } }); return mergeAll(gs); });
-    const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.88, haze: 1 }); }
+    const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; m.userData.layer = 'far'; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.92, haze: 1, layer: 'far' }); }
   // far cedars 80-150
   { const r = mul(seed ^ 0xCEDA); const pos = [];
     for (let i = 0; i < 26; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (80 + r() * 70), -70 - r() * 20, 40 - i * 9 - r() * 6, 60 + r() * 40, 3 + r() * 2, (r() * 1e6) | 0]); }
     const z = zoned(zn => mergeAll(pos.map(([x, y, zz, H, R, sd]) => { const g = cedarZone(THREE, zn, H, R, sd); g.translate(x, y, zz); return g; })));
-    farCedar = new THREE.Mesh(z.geo, basic()); farCedar.frustumCulled = false; root.add(farCedar); layers.push({ m: farCedar, ...z, fog: 0.15, par: 0.6 }); }
+    farCedar = new THREE.Mesh(z.geo, basic()); farCedar.frustumCulled = false; farCedar.userData.layer = 'mid'; root.add(farCedar); layers.push({ m: farCedar, ...z, fog: 0.15, par: 0.55, layer: 'mid' }); }
   // waterfalls
   const wfMat = waterfallMat(THREE, 'spring'); wfMat.fog = false;
-  const wf = new THREE.Mesh(new THREE.BufferGeometry(), wfMat); wf.frustumCulled = false; root.add(wf); let wfBand = -1;
+  const wf = new THREE.Mesh(new THREE.BufferGeometry(), wfMat); wf.frustumCulled = false; wf.userData.layer = 'mid'; root.add(wf); let wfBand = -1;
   // steam / seasonal mist (below lane only)
   const stMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false,
     uniforms: { color: { value: new THREE.Color(0xffffff) }, opacity: { value: 0.25 } },
@@ -37,20 +39,20 @@ export function createScenery(S, seed, reduceMotion) {
       vec4 mv=modelViewMatrix*vec4(position,1.); mv.xy+=corner*rad*vec2(1.,0.55); gl_Position=projectionMatrix*mv; }`,
     fragmentShader: `uniform vec3 color; uniform float opacity; varying vec2 vC; void main(){ float r=length(vC); float a=opacity*(1.-smoothstep(0.35,1.,r)); if(a<0.003) discard; gl_FragColor=vec4(color,a); }` });
   Object.defineProperty(stMat, 'color', { get: () => stMat.uniforms.color.value });
-  const steam = new THREE.Mesh(new THREE.BufferGeometry(), stMat); steam.frustumCulled = false; root.add(steam);
+  const steam = new THREE.Mesh(new THREE.BufferGeometry(), stMat); steam.frustumCulled = false; steam.userData.layer = 'mid'; root.add(steam);
   // birds
   const NB = 9, birds = new THREE.InstancedMesh(bird(THREE), new THREE.MeshBasicMaterial({ color: 0x6F7FA0, side: THREE.DoubleSide, fog: false }), NB);
-  birds.frustumCulled = false; S.add(birds);
+  birds.frustumCulled = false; birds.userData.layer = 'mid'; S.add(birds);
   // ---- seasonal weather: ONE shared InstancedMesh (soft billboard quads) ----
   // kinds by hash slot: drizzle / petal-leaf-snow / mote-firefly / flake. Scales to 0 when that season's weight is 0.
   const NW = reduceMotion ? 56 : 120;
   const wxGeo = new THREE.PlaneGeometry(1, 1);
   const wxMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, fog: false, side: THREE.DoubleSide,
     vertexColors: true,
-    vertexShader: `attribute vec3 instanceColor; varying vec2 vUv; varying vec3 vC; void main(){ vUv=uv; vC=instanceColor; vec4 mv=modelViewMatrix*instanceMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; }`,
+    vertexShader: `varying vec2 vUv; varying vec3 vC; void main(){ vUv=uv; vC=instanceColor; vec4 mv=modelViewMatrix*instanceMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; }`, /* instanceColor provided by Three when InstancedMesh.instanceColor is set */
     fragmentShader: `varying vec2 vUv; varying vec3 vC; void main(){ vec2 p=vUv*2.-1.; float r=length(p); float a=1.15*(1.-smoothstep(0.0,0.85,r)); a=clamp(a,0.,1.); if(a<0.04) discard; gl_FragColor=vec4(vC,a); }` });
   const weather = new THREE.InstancedMesh(wxGeo, wxMat, NW); weather.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NW * 3), 3);
-  weather.frustumCulled = false; weather.renderOrder = 2; S.add(weather);
+  weather.frustumCulled = false; weather.renderOrder = 2; weather.userData.layer = 'fg'; S.add(weather);
   // per-particle seed state (fixed at create)
   const px = new Float32Array(NW), py = new Float32Array(NW), pz = new Float32Array(NW), pph = new Float32Array(NW), pk = new Uint8Array(NW), psp = new Float32Array(NW);
   { const r = mul(seed ^ 0xA7E471); for (let i = 0; i < NW; i++) {
@@ -82,7 +84,15 @@ export function createScenery(S, seed, reduceMotion) {
   const C_DRIZZLE = 0x9EB8D8, C_PETAL = 0xFFF8EC, C_PETAL2 = 0xF0DCE8, C_POLLEN = 0xE0ECA0;
   const C_FIREFLY = 0xD4C878, C_LEAF = 0x7A8A4A, C_LEAF2 = 0xD4C070, C_SNOW = 0xF4FAFF, C_SNOW2 = 0xFFFFFF;
 
-  return { root, birds, weather,
+  root.userData.layer = 'mid'; // container; children carry real tags
+  return { root, birds, weather, layers,
+    // capture helper: 'far'|'mid'|'fg' visibility on scenery-owned meshes (play tagged in index)
+    applyLayer(name) {
+      const all = !name || name === 'all';
+      for (const L of layers) L.m.visible = all || L.layer === name;
+      wf.visible = all || name === 'mid'; steam.visible = all || name === 'mid';
+      birds.visible = all || name === 'mid'; weather.visible = all || name === 'fg';
+    },
     update(cam, h, t, fog, sky) {
       const zm = zoneMix(Math.max(0, h)), A = ZONES[zm.a], B = ZONES[zm.b], st = stormK(h), dark = 1 - 0.26 * st;
       const Wgt = { spring: 0, summer: 0, autumn: 0, winter: 0 }; Wgt[zm.a] += 1 - zm.t; Wgt[zm.b] += zm.t;
@@ -111,8 +121,15 @@ export function createScenery(S, seed, reduceMotion) {
       const fNear = 10 + 4 * Wgt.autumn - 2 * Wgt.spring - 3 * Wgt.winter, fFar = 120 - 15 * Wgt.winter - 10 * Wgt.summer + 20 * Wgt.autumn;
       if (fog.isColor) { /* fog is Color; near/far live on scene fog — set via side channel */ this.fogNear = fNear; this.fogFar = Math.max(80, fFar); }
 
+      // kamishibai parallax: root tracks camera; each layer lags by (1-par) on y/x (render-only)
       root.position.set(0, cam.position.y, cam.position.z);
-      for (const L of layers) L.m.position.y = -h * (1 - L.par) * 0.25;
+      const cx = cam.position.x;
+      for (const L of layers) {
+        L.m.position.y = -h * (1 - L.par) * 0.28;
+        L.m.position.x = -cx * (1 - L.par) * 0.22; // lateral depth cue
+      }
+      // mid props (falls/steam) share mid parallax
+      wf.position.x = -cx * (1 - 0.5) * 0.18; steam.position.x = -cx * (1 - 0.45) * 0.2;
       // autumn cedar sway (gusty wind); reduce motion nearly still
       if (farCedar) { const wind = Wgt.autumn * (reduceMotion ? 0.003 : 0.018) * Math.sin(t * 1.35 + ph1);
         farCedar.rotation.z = wind; farCedar.rotation.x = wind * 0.35; }

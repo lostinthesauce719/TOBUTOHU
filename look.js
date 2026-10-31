@@ -125,21 +125,22 @@ export function createPost(R, pal) {
           float line=1.-smoothstep(0.,w,abs(fb-0.5)*2.-0.0); line=step(abs(fb-0.5),w*0.5);
           float rr=smoothstep(0.28,0.55,r)*(1.-smoothstep(0.95,1.2,r));
           float s=on*line*rr*spd*0.9; o=vec4(1.,1.,1.,s); }
-        // ---- enchantments (subtle; BRUSH greens #6E9A42 / sash #FFD23F) ----
+        // ---- enchantments (bolder; BRUSH greens #6E9A42 / sash #FFD23F) ----
         { vec2 hv=hUV*res; float asp=res.x/res.y;
-          // soft rim glow around hero
-          if(hRim>0.01){ float d=length((p-hv)/res.y); float g=smoothstep(0.11,0.02,d)*hRim*0.35;
-            o=over(o,vec3(0.431,0.604,0.259),g); /* #6E9A42 */ }
-          // sash ribbon trail: short gold streaks below/behind hero when trailing
-          if(hTrail>0.02){ for(int i=0;i<5;i++){ float fi=float(i);
-            vec2 tp=hv+vec2((h1(fi*3.1+floor(sT*8.))-0.5)*18.*px, -(10.+fi*9.)*px);
-            float td=length(p-tp); float tw=(3.5-fi*0.4)*px; float ta=smoothstep(tw,0.,td)*hTrail*(0.55-fi*0.08);
+          // soft rim glow around hero (wider + stronger)
+          if(hRim>0.01){ float d=length((p-hv)/res.y); float g=smoothstep(0.16,0.015,d)*hRim*0.55;
+            o=over(o,vec3(0.431,0.604,0.259),g); /* #6E9A42 */
+            float g2=smoothstep(0.09,0.01,d)*hRim*0.25; o=over(o,vec3(0.93,0.94,0.78),g2); }
+          // sash ribbon trail: brighter gold streaks behind hero
+          if(hTrail>0.02){ for(int i=0;i<8;i++){ float fi=float(i);
+            vec2 tp=hv+vec2((h1(fi*3.1+floor(sT*10.))-0.5)*28.*px, -(8.+fi*11.)*px);
+            float td=length(p-tp); float tw=(5.5-fi*0.35)*px; float ta=smoothstep(tw,0.,td)*hTrail*(0.85-fi*0.07);
             o=over(o,vec3(1.0,0.824,0.247),ta); /* #FFD23F */ } }
-          // launch / Catch motes (gold + soft green sparkles)
+          // launch / Catch motes (more, brighter)
           float spk=max(hSpark,hCatch);
-          if(spk>0.02){ for(int i=0;i<8;i++){ float fi=float(i); float ang=fi*0.785+sT*2.1; float rad=(18.+fi*7.)*px*spk;
-            vec2 mp=hv+vec2(cos(ang)*rad*asp,sin(ang)*rad*(0.7+0.3*h1(fi)));
-            float md=length(p-mp); float ma=smoothstep(3.2*px,0.,md)*spk*0.7;
+          if(spk>0.02){ for(int i=0;i<12;i++){ float fi=float(i); float ang=fi*0.524+sT*2.4; float rad=(14.+fi*8.)*px*spk;
+            vec2 mp=hv+vec2(cos(ang)*rad*asp,sin(ang)*rad*(0.65+0.35*h1(fi)));
+            float md=length(p-mp); float ma=smoothstep(4.2*px,0.,md)*spk*0.9;
             vec3 mc=mix(vec3(1.0,0.824,0.247),vec3(0.525,0.682,0.345),step(0.5,h1(fi*7.3)));
             o=over(o,mc,ma); } }
         }

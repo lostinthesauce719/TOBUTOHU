@@ -1,0 +1,22 @@
+{
+  "spring_far": {"t":43.9,"draws":2,"py":54.7},
+  "spring_mid": {"t":43.9,"draws":8,"py":54.7},
+  "spring_play": {"t":43.9,"draws":24,"py":54.7},
+  "spring_fg": {"t":43.9,"draws":1,"py":54.7},
+  "spring_all": {"t":43.9,"draws":22,"py":54.7},
+  "summer_far": {"t":160.2,"draws":2,"py":180.4},
+  "summer_mid": {"t":160.2,"draws":8,"py":180.4},
+  "summer_play": {"t":160.2,"draws":24,"py":180.4},
+  "summer_fg": {"t":160.2,"draws":1,"py":180.4},
+  "summer_all": {"t":160.2,"draws":26,"py":180.4},
+  "autumn_far": {"t":249.5,"draws":2,"py":295.1},
+  "autumn_mid": {"t":249.5,"draws":8,"py":295.1},
+  "autumn_play": {"t":249.5,"draws":26,"py":295.1},
+  "autumn_fg": {"t":249.5,"draws":1,"py":295.1},
+  "autumn_all": {"t":249.5,"draws":26,"py":295.1},
+  "winter_far": {"t":395,"draws":2,"py":460.7},
+  "winter_mid": {"t":395,"draws":8,"py":460.7},
+  "winter_play": {"t":395,"draws":32,"py":460.7},
+  "winter_fg": {"t":395,"draws":1,"py":460.7},
+  "winter_all": {"t":395,"draws":28,"py":460.7}
+}

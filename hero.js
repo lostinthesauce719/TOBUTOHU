@@ -9,6 +9,7 @@ const C = { lit: 0x86AE58, base: 0x6E9A42, shade: 0x6E9A42, belly: 0xF2EEE0, sas
   eye: 0x4E6A3A, line: 0x1E2A2A, rim: 0xEEF0DA, patch: 0x1E2A40 };
 const BL = 1.1;               // body length in world units (matches the camera framing KAMI approved)
 const RIDE = 0.22;            // thorax centre above the contact surface
+const VIS = 1.28;             // render-only body scale (~with closer cam → ~8% frame width); hitbox untouched
 const LIGHT = new THREE.Vector3(-0.5, 0.7, 0.5).normalize(); // camera-space light (BRUSH brief §3)
 
 // ---------- cel + hull materials (brief §3) ----------
@@ -89,17 +90,25 @@ for (const s of [-1, 1]) {
 }
 
 export function createHero(scene, P, boxes) {
-  const root = new THREE.Group(); const HM = heroMesh(THREE, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })); const body = HM.mesh; body.bindMode = 'attached'; /* bones are children of the mesh: attached keeps them out of double model transforms */ root.add(body); scene.add(root);
+  const root = new THREE.Group(); const HM = heroMesh(THREE, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })); const body = HM.mesh; body.bindMode = 'attached'; /* bones are children of the mesh: attached keeps them out of double model transforms */ root.add(body); root.userData.layer = 'play'; scene.add(root);
   const boneBy = new Map(HM.bones.map(b => [b.name, b])), _inv = new THREE.Matrix4(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
   const bone = (L, i, a, b) => placeBone(THREE, boneBy.get(legName(L, i)), _a.copy(a).applyMatrix4(_inv), _b.copy(b).applyMatrix4(_inv)); // IK points (world) -> body-local
+  // render-only antenna props (sway in idle); 0 extra draws when baked into... keep as 2 thin meshes — still under budget with closer framing
+  const ants = [];
+  for (const s of [-1, 1]) {
+    const ag = new THREE.Group();
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.01, 0.22, 5), new THREE.MeshBasicMaterial({ color: C.base, fog: true }));
+    rod.position.y = 0.11; ag.add(rod);
+    ag.position.set(s * 0.028, 0.06, 0.34); ag.rotation.set(0.55, 0, s * -0.3); root.add(ag); ants.push({ g: ag, s, base: ag.rotation.clone() });
+  }
   const patch = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), new THREE.MeshBasicMaterial({ color: C.patch, transparent: true, opacity: 0.35, depthWrite: false }));
-  patch.scale.set(0.36, 0.72, 1); scene.add(patch);
+  patch.scale.set(0.36, 0.72, 1); patch.userData.layer = 'play'; scene.add(patch);
   for (const L of LEGS) {
     L.hipV = new THREE.Vector3(...L.hip); L.restV = new THREE.Vector3(...L.rest);
     L.plant = null; L.n = new THREE.Vector3(0, 1, 0); L.swing = 0; L.from = new THREE.Vector3(); L.foot = new THREE.Vector3(); L.hold = 0;
   }
-  const st = { prev: 'air', q: new THREE.Quaternion(), off: new THREE.Vector3(), latch: 9, land: 9, kick: 9, fwd: new THREE.Vector3(0, 0, -1), sq: 0, turn: 0, gait: 0 };
-  const fx = { trail: 0, spark: 0, rim: 0.25, state: 'air', speed: 0, kick: 9 };
+  const st = { prev: 'air', q: new THREE.Quaternion(), off: new THREE.Vector3(), latch: 9, land: 9, kick: 9, fwd: new THREE.Vector3(0, 0, -1), sq: 0, turn: 0, gait: 0, breath: 0, idleShift: 0 };
+  const fx = { trail: 0, spark: 0, rim: 0.4, state: 'air', speed: 0, kick: 9 };
   const mat = new THREE.Matrix4(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const world = (v, out) => out.copy(v).applyMatrix4(root.matrixWorld);
 
@@ -143,7 +152,22 @@ export function createHero(scene, P, boxes) {
     root.position.set(P.pos.x, P.pos.y, P.pos.z).add(st.off); root.quaternion.copy(st.q);
     const lt = st.latch, squash = state !== 'wall' ? 0 : lt < 0.08 ? Math.sin(Math.PI / 2 * lt / 0.08) : lt < 0.18 ? 0.5 + 0.5 * Math.cos(Math.PI * (lt - 0.08) / 0.1) : 0; // §8.2.1: 13% toward the wall in 0.08 s, recover 0.10 s
     const nl = sf.n ? sf.n.clone().applyQuaternion(st.q.clone().invert()) : new THREE.Vector3(0, 1, 0);
-    body.scale.set(1 - 0.13 * squash * Math.abs(nl.x), 1 - 0.13 * squash * Math.abs(nl.y), 1);
+    const speed = Math.hypot(P.vel.x, P.vel.z, state === 'air' ? 0 : Math.min(Math.abs(P.vel.y), 8));
+    // breathing + visual scale (render-only). Idle: clear thorax bob; moving: lighter.
+    const idle = state !== 'air' && speed < 0.55;
+    st.breath += dt;
+    const breath = idle ? 0.035 * Math.sin(st.breath * 2.6) : 0.012 * Math.sin(st.breath * 3.1);
+    const sx = VIS * (1 - 0.13 * squash * Math.abs(nl.x));
+    const sy = VIS * (1 - 0.13 * squash * Math.abs(nl.y)) * (1 + breath);
+    const sz = VIS * (1 + breath * 0.35);
+    body.scale.set(sx, sy, sz);
+    // antenna sway (seeded-feel from P.t only)
+    for (const A of ants) {
+      const w = idle ? 1 : 0.35;
+      A.g.scale.setScalar(VIS);
+      A.g.rotation.x = A.base.x + w * 0.18 * Math.sin(P.t * 2.8 + A.s * 1.3);
+      A.g.rotation.z = A.base.z + w * 0.22 * Math.sin(P.t * 2.1 + A.s * 0.7) + w * 0.08 * Math.sin(P.t * 0.55);
+    }
     root.updateMatrixWorld(true); _inv.copy(body.matrixWorld).invert();
     const delta = st.lastRoot ? root.position.clone().sub(st.lastRoot) : new THREE.Vector3(); st.lastRoot = root.position.clone();
 
@@ -151,7 +175,6 @@ export function createHero(scene, P, boxes) {
     // Bones driven: root + front_{L|R}_s{1,2} + mid_{L|R}_s{1,2} + hind_{L|R}_s{1,2,3} (15 total)
     const bodyUp = tmp2.set(0, 1, 0).applyQuaternion(st.q), bodyBack = new THREE.Vector3(0, 0, -1).applyQuaternion(st.q);
     const bodyFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(st.q);
-    const speed = Math.hypot(P.vel.x, P.vel.z, state === 'air' ? 0 : Math.min(Math.abs(P.vel.y), 8));
     // gait phase advances with distance so stride rate tracks speed; idle still breathes
     st.gait = (st.gait || 0) + dt * (state === 'air' ? 0 : (0.55 + speed * 0.42));
     const swingT = Math.max(0.09, 0.16 - speed * 0.004); // longer, readable swing (~0.1–0.16 s)
@@ -174,8 +197,13 @@ export function createHero(scene, P, boxes) {
         const ahead = new THREE.Vector3(P.vel.x, 0, P.vel.z);
         if (ahead.lengthSq() < 1e-4) ahead.copy(bodyFwd); else ahead.normalize();
         const goal = project(restW.clone().addScaledVector(ahead, strideLen * (0.5 - ph)), sf);
-        // idle micro-shift when nearly still
-        if (speed < 0.5) goal.addScaledVector(sideW, 0.012 * Math.sin(P.t * 1.7 + L.s + kindOff * 6));
+        // idle micro-shift when nearly still (livelier stance: occasional weight transfer)
+        if (speed < 0.55) {
+          const pulse = Math.sin(P.t * 1.7 + L.s + kindOff * 6);
+          const kick = Math.sin(P.t * 0.37 + L.grp * 2.1); // occasional bigger shift
+          goal.addScaledVector(sideW, 0.018 * pulse + 0.022 * Math.max(0, kick) * Math.sin(P.t * 2.4 + kindOff));
+          goal.addScaledVector(bodyFwd, 0.01 * Math.sin(P.t * 0.9 + kindOff * 4));
+        }
         if (wantSwing && L.swing <= 0 && L.hold <= 0) {
           L.from.copy(L.plant || L.foot.lengthSq() ? L.foot : restW); L.plant = null; L.swing = 1e-6;
         }
@@ -237,12 +265,14 @@ export function createHero(scene, P, boxes) {
     if (state === 'wall') { patch.position.set(sf.d - sf.side * 0.01, P.pos.y - 0.1, P.pos.z); patch.rotation.set(0, sf.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0); }
 
     // ---- enchantments (read by index → post overlay; 0 extra draws) ----
-    // soft sash ribbon during fast moves/jumps; faint motes on launch + Catch save; small rim glow
-    const fast = speed > 8 || (state === 'air' && Math.abs(P.vel.y) > 6);
-    fx.trail = Math.max(0, Math.min(1, fx.trail + (fast ? 1 : -1) * dt * 3.5));
-    if (st.kick < 0.35) fx.spark = Math.max(fx.spark, 1 - st.kick / 0.35);
-    fx.spark = Math.max(0, fx.spark - dt * 1.8);
-    fx.rim = 0.25 + 0.35 * fx.trail + 0.4 * fx.spark;
+    // bolder sash ribbon, launch/Catch motes, rim glow (still overlay-only)
+    const fast = speed > 6 || (state === 'air' && Math.abs(P.vel.y) > 4);
+    fx.trail = Math.max(0, Math.min(1, fx.trail + (fast ? 1 : -1) * dt * 4.2));
+    if (st.kick < 0.4) fx.spark = Math.max(fx.spark, 1 - st.kick / 0.4);
+    fx.spark = Math.max(0, fx.spark - dt * 1.4);
+    // idle shimmer so enchantments read even when standing
+    const idleGlow = idle ? 0.22 + 0.08 * Math.sin(P.t * 2.2) : 0;
+    fx.rim = Math.min(1, 0.45 + 0.45 * fx.trail + 0.5 * fx.spark + idleGlow);
     fx.state = state; fx.speed = speed; fx.kick = st.kick;
 
     st.prev = state; if (state !== 'air') st.lastSf = sf;
