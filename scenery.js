@@ -179,9 +179,21 @@ export function createScenery(S, seed, reduceMotion) {
       const _bill = new THREE.Quaternion().copy(cam.quaternion);
       // render-only clearance: no particle within HERO_R of the hero (pushed out radially); fade (shrink) any within CAM_R of camera
       const HERO_R = 1.5, CAM_R = 3, _hp = heroPos || null;
-      const clearWx = (sc) => { if (_hp) { _v.copy(_p).sub(_hp); const d = _v.length();
+      let _hs = null; if (_hp) { // hero projected bounds from an 8-corner box (half-extent ~0.65u incl. legs)
+        let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const H = 0.65; const _c = new THREE.Vector3();
+        for (let c = 0; c < 8; c++) { _c.set(_hp.x + (c & 1 ? H : -H), _hp.y + (c & 2 ? H : -H), _hp.z + (c & 4 ? H : -H)).project(cam);
+          x0 = Math.min(x0, _c.x); x1 = Math.max(x1, _c.x); y0 = Math.min(y0, _c.y); y1 = Math.max(y1, _c.y); }
+        _c.copy(_hp).project(cam);
+        if (_c.z < 1) _hs = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, ax: Math.max(1e-3, (x1 - x0) * 0.7), ay: Math.max(1e-3, (y1 - y0) * 0.7), z: _c.z }; }
+      const clearWx = (sc, ext = 0.4) => { if (_hp) { _v.copy(_p).sub(_hp); const d = _v.length();
           if (d < HERO_R) { if (d < 1e-4) _v.set(1, 0, 0); else _v.multiplyScalar(1 / d); _p.copy(_hp).addScaledVector(_v, HERO_R + 0.05); } }
         const dc = _p.distanceTo(cam.position); if (dc < CAM_R) { const k = Math.max(0, (dc - 0.6) / (CAM_R - 0.6)); sc *= k * k * (3 - 2 * k); }
+        // screen-space clearance: particle inside ellipse ~1.4x hero screen bounds -> shrink to 0 (smooth edge).
+        // Weather draws with depthTest off, so particles behind the hero also paint over it: clear those too, and pad by the quad's own screen size.
+        if (_hp && _hs) { const dcam = Math.max(0.1, _p.distanceTo(cam.position)); _v.copy(_p).project(cam); if (_v.z < 1 && _v.z > -1) {
+            const pad = ext * sc / (dcam * Math.tan(cam.fov * Math.PI / 360));
+            const ex = (_v.x - _hs.x) / (_hs.ax + pad / cam.aspect), ey = (_v.y - _hs.y) / (_hs.ay + pad), e = Math.sqrt(ex * ex + ey * ey);
+            if (e < 1) { const k = Math.max(0, (e - 0.7) / 0.3); sc *= k * k * (3 - 2 * k); } } }
         return sc; };
       for (let i = 0; i < NW; i++) {
         const kind = pk[i], ph = pph[i], life = (t * psp[i] * rm + ph * 10);
@@ -217,7 +229,7 @@ export function createScenery(S, seed, reduceMotion) {
             _e.set(0, 0, 0); weather.setColorAt(i, col);
             const sc = wgt * rm * 4.2; _q.copy(_bill); _s.set(sx * sc, sy * sc, 1);
             if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
-            { const k2 = clearWx(1); _s.x *= k2; _s.y *= k2; }
+            { const k2 = clearWx(1, Math.max(sx, sy) * 0.5); _s.x *= k2; _s.y *= k2; }
             _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m); continue; }
           else if (Wgt.autumn > 0.25) {
             wgt = Wgt.autumn; hex = C_LEAF2; sx = 0.9; sy = 0.55;
@@ -247,7 +259,7 @@ export function createScenery(S, seed, reduceMotion) {
         col.setHex(hex); weather.setColorAt(i, col);
         _q.copy(_bill);
         { const roll = _e.z || 0; if (roll) { _e.set(0, 0, roll); _q.multiply(new THREE.Quaternion().setFromEuler(_e)); } }
-        sc = clearWx(sc); _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
+        sc = clearWx(sc, Math.max(sx, sy) * 0.5); _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
       }
       weather.instanceMatrix.needsUpdate = true; if (weather.instanceColor) weather.instanceColor.needsUpdate = true; this.wxOn = (Wgt.spring + Wgt.summer + Wgt.autumn + Wgt.winter) > 0 ? NW : 0;
     } };
