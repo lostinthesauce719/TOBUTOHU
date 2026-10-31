@@ -1,0 +1,23 @@
+{
+  "branch": "art-final",
+  "base": "1e5a526",
+  "brush_fixes": [
+    "hero_mass_1.8x_thorax_abdomen",
+    "hind_femur_drumstick_2.5x",
+    "front_mid_legs_1.5x",
+    "wall_flute_shade_luma_60_91",
+    "fx_quieter_for_chase"
+  ],
+  "draws": {
+    "spring": 20,
+    "summer": 25,
+    "autumn": 24,
+    "winter": 26,
+    "chase_ground": 13,
+    "chase_climb": 22,
+    "chase_storm": 25,
+    "hero_clip_max": 13
+  },
+  "sim_version": "tobu-sim-5",
+  "luma_note": "see luma.txt"
+}

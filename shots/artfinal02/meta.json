@@ -1,0 +1,20 @@
+{
+  "branch": "art-final",
+  "base": "0e54fe6",
+  "brush_fixes": [
+    "wall_grid_gAV0",
+    "breakable_slate_perf",
+    "scenery_B_density",
+    "hero_fx_soft",
+    "no_thanks_copy"
+  ],
+  "draws": {
+    "spring": 20,
+    "summer": 25,
+    "autumn": 24,
+    "winter": 26,
+    "hero_clip_max": 13
+  },
+  "sim_version": "tobu-sim-5",
+  "luma_note": "see luma.txt"
+}

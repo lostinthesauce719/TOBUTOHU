@@ -1,0 +1,6 @@
+artfinal03 luma (mid-band scenery heuristic)
+
+spring: mid-pixels 53.0% luma p5=131 p50=192 p95=199; in126-199=46%; warm/redish=0.00%
+summer: mid-pixels 20.7% luma p5=113 p50=158 p95=206; in126-199=15%; warm/redish=0.24%
+autumn: mid-pixels 55.8% luma p5=131 p50=188 p95=199; in126-199=49%; warm/redish=0.33%
+winter: mid-pixels 35.5% luma p5=132 p50=199 p95=203; in126-199=24%; warm/redish=0.00%
