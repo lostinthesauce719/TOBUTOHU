@@ -11,10 +11,10 @@ const BL = 1.1, RIDE = 0.22;
 // identical hip / rest / segment data to tobu3d/hero.js LEGS so the existing IK drives the bones unchanged
 export const LEGS = [];
 for (const s of [-1, 1]) {
-  // BRUSH artfinal03: front/mid ~1.5x thicker; hind femurs chunky drumsticks ~2.5x (tibia slight bump for join)
-  LEGS.push({ s, kind: 'front', hip: [s * 0.05, -0.04, 0.22], rest: [s * 0.2, -RIDE, 0.36], a: 0.15, b: 0.19, r: [0.028, 0.020, 0.020, 0.014] });
-  LEGS.push({ s, kind: 'mid', hip: [s * 0.06, -0.04, 0.12], rest: [s * 0.24, -RIDE, 0.08], a: 0.15, b: 0.19, r: [0.028, 0.020, 0.020, 0.014] });
-  LEGS.push({ s, kind: 'hind', hip: [s * 0.065, 0.0, 0.07], rest: [s * 0.17, -RIDE, -0.48], a: 0.6, b: 0.55, t: 0.1, r: [0.14, 0.065, 0.028, 0.014], r3: [0.016, 0.010] });
+  // artfinal05 (Apollo: legs too big): front/mid ~1.15x original; hind femurs ~1.6x original (V kept); body unchanged from artfinal03
+  LEGS.push({ s, kind: 'front', hip: [s * 0.05, -0.04, 0.22], rest: [s * 0.2, -RIDE, 0.36], a: 0.15, b: 0.19, r: [0.0184, 0.0138, 0.0138, 0.0104] });
+  LEGS.push({ s, kind: 'mid', hip: [s * 0.06, -0.04, 0.12], rest: [s * 0.24, -RIDE, 0.08], a: 0.15, b: 0.19, r: [0.0184, 0.0138, 0.0138, 0.0104] });
+  LEGS.push({ s, kind: 'hind', hip: [s * 0.065, 0.0, 0.07], rest: [s * 0.17, -RIDE, -0.48], a: 0.6, b: 0.55, t: 0.1, r: [0.08, 0.035, 0.022, 0.011], r3: [0.013, 0.009] });
 }
 export const legName = (L, i) => `${L.kind}_${L.s < 0 ? 'L' : 'R'}_s${i}`;
 
