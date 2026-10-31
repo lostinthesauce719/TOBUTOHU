@@ -11,9 +11,10 @@ const BL = 1.1, RIDE = 0.22;
 // identical hip / rest / segment data to tobu3d/hero.js LEGS so the existing IK drives the bones unchanged
 export const LEGS = [];
 for (const s of [-1, 1]) {
-  LEGS.push({ s, kind: 'front', hip: [s * 0.05, -0.04, 0.22], rest: [s * 0.2, -RIDE, 0.36], a: 0.15, b: 0.19, r: [0.016, 0.012, 0.012, 0.009] });
-  LEGS.push({ s, kind: 'mid', hip: [s * 0.06, -0.04, 0.12], rest: [s * 0.24, -RIDE, 0.08], a: 0.15, b: 0.19, r: [0.016, 0.012, 0.012, 0.009] });
-  LEGS.push({ s, kind: 'hind', hip: [s * 0.065, 0.0, 0.07], rest: [s * 0.17, -RIDE, -0.48], a: 0.6, b: 0.55, t: 0.1, r: [0.05, 0.022, 0.016, 0.009], r3: [0.012, 0.008] });
+  // BRUSH artfinal03: front/mid ~1.5x thicker; hind femurs chunky drumsticks ~2.5x (tibia slight bump for join)
+  LEGS.push({ s, kind: 'front', hip: [s * 0.05, -0.04, 0.22], rest: [s * 0.2, -RIDE, 0.36], a: 0.15, b: 0.19, r: [0.028, 0.020, 0.020, 0.014] });
+  LEGS.push({ s, kind: 'mid', hip: [s * 0.06, -0.04, 0.12], rest: [s * 0.24, -RIDE, 0.08], a: 0.15, b: 0.19, r: [0.028, 0.020, 0.020, 0.014] });
+  LEGS.push({ s, kind: 'hind', hip: [s * 0.065, 0.0, 0.07], rest: [s * 0.17, -RIDE, -0.48], a: 0.6, b: 0.55, t: 0.1, r: [0.14, 0.065, 0.028, 0.014], r3: [0.016, 0.010] });
 }
 export const legName = (L, i) => `${L.kind}_${L.s < 0 ? 'L' : 'R'}_s${i}`;
 
@@ -49,17 +50,17 @@ export function buildHero(THREE) {
     for (let i = 0; i < k; i++) { si[i * 4] = b; sw[i * 4] = 1; } g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); };
   const M = (p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1]) => new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)), new THREE.Vector3(...s));
   const H = Math.PI / 2;
-  // Hero C sleek leap: elongated abdomen, slimmer thorax, longer folded wings (bones/IK unchanged)
-  add(new THREE.CapsuleGeometry(0.055, 0.11, 2, 8), M([0, 0.01, 0.16], [H, 0, 0], [0.92, 1, 0.85]));          // thorax (slimmer)
-  add(new THREE.BoxGeometry(0.13, 0.05, 0.15), M([0, 0.055, 0.18], [0.06, 0, 0]));                            // pronotum saddle
-  add(new THREE.BoxGeometry(0.134, 0.011, 0.04), M([0, 0.084, 0.18], [0.08, 0.55, 0]), () => sash);           // sash across pronotum
-  add(new THREE.BoxGeometry(0.04, 0.008, 0.18), M([0.06, 0.02, 0.05], [0.15, -0.35, 0.2]), () => sash);      // sash trail (leap read)
-  add(new THREE.ConeGeometry(0.055, 0.16, 7), M([0, -0.005, 0.32], [H + 0.5, 0, 0], [0.9, 1, 1.2]));          // head
-  add(new THREE.ConeGeometry(0.048, 0.82, 8), M([0, -0.01, -0.34], [-H, 0, 0], [0.85, 1, 0.72]));             // elongated abdomen (C)
+  // Hero C sleek leap + BRUSH mass fix: abdomen/thorax ~1.8x thicker (cream belly reads); not skeletal
+  add(new THREE.CapsuleGeometry(0.12, 0.14, 2, 8), M([0, 0.02, 0.14], [H, 0, 0], [1.1, 1, 1.0]));              // thorax massy (cream belly)
+  add(new THREE.BoxGeometry(0.24, 0.07, 0.17), M([0, 0.07, 0.16], [0.06, 0, 0]));                             // pronotum saddle
+  add(new THREE.BoxGeometry(0.24, 0.014, 0.05), M([0, 0.11, 0.16], [0.08, 0.55, 0]), () => sash);           // sash across pronotum
+  add(new THREE.BoxGeometry(0.05, 0.01, 0.20), M([0.09, 0.02, 0.04], [0.15, -0.35, 0.2]), () => sash);      // sash trail (leap read)
+  add(new THREE.ConeGeometry(0.065, 0.16, 7), M([0, -0.005, 0.34], [H + 0.5, 0, 0], [0.95, 1, 1.2]));         // head (slightly fuller)
+  add(new THREE.ConeGeometry(0.115, 0.72, 8), M([0, -0.03, -0.30], [-H, 0, 0], [1.1, 1, 0.95]));             // abdomen massy + cream belly
   for (const s of [-1, 1]) {
-    add(new THREE.SphereGeometry(0.028, 6, 4), M([s * 0.042, 0.032, 0.30], [0, 0, 0], [0.7, 1.1, 1.15]), () => crease); // eye
-    add(new THREE.CylinderGeometry(0.005, 0.01, 0.16, 4), M([s * 0.028, 0.07, 0.38], [0.7, 0, s * -0.22]), () => crease); // short antenna
-    add(new THREE.BoxGeometry(0.048, 0.014, 0.88), M([s * 0.028, 0.048, -0.30], [0.04, s * 0.03, s * 0.1]), (n) => n.y > 0.3 ? top : n.y < -0.3 ? belly : crease); // longer folded wing
+    add(new THREE.SphereGeometry(0.032, 6, 4), M([s * 0.055, 0.038, 0.32], [0, 0, 0], [0.7, 1.1, 1.15]), () => crease); // eye (on fuller head)
+    add(new THREE.CylinderGeometry(0.005, 0.01, 0.16, 4), M([s * 0.035, 0.08, 0.40], [0.7, 0, s * -0.22]), () => crease); // short antenna
+    add(new THREE.BoxGeometry(0.055, 0.016, 0.88), M([s * 0.042, 0.055, -0.30], [0.04, s * 0.03, s * 0.1]), (n) => n.y > 0.3 ? top : n.y < -0.3 ? belly : crease); // longer folded wing
   }
   // leg segments: unit length along +Y in bone space
   let bi = 1; const boneDefs = [{ name: 'root' }];
@@ -128,7 +129,13 @@ export const kit = {
       q([-w, h, zz], [w, h, zz], [w * 0.7, -h, zz], [-w * 0.7, -h, zz]);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
-    const out = paint(THREE, fixWinding(THREE, g), (n) => n.y > 0.55 ? top : n.y < -0.35 ? deep : side); out.translate(b.x, b.y, b.z); return out;
+    const out = paint(THREE, fixWinding(THREE, g), (n, c) => {
+      if (n.y > 0.55) return top;
+      if (n.y < -0.35) return deep;
+      // long-side flutes: light/dark alternate within slate (luma 60–91)
+      const fluteI = Math.max(0, Math.min(nFl - 1, Math.floor(((c.z + l) / Math.max(2 * l, 1e-6)) * nFl)));
+      return (fluteI % 2) === 0 ? side : deep;
+    }); out.translate(b.x, b.y, b.z); return out;
   },
   // Walls C fluted crystalline wall = sim 'wall'. Ridges sit on the flat collider plane; grooves inset into the rock.
   wall(THREE, b, side) {
@@ -172,9 +179,14 @@ export const kit = {
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
     const out = paint(THREE, fixWinding(THREE, g), (n, c) => {
-      // faces near the contact plane read as climb face; tops/sides use slate family
-      if (Math.abs(c.x - inner) < groove * 0.55 + 1e-3 && Math.abs(n.x) > 0.55) return face;
-      return n.y > 0.5 ? top : n.y < -0.5 ? deep : sd;
+      // BRUSH: per-flute light→dark within slate luma 60–91 so ridges read in chase cam
+      const fluteI = Math.max(0, Math.min(nFl - 1, Math.floor(((c.z + l) / Math.max(2 * l, 1e-6)) * nFl)));
+      const ridge = (fluteI % 2) === 0;
+      if (n.y > 0.5) return top;   // #4A5D80 luma 91
+      if (n.y < -0.5) return deep; // #2F3D58 luma 60
+      // ridge columns light (face/top 86–91), groove columns dark (side/deep 60–73)
+      if (ridge) return Math.abs(n.x) > 0.65 ? face : top;
+      return Math.abs(n.x) > 0.65 ? deep : sd;
     });
     out.translate(b.x, b.y, b.z); return out;
   },
