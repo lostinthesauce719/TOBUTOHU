@@ -24,9 +24,9 @@ export function createScenery(S, seed, reduceMotion) {
   // mountains: 3 rings merged; per-vertex haze toward horizon
   { const fw = []; const z = zoned(zn => { const gs = [0, 1, 2].map(L => mountains(THREE, zn, L, 3 + (seed % 997))); if (!fw.length) gs.forEach((g, L) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const hk = THREE.MathUtils.clamp(1 - (p.getY(i) + 30) / [70, 110, 160][L], 0, 1); fw.push(Math.min(0.85, 0.28 + L * 0.17 + 0.3 * hk)); } }); return mergeAll(gs); });
     const m = new THREE.Mesh(z.geo, basic()); m.frustumCulled = false; m.userData.layer = 'far'; root.add(m); layers.push({ m, ...z, fogV: fw, par: 0.92, haze: 1, layer: 'far' }); }
-  // far cedars 80-150
+  // far cedars 80-150 — Scenery B denser packing (more columns, tighter spacing)
   { const r = mul(seed ^ 0xCEDA); const pos = [];
-    for (let i = 0; i < 26; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (80 + r() * 70), -70 - r() * 20, 40 - i * 9 - r() * 6, 60 + r() * 40, 3 + r() * 2, (r() * 1e6) | 0]); }
+    for (let i = 0; i < 64; i++) { const s = i % 2 ? 1 : -1; pos.push([s * (72 + r() * 70), -70 - r() * 22, 52 - i * 4.4 - r() * 3, 55 + r() * 50, 2.6 + r() * 2.4, (r() * 1e6) | 0]); }
     const z = zoned(zn => mergeAll(pos.map(([x, y, zz, H, R, sd]) => { const g = cedarZone(THREE, zn, H, R, sd); g.translate(x, y, zz); return g; })));
     farCedar = new THREE.Mesh(z.geo, basic()); farCedar.frustumCulled = false; farCedar.userData.layer = 'mid'; root.add(farCedar); layers.push({ m: farCedar, ...z, fog: 0.15, par: 0.55, layer: 'mid' }); }
   // waterfalls
@@ -97,7 +97,7 @@ export function createScenery(S, seed, reduceMotion) {
       wf.visible = all || name === 'mid'; steam.visible = all || name === 'mid';
       birds.visible = all || name === 'mid'; weather.visible = all || name === 'fg';
     },
-    update(cam, h, t, fog, sky) {
+    update(cam, h, t, fog, sky, heroPos) {
       const zm = zoneMix(Math.max(0, h)), A = ZONES[zm.a], B = ZONES[zm.b], st = stormK(h), dark = 1 - 0.26 * st;
       const Wgt = { spring: 0, summer: 0, autumn: 0, winter: 0 }; Wgt[zm.a] += 1 - zm.t; Wgt[zm.b] += zm.t;
       // summer→autumn crossfade was overbright: peak mid-fade dampener
@@ -177,6 +177,12 @@ export function createScenery(S, seed, reduceMotion) {
       const rm = reduceMotion ? 0.35 : 1, gust = Wgt.autumn * (0.55 + 0.45 * Math.sin(t * 0.9 + ph2));
       // billboard toward camera so thin planes stay readable (tumble is roll-only)
       const _bill = new THREE.Quaternion().copy(cam.quaternion);
+      // render-only clearance: no particle within HERO_R of the hero (pushed out radially); fade (shrink) any within CAM_R of camera
+      const HERO_R = 1.5, CAM_R = 3, _hp = heroPos || null;
+      const clearWx = (sc) => { if (_hp) { _v.copy(_p).sub(_hp); const d = _v.length();
+          if (d < HERO_R) { if (d < 1e-4) _v.set(1, 0, 0); else _v.multiplyScalar(1 / d); _p.copy(_hp).addScaledVector(_v, HERO_R + 0.05); } }
+        const dc = _p.distanceTo(cam.position); if (dc < CAM_R) { const k = Math.max(0, (dc - 0.6) / (CAM_R - 0.6)); sc *= k * k * (3 - 2 * k); }
+        return sc; };
       for (let i = 0; i < NW; i++) {
         const kind = pk[i], ph = pph[i], life = (t * psp[i] * rm + ph * 10);
         // which season owns this particle slot
@@ -211,6 +217,7 @@ export function createScenery(S, seed, reduceMotion) {
             _e.set(0, 0, 0); weather.setColorAt(i, col);
             const sc = wgt * rm * 4.2; _q.copy(_bill); _s.set(sx * sc, sy * sc, 1);
             if (Math.abs(_p.x) < 20) _p.x = Math.sign(_p.x || 1) * 20;
+            { const k2 = clearWx(1); _s.x *= k2; _s.y *= k2; }
             _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m); continue; }
           else if (Wgt.autumn > 0.25) {
             wgt = Wgt.autumn; hex = C_LEAF2; sx = 0.9; sy = 0.55;
@@ -240,7 +247,7 @@ export function createScenery(S, seed, reduceMotion) {
         col.setHex(hex); weather.setColorAt(i, col);
         _q.copy(_bill);
         { const roll = _e.z || 0; if (roll) { _e.set(0, 0, roll); _q.multiply(new THREE.Quaternion().setFromEuler(_e)); } }
-        _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
+        sc = clearWx(sc); _s.set(sx * sc, sy * sc, 1); _m.compose(_p, _q, _s); weather.setMatrixAt(i, _m);
       }
       weather.instanceMatrix.needsUpdate = true; if (weather.instanceColor) weather.instanceColor.needsUpdate = true; this.wxOn = (Wgt.spring + Wgt.summer + Wgt.autumn + Wgt.winter) > 0 ? NW : 0;
     } };

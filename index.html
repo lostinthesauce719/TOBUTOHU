@@ -301,7 +301,7 @@ $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});cons
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
+ else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky,P.pos);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
  // grasshopper enchantments → post overlay (0 draws)
  const _hv=_mv.set(hero.root.position.x,hero.root.position.y,hero.root.position.z).project(cam);
  post.U.hUV.value.set(_hv.x*0.5+0.5,_hv.y*0.5+0.5);

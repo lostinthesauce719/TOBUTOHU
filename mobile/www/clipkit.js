@@ -11,9 +11,10 @@ const BL = 1.1, RIDE = 0.22;
 // identical hip / rest / segment data to tobu3d/hero.js LEGS so the existing IK drives the bones unchanged
 export const LEGS = [];
 for (const s of [-1, 1]) {
-  LEGS.push({ s, kind: 'front', hip: [s * 0.05, -0.04, 0.22], rest: [s * 0.2, -RIDE, 0.36], a: 0.15, b: 0.19, r: [0.016, 0.012, 0.012, 0.009] });
-  LEGS.push({ s, kind: 'mid', hip: [s * 0.06, -0.04, 0.12], rest: [s * 0.24, -RIDE, 0.08], a: 0.15, b: 0.19, r: [0.016, 0.012, 0.012, 0.009] });
-  LEGS.push({ s, kind: 'hind', hip: [s * 0.065, 0.0, 0.07], rest: [s * 0.17, -RIDE, -0.48], a: 0.6, b: 0.55, t: 0.1, r: [0.05, 0.022, 0.016, 0.009], r3: [0.012, 0.008] });
+  // BRUSH artfinal03: front/mid ~1.5x thicker; hind femurs chunky drumsticks ~2.5x (tibia slight bump for join)
+  LEGS.push({ s, kind: 'front', hip: [s * 0.05, -0.04, 0.22], rest: [s * 0.2, -RIDE, 0.36], a: 0.15, b: 0.19, r: [0.028, 0.020, 0.020, 0.014] });
+  LEGS.push({ s, kind: 'mid', hip: [s * 0.06, -0.04, 0.12], rest: [s * 0.24, -RIDE, 0.08], a: 0.15, b: 0.19, r: [0.028, 0.020, 0.020, 0.014] });
+  LEGS.push({ s, kind: 'hind', hip: [s * 0.065, 0.0, 0.07], rest: [s * 0.17, -RIDE, -0.48], a: 0.6, b: 0.55, t: 0.1, r: [0.14, 0.065, 0.028, 0.014], r3: [0.016, 0.010] });
 }
 export const legName = (L, i) => `${L.kind}_${L.s < 0 ? 'L' : 'R'}_s${i}`;
 
@@ -49,16 +50,17 @@ export function buildHero(THREE) {
     for (let i = 0; i < k; i++) { si[i * 4] = b; sw[i * 4] = 1; } g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); };
   const M = (p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1]) => new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)), new THREE.Vector3(...s));
   const H = Math.PI / 2;
-  // slim but solid body (local +z head, +y back), sizes from hero.js
-  add(new THREE.CapsuleGeometry(0.068, 0.12, 2, 8), M([0, 0, 0.15], [H, 0, 0], [1, 1, 0.9]));               // thorax
-  add(new THREE.BoxGeometry(0.15, 0.06, 0.16), M([0, 0.06, 0.17], [0.08, 0, 0]));                             // pronotum saddle
-  add(new THREE.BoxGeometry(0.152, 0.012, 0.045), M([0, 0.094, 0.17], [0.08, 0.55, 0]), () => sash);          // sash: high, diagonal across the pronotum
-  add(new THREE.ConeGeometry(0.06, 0.17, 7), M([0, -0.01, 0.31], [H + 0.55, 0, 0], [0.95, 1, 1.25]));         // head
-  add(new THREE.ConeGeometry(0.06, 0.62, 8), M([0, -0.015, -0.22], [-H, 0, 0], [1, 1, 0.85]));                 // abdomen
+  // Hero C sleek leap + BRUSH mass fix: abdomen/thorax ~1.8x thicker (cream belly reads); not skeletal
+  add(new THREE.CapsuleGeometry(0.12, 0.14, 2, 8), M([0, 0.02, 0.14], [H, 0, 0], [1.1, 1, 1.0]));              // thorax massy (cream belly)
+  add(new THREE.BoxGeometry(0.24, 0.07, 0.17), M([0, 0.07, 0.16], [0.06, 0, 0]));                             // pronotum saddle
+  add(new THREE.BoxGeometry(0.24, 0.014, 0.05), M([0, 0.11, 0.16], [0.08, 0.55, 0]), () => sash);           // sash across pronotum
+  add(new THREE.BoxGeometry(0.05, 0.01, 0.20), M([0.09, 0.02, 0.04], [0.15, -0.35, 0.2]), () => sash);      // sash trail (leap read)
+  add(new THREE.ConeGeometry(0.065, 0.16, 7), M([0, -0.005, 0.34], [H + 0.5, 0, 0], [0.95, 1, 1.2]));         // head (slightly fuller)
+  add(new THREE.ConeGeometry(0.115, 0.72, 8), M([0, -0.03, -0.30], [-H, 0, 0], [1.1, 1, 0.95]));             // abdomen massy + cream belly
   for (const s of [-1, 1]) {
-    add(new THREE.SphereGeometry(0.03, 6, 4), M([s * 0.045, 0.035, 0.29], [0, 0, 0], [0.7, 1.1, 1.2]), () => crease); // eye
-    add(new THREE.CylinderGeometry(0.006, 0.011, 0.18, 4), M([s * 0.03, 0.08, 0.37], [0.75, 0, s * -0.25]), () => crease); // short antenna
-    add(new THREE.BoxGeometry(0.06, 0.018, 0.7), M([s * 0.032, 0.055, -0.24], [0.05, s * 0.035, s * 0.12]), (n) => n.y > 0.3 ? top : n.y < -0.3 ? belly : crease); // folded wing, crease edges
+    add(new THREE.SphereGeometry(0.032, 6, 4), M([s * 0.055, 0.038, 0.32], [0, 0, 0], [0.7, 1.1, 1.15]), () => crease); // eye (on fuller head)
+    add(new THREE.CylinderGeometry(0.005, 0.01, 0.16, 4), M([s * 0.035, 0.08, 0.40], [0.7, 0, s * -0.22]), () => crease); // short antenna
+    add(new THREE.BoxGeometry(0.055, 0.016, 0.88), M([s * 0.042, 0.055, -0.30], [0.04, s * 0.03, s * 0.1]), (n) => n.y > 0.3 ? top : n.y < -0.3 ? belly : crease); // longer folded wing
   }
   // leg segments: unit length along +Y in bone space
   let bi = 1; const boneDefs = [{ name: 'root' }];
@@ -96,37 +98,96 @@ export function placeBone(THREE, bone, a, b) {
 // Every climbable builder takes the sim box (centre + half extents) and stays INSIDE it; contact faces are coplanar
 // with the collider faces, so grip, shadows and kicks line up with the sim exactly.
 export const kit = {
-  // branch ledge = sim 'shelf' (8 x 1 x len). Flat top at the collider top; underside tapers like a branch.
+  // Walls C fluted crystalline shelf = sim 'shelf'. Flat contact top coplanar with collider; sides are vertical basalt flutes.
   ledge(THREE, b) {
-    const { top, side, deep } = PAL.climb, w = b.hx, h = b.hy, l = b.hz;
-    const g = new THREE.BufferGeometry();
-    // octagonal-ish prism along z: full-width top, chamfered upper edges, narrowed keel underneath
-    const prof = [[-w, h], [w, h], [w, h * 0.2], [w * 0.62, -h], [-w * 0.62, -h], [-w, h * 0.2]];
-    const pts = []; const q = (A, B, C, D) => pts.push(A, B, C, A, C, D);
-    for (let i = 0; i < prof.length; i++) { const [x0, y0] = prof[i], [x1, y1] = prof[(i + 1) % prof.length];
-      q([x0, y0, l], [x1, y1, l], [x1, y1, -l], [x0, y0, -l]); }
-    for (const zz of [l, -l]) for (let i = 1; i < prof.length - 1; i++) { const a = [...prof[0], zz], b2 = [...prof[i], zz], c = [...prof[i + 1], zz]; zz > 0 ? pts.push(a, c, b2) : pts.push(a, b2, c); }
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
-    const out = paint(THREE, fixWinding(THREE, g), (n) => n.y > 0.5 ? top : n.y < -0.2 ? deep : side); out.translate(b.x, b.y, b.z); return out;
-  },
-  // curved bark wall = sim 'wall' (0.6 x H x len). Contact face (facing the run, -side) is the flat collider plane;
-  // the back is a convex bark curve with vertical flutes, ends and top are bevelled.
-  wall(THREE, b, side) {
-    const { face, side: sd, deep, top } = PAL.climb, t = b.hx * 2, h = b.hy, l = b.hz, segs = 10, pts = [];
-    const inner = -side * b.hx; // contact plane offset from centre
-    const back = (u) => inner + side * t * (0.35 + 0.65 * Math.sin(Math.PI * (0.08 + 0.84 * u))) * (1 - 0.06 * (Math.round(u * segs) % 2)); // curve + flutes
-    const Z = (u) => -l + 2 * l * u, q = (A, B, C, D) => pts.push(A, B, C, A, C, D), bev = Math.min(0.25, h * 0.05);
-    for (let i = 0; i < segs; i++) { const u0 = i / segs, u1 = (i + 1) / segs;
-      q([inner, -h, Z(u0)], [inner, -h, Z(u1)], [inner, h - bev, Z(u1)], [inner, h - bev, Z(u0)]);                  // contact face
-      q([back(u0), -h, Z(u0)], [back(u0), h - bev, Z(u0)], [back(u1), h - bev, Z(u1)], [back(u1), -h, Z(u1)]);       // curved back
-      const m0 = (inner + back(u0)) / 2, m1 = (inner + back(u1)) / 2;                                                   // bevelled top ridge
-      q([inner, h - bev, Z(u0)], [inner, h - bev, Z(u1)], [m1, h, Z(u1)], [m0, h, Z(u0)]);
-      q([m0, h, Z(u0)], [m1, h, Z(u1)], [back(u1), h - bev, Z(u1)], [back(u0), h - bev, Z(u0)]);
-      q([inner, -h, Z(u0)], [back(u0), -h, Z(u0)], [back(u1), -h, Z(u1)], [inner, -h, Z(u1)]); }
-    for (const [u, zz] of [[0, -l], [1, l]]) { const m = (inner + back(u)) / 2;
-      q([inner, -h, zz], [back(u), -h, zz], [back(u), h - bev, zz], [inner, h - bev, zz]); pts.push([inner, h - bev, zz], [back(u), h - bev, zz], [m, h, zz]); }
+    const { top, side, deep } = PAL.climb, w = b.hx, h = b.hy, l = b.hz, pts = [];
+    const q = (A, B, C, D) => pts.push(A, B, C, A, C, D);
+    const nFl = Math.max(4, Math.min(10, Math.round(l * 1.6))); // vertical flutes along length
+    // flat contact top (exact collider top face)
+    q([-w, h, l], [w, h, l], [w, h, -l], [-w, h, -l]);
+    // underside keel (slightly inset)
+    q([-w * 0.7, -h, -l], [w * 0.7, -h, -l], [w * 0.7, -h, l], [-w * 0.7, -h, l]);
+    // fluted long sides: vertical crystal columns inset under the top lip
+    for (const sx of [-1, 1]) {
+      for (let i = 0; i < nFl; i++) {
+        const z0 = -l + (2 * l * i) / nFl, z1 = -l + (2 * l * (i + 1)) / nFl, zm = (z0 + z1) / 2;
+        const inset = 0.04 * w * (i % 2 ? 1 : 0.35); // alternate flute depth
+        const xOuter = sx * w, xInner = sx * (w - inset - 0.08 * w);
+        // outer face of flute
+        q([xOuter, h, z0], [xOuter, -h * 0.15, z0], [xOuter, -h * 0.15, z1], [xOuter, h, z1]);
+        // recessed face
+        q([xInner, h * 0.85, z0], [xInner, h * 0.85, z1], [xInner, -h * 0.55, z1], [xInner, -h * 0.55, z0]);
+        // facet joins (crystal edges)
+        q([xOuter, h, z0], [xInner, h * 0.85, z0], [xInner, -h * 0.55, z0], [xOuter, -h * 0.15, z0]);
+        q([xOuter, h, z1], [xOuter, -h * 0.15, z1], [xInner, -h * 0.55, z1], [xInner, h * 0.85, z1]);
+        // tapered to keel
+        q([xOuter, -h * 0.15, z0], [sx * w * 0.7, -h, z0], [sx * w * 0.7, -h, z1], [xOuter, -h * 0.15, z1]);
+      }
+    }
+    // end caps (faceted)
+    for (const zz of [l, -l]) {
+      q([-w, h, zz], [w, h, zz], [w * 0.7, -h, zz], [-w * 0.7, -h, zz]);
+    }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
-    const out = paint(THREE, fixWinding(THREE, g), (n, c) => Math.abs(c.x - inner) < 1e-4 && Math.abs(n.x) > 0.9 ? face : n.y > 0.5 ? top : n.y < -0.5 ? deep : sd);
+    const out = paint(THREE, fixWinding(THREE, g), (n, c) => {
+      if (n.y > 0.55) return top;
+      if (n.y < -0.35) return deep;
+      // long-side flutes: light/dark alternate within slate (luma 60–91)
+      const fluteI = Math.max(0, Math.min(nFl - 1, Math.floor(((c.z + l) / Math.max(2 * l, 1e-6)) * nFl)));
+      return (fluteI % 2) === 0 ? side : deep;
+    }); out.translate(b.x, b.y, b.z); return out;
+  },
+  // Walls C fluted crystalline wall = sim 'wall'. Ridges sit on the flat collider plane; grooves inset into the rock.
+  wall(THREE, b, side) {
+    const { face, side: sd, deep, top } = PAL.climb, t0 = b.hx * 2, h = b.hy, l = b.hz, pts = [];
+    const inner = -side * b.hx; // contact plane (ridge tops)
+    const nFl = Math.max(6, Math.min(16, Math.round(l * 2.4)));
+    const Z = (u) => -l + 2 * l * u, q = (A, B, C, D) => pts.push(A, B, C, A, C, D), bev = Math.min(0.22, h * 0.04);
+    const groove = Math.min(t0 * 0.45, b.hx * 0.7); // how deep grooves go into the wall
+    for (let i = 0; i < nFl; i++) {
+      const u0 = i / nFl, u1 = (i + 1) / nFl, um = (u0 + u1) / 2;
+      const z0 = Z(u0), z1 = Z(u1), zm = Z(um);
+      const isRidge = (i % 2) === 0;
+      // alternate ridge (at contact plane) and groove (inset)
+      const xFace = isRidge ? inner : (inner + side * groove);
+      const xBack = inner + side * (t0 * (0.7 + 0.25 * ((i % 3) / 2)));
+      // contact / groove face
+      q([xFace, -h, z0], [xFace, -h, z1], [xFace, h - bev, z1], [xFace, h - bev, z0]);
+      // back face
+      q([xBack, -h, z0], [xBack, h - bev, z0], [xBack, h - bev, z1], [xBack, -h, z1]);
+      // vertical crystal facets between ridge and groove
+      if (!isRidge) {
+        // side walls of the groove (visible from chase cam)
+        q([inner, -h, z0], [xFace, -h, z0], [xFace, h - bev, z0], [inner, h - bev, z0]);
+        q([xFace, -h, z1], [inner, -h, z1], [inner, h - bev, z1], [xFace, h - bev, z1]);
+      }
+      // outer column sides
+      q([xFace, -h, z0], [xBack, -h, z0], [xBack, h - bev, z0], [xFace, h - bev, z0]);
+      q([xBack, -h, z1], [xFace, -h, z1], [xFace, h - bev, z1], [xBack, h - bev, z1]);
+      // faceted crystalline top
+      const xMid = (xFace + xBack) / 2;
+      q([xFace, h - bev, z0], [xFace, h - bev, z1], [xMid, h, z1], [xMid, h, z0]);
+      q([xMid, h, z0], [xMid, h, z1], [xBack, h - bev, z1], [xBack, h - bev, z0]);
+      // bottom
+      q([xFace, -h, z0], [xBack, -h, z0], [xBack, -h, z1], [xFace, -h, z1]);
+    }
+    // end caps
+    for (const [u, zz] of [[0, -l], [1, l]]) {
+      const xBack = inner + side * t0 * 0.85;
+      q([inner, -h, zz], [xBack, -h, zz], [xBack, h - bev, zz], [inner, h - bev, zz]);
+      pts.push([inner, h - bev, zz], [xBack, h - bev, zz], [(inner + xBack) / 2, h, zz]);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
+    const out = paint(THREE, fixWinding(THREE, g), (n, c) => {
+      // BRUSH: per-flute light→dark within slate luma 60–91 so ridges read in chase cam
+      const fluteI = Math.max(0, Math.min(nFl - 1, Math.floor(((c.z + l) / Math.max(2 * l, 1e-6)) * nFl)));
+      const ridge = (fluteI % 2) === 0;
+      if (n.y > 0.5) return top;   // #4A5D80 luma 91
+      if (n.y < -0.5) return deep; // #2F3D58 luma 60
+      // ridge columns light (face/top 86–91), groove columns dark (side/deep 60–73)
+      if (ridge) return Math.abs(n.x) > 0.65 ? face : top;
+      return Math.abs(n.x) > 0.65 ? deep : sd;
+    });
     out.translate(b.x, b.y, b.z); return out;
   },
   // giant cedar (decor, no collider): tapered octagonal trunk + stacked flat canopy tiers. Base at origin, height H.
@@ -164,7 +225,7 @@ export const triCount = tris;
 export const ZONES = {
   spring: { y0: 0,   sky: [0x4A86D0, 0xB4D8FA], fog: 0xCFE6FB, fogD: 0.0038, trunk: 0x9AA2D8, tierA: 0xC4C2DC, tierB: 0xCDB4CC, pinkShare: 0.4, mtn: [0x8E98CC, 0xA4B0DA, 0xBAC6E4], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE6F0FA, 0.25], bird: 0x6F7FA0 },
   summer: { y0: 120, sky: [0x34609A, 0xA8D2F6], fog: 0xC9E2F6, fogD: 0.0042, trunk: 0x7F90B8, tierA: 0x5E8C8A, tierB: 0x6E9C98, mtn: [0x7486B4, 0x8E9ECC, 0xAEBEE0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE2EEF8, 0.35], bird: 0x6F7FA0 },
-  autumn: { y0: 250, sky: [0x4C7CC0, 0xB2D2F2], fog: 0xD0E2F2, fogD: 0.0040, trunk: 0x9298C8, tierA: 0x8E9A6A, tierB: 0xC8BC86, mtn: [0x8A90C4, 0xA2A8D4, 0xBCC2E2], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE4ECF6, 0.40], bird: 0x6F7FA0 },
+  autumn: { y0: 250, sky: [0x4C7CC0, 0xB2D2F2], fog: 0xD0E2F2, fogD: 0.0040, trunk: 0x9298C8, tierA: 0x9AA052, tierB: 0xD8B76A, mtn: [0x8A90C4, 0xA2A8D4, 0xBCC2E2], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE4ECF6, 0.40], bird: 0x6F7FA0 }, /* B gold-corrected olive/gold */
   winter: { y0: 400, sky: [0x6C9AD4, 0xC8E2FA], fog: 0xDCEBF8, fogD: 0.0048, trunk: 0x8E9CC8, tierA: 0xA6B4DC, tierB: 0xC0C6DE, snow: 0xC0C6DE, mtn: [0x9CA8D2, 0xB2BEDE, 0xBCC6E0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xEAF2FA, 0.30], bird: 0xFFFFFF },
 };
 export const XFADE_M = 15; // metres of cross-fade centred on each boundary
