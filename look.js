@@ -35,15 +35,19 @@ const SHADE = `
 // flat smooth-shaded grid material: one shared instance per colour
 const cache = new Map();
 export function gridMat(color, o = {}) {
+  // gAV = grid alpha on vertical faces (Walls C: 0 so flutes read); tops/floors keep gA (~0.7).
   const k = color + '|' + JSON.stringify(o); if (cache.has(k)) return cache.get(k);
+  const gA = o.gA ?? 0.7, gAV = o.gAV ?? gA;
   const m = new THREE.ShaderMaterial({ fog: true, vertexColors: !!o.vc,
     uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(color) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
       hG: { value: new THREE.Color(LOOK.hemiGround) }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
-      cell: { value: o.cell || 1 }, gA: { value: o.gA ?? 0.7 }, gW: { value: o.gW || 1.1 } }]),
+      cell: { value: o.cell || 1 }, gA: { value: gA }, gAV: { value: gAV }, gW: { value: o.gW || 1.1 } }]),
     vertexShader: VS,
     fragmentShader: `#include <fog_pars_fragment>
-      ${SHADE} varying vec3 vW; varying vec3 vWN; varying vec3 vC;
-      void main(){ vec3 n=normalize(vWN); vec3 c=shade(base*vC,n)*(1.-0.05*checker(vW,n)); c=mix(c,gC,grid(vW,n)*gA);
+      ${SHADE} uniform float gAV; varying vec3 vW; varying vec3 vWN; varying vec3 vC;
+      void main(){ vec3 n=normalize(vWN); vec3 c=shade(base*vC,n)*(1.-0.05*checker(vW,n));
+        float ga=mix(gAV,gA,smoothstep(0.35,0.7,abs(n.y))); /* tops keep grid; vertical rock faces soft/off */
+        c=mix(c,gC,grid(vW,n)*ga);
         gl_FragColor=vec4(c,1.);
         #include <fog_fragment>
       }` });
@@ -55,27 +59,38 @@ export function gridMat(color, o = {}) {
 // grid spec (clipstyle v2): 2 px line at 1080 width, never under 1 px; white 70%, drawn on top of the shading
 export const gridU = { px: { value: 1 } };
 export const perfU = { minPx: { value: 6 } };
-export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0') {
+// Walls-C-adjacent breakable card: slate face/side/underside (luma ≤95), dark dashes, pale tear + lip. Never vermilion.
+export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0', o = {}) {
+  const topC = o.top || '#4A5D80', faceC = o.face || color || '#46587A', sideC = o.side || '#3A4A68', deepC = o.deep || '#2F3D58';
+  const lipC = o.lip || '#D6DCC6';
   const m = new THREE.ShaderMaterial({ fog: true, 
-    uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(color) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
+    uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(faceC) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
       hG: { value: new THREE.Color(LOOK.hemiGround) }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
-      cell: { value: 1 }, gA: { value: 0.7 }, gW: { value: 1.1 }, pC: { value: new THREE.Color(perf) }, tC: { value: new THREE.Color(tear) },
+      cell: { value: 1 }, gA: { value: 0.0 }, gW: { value: 1.1 }, // no white lattice on breakable cards
+      pC: { value: new THREE.Color(perf) }, tC: { value: new THREE.Color(tear) }, lip: { value: new THREE.Color(lipC) },
+      topCol: { value: new THREE.Color(topC) }, sideCol: { value: new THREE.Color(sideC) }, deepCol: { value: new THREE.Color(deepC) },
       hx: { value: new THREE.Vector3(...half) }, tearK: { value: -1 } }]),
     vertexShader: VS,
     fragmentShader: `#include <fog_pars_fragment>
-      ${SHADE} uniform vec3 pC,tC,hx; uniform float tearK,minPx; varying vec3 vW; varying vec3 vWN; varying vec3 vO; varying vec3 vON;
+      ${SHADE} uniform vec3 pC,tC,lip,topCol,sideCol,deepCol,hx; uniform float tearK,minPx; varying vec3 vW; varying vec3 vWN; varying vec3 vO; varying vec3 vON;
       float hash(float x){ return fract(sin(x*127.1)*43758.5453); }
-      void main(){ vec3 n=normalize(vWN); vec3 c=shade(base,n); c=mix(c,gC,grid(vW,n)*gA);
+      void main(){ vec3 n=normalize(vWN);
+        // face / top / side / underside from climbable slate (luma ≤95)
+        vec3 baseC = abs(n.y)>0.55 ? (n.y>0. ? topCol : deepCol) : (abs(n.y)<0.25 ? base : sideCol);
+        vec3 c=shade(baseC,n);
         vec3 a=abs(vON); vec2 p2 = a.x>0.5 ? vO.yz : a.y>0.5 ? vO.xz : vO.xy; vec2 h2 = a.x>0.5 ? hx.yz : a.y>0.5 ? hx.xz : hx.xy;
         bool lx=h2.x>=h2.y; float pL=lx?p2.x:p2.y, pS=lx?p2.y:p2.x, hS2=lx?h2.y:h2.x;
         float fwL=fwidth(pL), fwS=fwidth(pS), hwL=max(0.03,fwL*minPx*0.5), hwS=max(0.03,fwS*minPx*0.5);
-        float dash=step(mod(pS,0.25),0.16), dashL=step(mod(pL,0.25),0.16);
+        // dash 17/gap 10 ≈ 0.63 duty on 0.27 cell (~8 cm / 4.5 cm world at shelf scale)
+        float dash=step(mod(pS,0.27),0.17), dashL=step(mod(pL,0.27),0.17);
         float k=0.; float ins=min(0.14,hS2*0.35);
-        if(hS2>0.2 && abs(abs(pS)-(hS2-ins))<hwS) k=dashL;
-        if(abs(pL)<hwL) k=max(k,dash);
+        if(hS2>0.2 && abs(abs(pS)-(hS2-ins))<hwS) k=dashL; // long-edge perforations
+        if(abs(pL)<hwL) k=max(k,dash); // tear-line dashes across card
         if(tearK>=0.){ float g=mix(0.02,0.06,clamp(tearK/0.85,0.,1.))+(hash(floor(pS/0.04))-0.5)*0.02;
-          if(abs(pL)<g) { c=tC; k=0.; } else if(abs(pL)<g+hwL) k=1.; }
+          if(abs(pL)<g) { c=tC; k=0.; } else if(abs(pL)<g+hwL*1.2) { c=lip; k=0.; } }
         c=mix(c,pC,k);
+        // hard luma cap ≤95 (Rec.601) on card body; dashes/tear already set
+        { float L=dot(c,vec3(0.299,0.587,0.114)); if(L>0.3725 && k<0.5) c*=0.3725/L; }
         gl_FragColor=vec4(c,1.);
         #include <fog_fragment>
       }` });
@@ -125,22 +140,22 @@ export function createPost(R, pal) {
           float line=1.-smoothstep(0.,w,abs(fb-0.5)*2.-0.0); line=step(abs(fb-0.5),w*0.5);
           float rr=smoothstep(0.28,0.55,r)*(1.-smoothstep(0.95,1.2,r));
           float s=on*line*rr*spd*0.9; o=vec4(1.,1.,1.,s); }
-        // ---- enchantments (bolder; BRUSH greens #6E9A42 / sash #FFD23F) ----
+        // ---- enchantments (softened for Hero C chase readability: slim abdomen + sash) ----
         { vec2 hv=hUV*res; float asp=res.x/res.y;
-          // soft rim glow around hero (wider + stronger)
-          if(hRim>0.01){ float d=length((p-hv)/res.y); float g=smoothstep(0.16,0.015,d)*hRim*0.55;
+          // soft rim: tighter + lower alpha so silhouette reads
+          if(hRim>0.01){ float d=length((p-hv)/res.y); float g=smoothstep(0.10,0.02,d)*hRim*0.28;
             o=over(o,vec3(0.431,0.604,0.259),g); /* #6E9A42 */
-            float g2=smoothstep(0.09,0.01,d)*hRim*0.25; o=over(o,vec3(0.93,0.94,0.78),g2); }
-          // sash ribbon trail: brighter gold streaks behind hero
-          if(hTrail>0.02){ for(int i=0;i<8;i++){ float fi=float(i);
-            vec2 tp=hv+vec2((h1(fi*3.1+floor(sT*10.))-0.5)*28.*px, -(8.+fi*11.)*px);
-            float td=length(p-tp); float tw=(5.5-fi*0.35)*px; float ta=smoothstep(tw,0.,td)*hTrail*(0.85-fi*0.07);
+            float g2=smoothstep(0.055,0.012,d)*hRim*0.12; o=over(o,vec3(0.93,0.94,0.78),g2); }
+          // sash ribbon: fewer quieter gold streaks
+          if(hTrail>0.02){ for(int i=0;i<5;i++){ float fi=float(i);
+            vec2 tp=hv+vec2((h1(fi*3.1+floor(sT*10.))-0.5)*18.*px, -(6.+fi*10.)*px);
+            float td=length(p-tp); float tw=(3.8-fi*0.3)*px; float ta=smoothstep(tw,0.,td)*hTrail*(0.55-fi*0.06);
             o=over(o,vec3(1.0,0.824,0.247),ta); /* #FFD23F */ } }
-          // launch / Catch motes (more, brighter)
+          // launch / Catch motes: fewer, softer
           float spk=max(hSpark,hCatch);
-          if(spk>0.02){ for(int i=0;i<12;i++){ float fi=float(i); float ang=fi*0.524+sT*2.4; float rad=(14.+fi*8.)*px*spk;
+          if(spk>0.02){ for(int i=0;i<7;i++){ float fi=float(i); float ang=fi*0.897+sT*2.0; float rad=(12.+fi*7.)*px*spk;
             vec2 mp=hv+vec2(cos(ang)*rad*asp,sin(ang)*rad*(0.65+0.35*h1(fi)));
-            float md=length(p-mp); float ma=smoothstep(4.2*px,0.,md)*spk*0.9;
+            float md=length(p-mp); float ma=smoothstep(3.2*px,0.,md)*spk*0.55;
             vec3 mc=mix(vec3(1.0,0.824,0.247),vec3(0.525,0.682,0.345),step(0.5,h1(fi*7.3)));
             o=over(o,mc,ma); } }
         }

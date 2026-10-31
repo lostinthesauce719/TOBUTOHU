@@ -56,7 +56,7 @@
 <div class="c" id="cH" style="top:580px;font-size:150px">0 m</div><div class="best" id="cBest">BEST 0 m</div>
 <div id="cOffer"><div class="c" style="top:870px;font-size:52px">Second chance?</div><div class="c t2" id="cSub" style="top:930px;font-size:34px;font-weight:700"></div>
 <div id="pips"></div>
-<button class="btn" id="bCatch" style="left:130px"><b id="bCatch1">Catch</b><i id="bCatch2"></i></button><button class="btn" id="bNo" style="left:550px"><b id="bNo1">No thanks</b><i>end this run</i></button></div>
+<button class="btn" id="bCatch" style="left:130px"><b id="bCatch1">Catch</b><i id="bCatch2"></i></button><button class="btn" id="bNo" style="left:550px"><b id="bNo1">No thanks</b></button></div>
 <div id="cUsed" style="display:none"><div class="c t2" style="top:880px;font-size:52px">Second chance</div><div class="dis"></div><div class="c" style="top:1030px;font-size:50px;color:#B9C2CC">Catch used</div><div class="c" style="top:1092px;font-size:40px;color:#B9C2CC;font-weight:700">one per run</div></div>
 <button class="retry" id="bRetry">&#x21BB; RETRY</button><button class="home" id="bHome">&#x2302;<br>HOME</button>
 </div></div>
@@ -109,7 +109,7 @@ const hooks={
  remove(b){const m=meshes.get(b.id);if(!m)return;if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
  module(m){flushKit();decor(m.z0,m.z1,m.y0);}};
 // BRUSH clipkit: branch ledges + curved bark walls (visual only; contact faces sit on the flat sim colliders), one merged draw per module
-const KM=gridMat(0xffffff,{vc:1}),pendKit=[];
+const KM=gridMat(0xffffff,{vc:1,gAV:0}),pendKit=[]; /* Walls C: no grid on vertical rock; ledge tops keep gA */
 function flushKit(){if(!pendKit.length)return;const gs=[],ent={n:0,mesh:null};
  for(const b of pendKit){if(b.gone)continue;if(b.brk){meshFor(b,climbMat(b,zoneAt(b.y)));continue;}
   gs.push(b.kind==='shelf'?kit.ledge(THREE,b):kit.wall(THREE,b,Math.sign(b.x)||1));ent.n++;meshes.set(b.id,{kit:ent,b});}
@@ -119,11 +119,12 @@ function mergeKit(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;c
 // climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
 const pendBrk=[];function flushBrk(){flushKit();for(const [b,zc] of pendBrk){const m=meshes.get(b.id);if(b.brk&&m&&m.pool){poolDel(m);meshFor(b,climbMat(b,zc));}}pendBrk.length=0;}
 // look reset placeholders: trunk walls bark-brown, ledge shelves moss, winter ice pale; breakables warm with perforations
-const LC={bark:0x516384,moss:0x5476A2,ice:0x858FD1,brk:0xABB8EB}; // BRUSH clipstyle v2: slate climbables, lavender ice, pale lavender breakables (dark perforations)
+const LC={bark:0x516384,moss:0x5476A2,ice:0x858FD1,brk:0x46587A}; // climbable slate breakables (luma≤95); never vermilion
 function climbMat(b,zc){
- if(b.brk)return perfMat(LC.brk,[b.hx,b.hy,b.hz],CB.perforation,CB.breakable_tear);
- if(b.kind==='shelf')return gridMat(zc.key==='winter'?LC.ice:LC.moss);
- return gridMat(LC.bark);}
+ if(b.brk)return perfMat(LC.brk,[b.hx,b.hy,b.hz],CB.perforation||'#140F0A',CB.breakable_tear||'#EEF2E0',
+  {top:'#4A5D80',face:'#46587A',side:'#3A4A68',deep:'#2F3D58',lip:'#D6DCC6'});
+ if(b.kind==='shelf')return gridMat(zc.key==='winter'?LC.ice:LC.moss,{gAV:0});
+ return gridMat(LC.bark,{gAV:0});}
 // ---------- decor (separate seeded stream, no collision) ----------
 const deco=[];const VC=gridMat(0xffffff,{vc:1,gA:0.3});const _c=new THREE.Color();
 function colored(g,hex){g=g.index?g.toNonIndexed():g;const n=g.attributes.position.count,a=new Float32Array(n*3);_c.setHex(hex);for(let i=0;i<n;i++){a[i*3]=_c.r;a[i*3+1]=_c.g;a[i*3+2]=_c.b;}g.setAttribute('color',new THREE.BufferAttribute(a,3));g.deleteAttribute('uv');return g;}
@@ -133,8 +134,8 @@ function merge(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;cons
 const FC={spring:[0xABB8EB,0x969EDE,0xDBE5FD,0xC7D6EB],summer:[0x969EDE,0x858FD1],autumn:[0xABB8EB,0x858FD1],winter:[0xC7D6EB,0xABB8EB]}; // lavender cedars (clipstyle)
 // decor: mid cedars (BRUSH spec). Layout stream unchanged; per-zone colour buffers so season blends fade live.
 function decor(z0,z1,y){const zc=zoneAt(y),places=[];
- for(let z=z0;z>z1;z-=8){for(const s of[-1,1]){if(rD()<0.88){const H=55+rD()*50,R=2.8+rD()*2.4,x=s*(25+R*2.4+rD()*(48-R*2.4)),zz=z-rD()*8;
-  places.push([x,y-70,zz,H,R,1+(rD()*1e6|0)]);}}} /* Scenery B denser mid cedars 25-70 from lane */
+ for(let z=z0;z>z1;z-=4.5){for(const s of[-1,1]){if(rD()<0.97){const H=55+rD()*50,R=2.8+rD()*2.4,x=s*(25+R*2.2+rD()*(42-R*2.2)),zz=z-rD()*4.2;
+  places.push([x,y-70,zz,H,R,1+(rD()*1e6|0)]);}}} /* Scenery B mid band 25-70: packed like board_scenery_B_overview */
  let toriiP=null;if(rD()<0.3){const s=rD()<.5?-1:1;toriiP=[s,s*(28+rD()*10),y-2,z1+rD()*(z0-z1)];} /* torii: background, no collider */
  if(zc.n!=='Spring cedar'&&rD()<0.5){rD();rD();rD();rD();} /* consume waterfall rDs — scenery.js owns falls */
  if(zc.n==='Autumn steam'||rD()<0.15){rD();rD();rD();rD();} /* consume steam rDs — scenery.js owns steam */
@@ -337,6 +338,21 @@ if(SIM){let t=0,TR=[],tk=0;
   catchShown=performance.now();ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button <0.5 s',P.mode]);catchShown=performance.now()-600;ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere >0.5 s',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button >0.5 s',P.mode]);window.__cw={...window.__cw,test:R2.map(r=>r.join('=')).join(';')};}
+ // capture-only breakable card close-ups: ?brkcap=intact|torn|falling (visual only; no sim write)
+ if(Q.has('brkcap')){const phase=Q.get('brkcap'); // intact | torn | falling
+  // hide scenery/course noise; stage one slate card in front of cam
+  S.traverse(o=>{if(o.isLight||o===S)return; if(o.userData&&o.userData.sky)return; o.visible=false;});
+  sky.visible=true; S.fog.near=40; S.fog.far=180;
+  const hx=2.2,hy=0.35,hz=4.5; const mat=perfMat(0x46587A,[hx,hy,hz],'#140F0A','#EEF2E0',{top:'#4A5D80',face:'#46587A',side:'#3A4A68',deep:'#2F3D58',lip:'#D6DCC6'});
+  if(phase==='torn')mat.uniforms.tearK.value=0.55; else if(phase==='falling')mat.uniforms.tearK.value=1.0; else mat.uniforms.tearK.value=-1;
+  const card=new THREE.Mesh(UB,mat); card.scale.set(hx*2,hy*2,hz*2);
+  card.position.set(0,0,-14); card.rotation.x=phase==='falling'?0.35:0.08; card.rotation.z=phase==='falling'?-0.25:0;
+  if(phase==='falling')card.position.set(1.2,-1.5,-12);
+  card.visible=true; S.add(card);
+  cam.position.set(0,3.2,2); cam.lookAt(0,0,-14); cam.fov=42; cam.updateProjectionMatrix();
+  post.U.spd.value=0; post.U.mistY.value=-1e4; post.U.hTrail.value=0; post.U.hSpark.value=0; post.U.hRim.value=0; post.U.hCatch.value=0;
+  for(const v of post.U.cSt.value)v.set(0,0,0,0);
+  post.render(S,cam);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
  document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}

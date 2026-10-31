@@ -252,14 +252,13 @@ export function createHero(scene, P, boxes) {
     if (state === 'wall') { patch.position.set(sf.d - sf.side * 0.01, P.pos.y - 0.1, P.pos.z); patch.rotation.set(0, sf.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0); }
 
     // ---- enchantments (read by index → post overlay; 0 extra draws) ----
-    // bolder sash ribbon, launch/Catch motes, rim glow (still overlay-only)
+    // softened for Hero C chase readability (slim abdomen + sash)
     const fast = speed > 6 || (state === 'air' && Math.abs(P.vel.y) > 4);
-    fx.trail = Math.max(0, Math.min(1, fx.trail + (fast ? 1 : -1) * dt * 4.2));
+    fx.trail = Math.max(0, Math.min(1, fx.trail + (fast ? 1 : -1) * dt * 3.2));
     if (st.kick < 0.4) fx.spark = Math.max(fx.spark, 1 - st.kick / 0.4);
-    fx.spark = Math.max(0, fx.spark - dt * 1.4);
-    // idle shimmer so enchantments read even when standing
-    const idleGlow = idle ? 0.22 + 0.08 * Math.sin(P.t * 2.2) : 0;
-    fx.rim = Math.min(1, 0.45 + 0.45 * fx.trail + 0.5 * fx.spark + idleGlow);
+    fx.spark = Math.max(0, fx.spark - dt * 1.6);
+    const idleGlow = idle ? 0.08 + 0.04 * Math.sin(P.t * 2.2) : 0;
+    fx.rim = Math.min(1, 0.22 + 0.28 * fx.trail + 0.35 * fx.spark + idleGlow);
     fx.state = state; fx.speed = speed; fx.kick = st.kick;
 
     st.prev = state; if (state !== 'air') st.lastSf = sf;
