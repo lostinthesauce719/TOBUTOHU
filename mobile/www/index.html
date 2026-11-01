@@ -208,7 +208,7 @@ const WALLET=createWallet();
 // migrate legacy powerups store owned skins into wallet once
 try{const leg=JSON.parse(localStorage.getItem('tobu_powerups_v1')||'{}');if(leg&&leg.owned){for(const k of Object.keys(leg.owned)){if(leg.owned[k]&&!WALLET.owns(k))WALLET.grant(k);}if(leg.active&&WALLET.owns(leg.active))WALLET.equip(leg.active);localStorage.removeItem('tobu_powerups_v1');}}catch{}
 if(Q.has('wallet')){const[c,g]=Q.get('wallet').split(',').map(Number);WALLET.debugSet({coins:c|0,gems:g|0});}
-const WINGS0=SEASONS.includes(WALLET.active)?WALLET.active:null;
+const WINGS0=SEASONS.includes(Q.get('wings'))?Q.get('wings'):(SEASONS.includes(WALLET.active)?WALLET.active:null);
 const sim=createSim({seed:SEED,board:BOARD,adapt:1/* skill-only factor goes here; forced 1 on daily/weekly */,nobrk:Q.has('nobrk'),nomist:Q.has('nomist'),miss:MISS,wings0:WINGS0,hooks});
 const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
 
