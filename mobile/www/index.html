@@ -47,6 +47,33 @@
 #tb .row button{flex:1;height:110px;border-radius:28px;background:rgba(200,218,235,.55);box-shadow:inset 0 0 0 2px #1E2A3A;border:0;font:inherit;font-size:36px;font-weight:800;color:#1E2A3A;cursor:pointer}
 #tb .hud{position:absolute;left:48px;bottom:80px;padding:14px 28px;border-radius:20px;background:rgba(200,218,235,.5);box-shadow:inset 0 0 0 2px #1E2A3A;font-size:32px;font-weight:800}
 #tb .ver{position:absolute;left:0;right:0;bottom:40px;text-align:center;font-size:22px;font-weight:700;color:#7A8A9A}
+
+/* Power-ups shop (BRUSH frosted, prices TBD; no currency) */
+#shop{position:fixed;inset:0;display:none;z-index:7;background:linear-gradient(180deg,#9EC9D8 0%,#B8C8E4 45%,#C4B8D8 100%);font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#1C2A44;font-weight:900}
+#shop.on{display:block}
+#shop::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 18% 22%,rgba(180,160,220,.45) 0 140px,transparent 180px),radial-gradient(circle at 82% 18%,rgba(140,180,220,.4) 0 160px,transparent 210px),radial-gradient(circle at 70% 70%,rgba(160,150,210,.35) 0 180px,transparent 240px);pointer-events:none}
+#sb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--su,1))}
+#sb .back{position:absolute;left:48px;top:48px;height:64px;padding:0 28px;border-radius:32px;background:rgba(232,238,246,.82);box-shadow:inset 0 0 0 2px #1C2A44;border:0;font:inherit;font-size:32px;font-weight:800;color:#1C2A44;cursor:pointer}
+#sb .hd{position:absolute;left:0;right:0;top:160px;text-align:center;font-size:72px;transform:translateY(-50%)}
+#sb .sub{position:absolute;left:0;right:0;top:230px;text-align:center;font-size:28px;font-weight:700;color:#3A4A68;transform:translateY(-50%)}
+#sb .cards{position:absolute;left:80px;top:300px;width:920px;display:flex;flex-direction:column;gap:28px}
+#sb .card{position:relative;height:220px;border-radius:36px;background:rgba(232,238,246,.82);box-shadow:inset 0 0 0 3px #1C2A44;display:flex;align-items:center;padding:0 28px;gap:24px;box-sizing:border-box}
+#sb .card.locked{opacity:.72;background:rgba(180,190,210,.55)}
+#sb .card .ico{width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.45);box-shadow:inset 0 0 0 2px #3A4A68;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#sb .card .ico img{width:78%;height:78%;object-fit:contain;display:block}
+#sb .card .meta{flex:1;min-width:0}
+#sb .card .nm{font-size:40px;line-height:1.1}
+#sb .card .bl{font-size:26px;font-weight:700;color:#3A4A68;margin-top:6px}
+#sb .card .pill{display:inline-block;margin-top:12px;padding:6px 18px;border-radius:20px;font-size:22px;font-weight:800}
+#sb .pill.available{background:#E8CF8E;color:#1C2A44}
+#sb .pill.active{background:#7AA8A4;color:#F6F8FC}
+#sb .pill.owned{background:#A8C9C0;color:#1C2A44}
+#sb .pill.locked{background:#1C2A44;color:#E8EEF6}
+#sb .card .act{width:160px;height:72px;border-radius:24px;border:0;font:inherit;font-size:30px;font-weight:800;color:#1C2A44;background:rgba(200,218,235,.7);box-shadow:inset 0 0 0 2px #1C2A44;cursor:pointer;flex:none}
+#sb .card .act:disabled{cursor:default;opacity:.85}
+#sb .foot{position:absolute;left:0;right:0;bottom:80px;text-align:center;font-size:24px;font-weight:700;color:#7A8A9A}
+#tb .shopbtn{position:absolute;left:240px;top:1180px;width:600px;height:100px;border:0;padding:0;background:transparent;cursor:pointer}
+#tb .shopbtn img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
 </style></head>
 <body><div id="hud"><span id="h">0 m</span>
 <span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · drag to steer</div>
@@ -66,8 +93,16 @@
 <div class="logo">TOBU</div><div class="tag">climb the forest</div>
 <button class="play" id="tPlay">PLAY</button>
 <div class="row"><button id="tDaily">Daily</button><button id="tWeekly">Weekly</button><button id="tFriends">Friends</button></div>
+<button class="shopbtn" id="tShop" aria-label="shop"><img src="./art/powerups/shop/shop_button.png" alt="Shop"></button>
 <div class="hud" id="tHud">HUD 0 m</div>
-<div class="ver">Tobu 0.1.0 (art-final)</div>
+<div class="ver">Tobu 0.1.0 (powerups-art)</div>
+</div></div>
+<div id="shop"><div id="sb">
+<button class="back" id="sBack">&lt; SHOP</button>
+<div class="hd">Power-ups</div>
+<div class="sub">Repeatable boosts for your climb.</div>
+<div class="cards" id="sCards"></div>
+<div class="foot">No premium currency · costs TBD<br>Tobu shop · clip style</div>
 </div></div>
 <div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
 <script type="module">
@@ -76,6 +111,8 @@ import {createHero} from './hero.js';import {kit,cedarZone,zoneMix} from './clip
 import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
+import {createPowerups,SEASONS} from './powerups.js';
+import {SHOP_ICON_URIS} from './art/powerups/shop_icon_uris.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),CLIP=Q.get('clip'),MISS=+Q.get('miss')||0,LAYER=Q.get('layer'); /* clip=t0,secs,fps capture-only; layer=far|mid|play|fg|mtn|all for kamishibai PNG dumps */
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
@@ -160,6 +197,10 @@ const P=sim.P,mistY=sim.mist,ZT=sim.ZT,mods=sim.mods,modAt=sim.modAt;
 
 // ---------- player: style D grasshopper, contact-driven poses (visual only, hero.js) ----------
 const hero=createHero(S,P,sim.boxes);hero.parts.forEach(o=>post.tag(o,CLS.hero)); // hero row is 0 px: its own hull draws it
+const POW=await createPowerups(S,SEED,hero);
+const WINGQ=Q.get('wings'),WINGPOSE=Q.get('wingpose')||'open';if(WINGQ&&SEASONS.includes(WINGQ)){POW.forceWings(WINGQ,WINGPOSE);}
+if(Q.has('pugrant')&&WINGQ)POW.grant(WINGQ);
+if(Q.get('pupick'))POW.setForcePick(Q.get('pupick'));
 // mist: drawn by the post pass as a scalloped edge (line over band over body); warning line inside 3 s, off past 3.5 s
 const MW=G.mist;let mSp=0,mLast=null,mWarn=false,mWarnA=0;const mRead=document.createElement('div');mRead.id='mread';document.body.appendChild(mRead);
 function mistTick(dt){if(mLast!==null)mSp+=((mistY.v-mLast)/dt-mSp)*(1-Math.exp(-dt/0.5));mLast=mistY.v;
@@ -249,7 +290,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
   /* live season colour cross-fade (visual only; same as scenery far cedars) */
   if(d.userData.per){const zm=zoneMix(Math.max(0,d.userData.y0)),key=zm.a+zm.b+zm.t.toFixed(3);if(key!==d.userData.fadeKey){d.userData.fadeKey=key;const a=d.userData.per[zm.a],b=d.userData.per[zm.b],c=d.geometry.getAttribute('color'),o=c.array,tt=zm.t;for(let i=0;i<o.length;i++)o[i]=a[i]+(b[i]-a[i])*tt;c.needsUpdate=true;}}});
  for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+60){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-70;} /* cull mid cedars past 70 m — was fogFar+10 (~130), caused 41 draws in long clips */
- while(deco.length>4){const d=deco.shift();S.remove(d);d.geometry.dispose();} /* hard cap 4 mid-cedar draws */
+ const decoCap=(lastZone==='Winter ice')?2:4;while(deco.length>decoCap){const d=deco.shift();S.remove(d);d.geometry.dispose();} /* hard cap 4; winter 2 so wings+pickups stay ≤40 */
  /* cull fully-fogged kit meshes (one merged draw per module) so long clips stay ≤40 */
  for(const [id,m] of [...meshes]){if(!m||!m.kit||!m.kit.mesh)continue;const z=m.b.z+(m.b.hz||0);const mesh=m.kit.mesh;if(z>P.pos.z+50){mesh.visible=false;continue;}mesh.visible=(m.b.z-(m.b.hz||0))>P.pos.z-65;}
  for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
@@ -283,16 +324,36 @@ let cwKey='';function showCW(mode){const st=mode==='catch'?catchState():P.caught
   const sz=st==='ad'?40:50;$('bCatch1').style.fontSize=$('bNo1').style.fontSize=sz+'px'; // one shared label size per screen (ad screen 40 px)
   const pe=$('pips');if(c[3]&&BOARD==='free'){pe.style.display='flex';pe.innerHTML=pipsHTML(SAVES.n);pe.style.left=(330-(3*parseFloat(getComputedStyle(cbEl).getPropertyValue('--pip')||45)+2*12+pe.querySelector('span').offsetWidth+6)/2)+'px';}else pe.style.display='none';}
  window.__cw={state:st,pip:(()=>{const p=document.querySelector('#pips .p');return p&&$('pips').style.display!=='none'?+p.getBoundingClientRect().width.toFixed(2):0})(),catchBtn:+$('bCatch').getBoundingClientRect().width.toFixed(1),noBtn:+$('bNo').getBoundingClientRect().width.toFixed(1)};}
+
+// ---- Power-ups shop (frosted; prices TBD; no ads / no currency) ----
+function fitShop(){const u=Math.min(innerWidth/1080,innerHeight/1920);const sb=$('sb');if(sb)sb.style.setProperty('--su',u);}
+function paintShop(){const st=POW.getShopState(best);const host=$('sCards');if(!host)return;const ico=SHOP_ICON_URIS;
+ host.innerHTML='';for(const r of st.rows){const card=document.createElement('div');card.className='card'+(r.state==='locked'?' locked':'');
+  const pill=r.state==='active'?'OWNED · ACTIVE':r.state==='owned'?'OWNED':r.state==='available'?'AVAILABLE':'LOCKED';
+  const pillCls=r.state==='active'?'active':r.state==='owned'?'owned':r.state==='available'?'available':'locked';
+  const act=r.state==='locked'?'Locked':r.state==='available'?'TBD':r.state==='active'?'Owned':'Equip';
+  card.innerHTML=`<div class="ico"><img src="${ico[r.season]}" alt=""></div><div class="meta"><div class="nm">${r.label}</div><div class="bl">${r.blurb}</div><span class="pill ${pillCls}">${pill}</span></div><button class="act" data-s="${r.season}" ${r.state==='locked'||r.state==='active'?'disabled':''}>${act}</button>`;
+  host.appendChild(card);}
+ host.querySelectorAll('.act').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const r=POW.setActiveFromShop(b.dataset.s);if(r==='tbd'){/* cost model open */}paintShop();}));}
+function showShop(){const el=$('shop');if(!el)return;el.classList.add('on');paintShop();fitShop();hideTitle();}
+function hideShop(){const el=$('shop');if(el)el.classList.remove('on');}
 // Title A frost (visual only). Hidden for sim/shot/bot/clip; ?menu=title forces; ?menu=gameover forces catch panel.
 function fitTitle(){const u=Math.min(innerWidth/1080,innerHeight/1920);const tb=$('tb');if(tb)tb.style.setProperty('--tu',u);}
 function showTitle(){const te=$('title');if(!te)return;te.classList.add('on');const n=SAVES.n;let h='';for(let i=0;i<3;i++)h+=`<div class="p ${i<n?'f':'e'}"></div>`;h+=`<span>Saves ${n}/3</span>`;$('tSaves').innerHTML=h;$('tHud').textContent='HUD '+(best|0)+' m';fitTitle();}
 function hideTitle(){const te=$('title');if(te)te.classList.remove('on');}
-const TITLE_ON=MENUQ==='title'||(!SIM&&!AUTO&&!SHOT&&!CLIP&&!LAYER&&MENUQ!=='off'&&MENUQ!=='gameover');
+const TITLE_ON=MENUQ==='title'||(!SIM&&!AUTO&&!SHOT&&!CLIP&&!LAYER&&MENUQ!=='off'&&MENUQ!=='gameover'&&MENUQ!=='shop'&&MENUQ!=='catch');
 if(TITLE_ON){showTitle();addEventListener('resize',fitTitle);
  $('tPlay').addEventListener('click',e=>{e.stopPropagation();hideTitle();});
- for(const id of['tDaily','tWeekly','tFriends','tGear']){const b=$(id);if(b)b.addEventListener('click',e=>e.stopPropagation());}}
+ for(const id of['tDaily','tWeekly','tFriends','tGear']){const b=$(id);if(b)b.addEventListener('click',e=>e.stopPropagation());}
+}
+
+const tShop=$('tShop');if(tShop)tShop.addEventListener('click',e=>{e.stopPropagation();showShop();});
+const sBack=$('sBack');if(sBack)sBack.addEventListener('click',e=>{e.stopPropagation();hideShop();if(MENUQ!=='shop')showTitle();});
+addEventListener('resize',fitShop);
 if(MENUQ==='gameover'){P.mode='dead';P.maxH=Math.max(P.maxH||0,482);best=Math.max(best,649);P.caught=false;showCW('dead');hideTitle();}
 if(MENUQ==='title'){showTitle();}
+if(Q.has('shopdemo')){POW.demoShop();best=250;}
+if(MENUQ==='shop'){hideTitle();showShop();}
 if(MENUQ==='catch'){ /* force frost Catch offer for capture: Free Catch today, 45px cream pips, No thanks */
   P.mode='catch'; catchSrc='free'; P.maxH=Math.max(P.maxH||0,482); best=Math.max(best,649); showCW('catch'); hideTitle(); }
 const stopEv=e=>{e.stopPropagation();};for(const id of['bCatch','bNo','bRetry','bHome']){const b=$(id);b.addEventListener('pointerdown',stopEv);b.addEventListener('pointerup',stopEv);}
@@ -322,7 +383,7 @@ const CLOSE=Q.get('cam')==='close';let closeSide=1;const closePos=new THREE.Vect
 function closeCam(dt){closeSide+=((P.state==='wall'?-P.wallSide:closeSide>0?1:-1)-closeSide)*(1-Math.exp(-3*dt));const r=hero.root.position;
  _cv.set(r.x+closeSide*2.1,r.y+0.9,r.z+1.9);closePos.lerp(_cv,1-Math.exp(-10*dt));cam.position.copy(closePos);cam.lookAt(r.x,r.y,r.z-0.2);} // review camera only (?cam=close)
 const STK=new Map(); /* ?strikelog: strike start times for capture planning */let catchShown=0,MANUAL=false; /* catchtest only: hand input back to the player */function tick(){if(P.mode==='catch'&&!catchShown)catchShown=performance.now();if((!AUTO||MANUAL)&&P.mode==='catch'&&performance.now()-catchShown<500)pending=false; /* 0.5 s guard so a climbing tap can't take the Catch */
- const inp=AUTO&&!MANUAL?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);if(SIM&&Q.has('strikelog'))for(const k of sim.strikes)if(k&&!STK.has(k.id))STK.set(k.id,+(k.t0+LT.warn).toFixed(3));flushBrk();updateCam(DT);shadowTick();mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);if(CLOSE)closeCam(DT);}
+ const inp=AUTO&&!MANUAL?sim.botInput():{press:pending,steer:steer||((K.KeyD||K.ArrowRight?1:0)-(K.KeyA||K.ArrowLeft?1:0))};pending=false;sim.tick(inp);if(SIM&&Q.has('strikelog'))for(const k of sim.strikes)if(k&&!STK.has(k.id))STK.set(k.id,+(k.t0+LT.warn).toFixed(3));flushBrk();updateCam(DT);shadowTick();mistTick(DT);hero.update(DT,R.domElement.width/1080,R.domElement.width,R.domElement.height);POW.update(DT,P,cam);if(CLOSE)closeCam(DT);}
 if(SIM){let t=0,TR=[],tk=0;
  if(CLIP){ // capture-only: real-time frame dump as JPEG b64 list (seasons clips)
   const [c0,csecs,cfps]=CLIP.split(',').map(Number), step=1/cfps, n=Math.round(csecs*cfps), frames=[]; let maxDraws=0,maxShake=0;
@@ -354,7 +415,7 @@ if(SIM){let t=0,TR=[],tk=0;
   for(const v of post.U.cSt.value)v.set(0,0,0,0);
   post.render(S,cam);}
  if(Q.has('dump')){const pre=document.createElement('pre');pre.id='shot';pre.textContent=R.domElement.toDataURL('image/png');document.body.appendChild(pre);}
- document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end});}}
+ document.title="SIM "+JSON.stringify({wx:scen.wxOn,stk:[...STK.values()].slice(0,12),birds:scen.birdsInView,shake:window.__shake,cw:window.__cw,draws:post.U.draws,tight:+tightK.toFixed(2),fov:+cam.fov.toFixed(0),warn:+mWarnA.toFixed(2),msp:+mSp.toFixed(2),vy:+P.vel.y.toFixed(1),st:P.state,cam:cam.position.toArray().map(v=>+v.toFixed(1)),pz:+P.pos.z.toFixed(1),mode:P.mode,mist:+mistY.v.toFixed(1),py:+P.pos.y.toFixed(1),my:+post.U.mistY.value.toFixed(0),m:+P.maxH.toFixed(1),t:+t.toFixed(1),...P.stats,ZT,zone:lastZone,mods:sim.log.end,pow:{active:POW.active,mode:POW.mode,shown:POW.pickRoot.children.filter(c=>c.visible).length,stub:!POW.active}});}}
 else{let last=performance.now(),acc=0;(function loop(now){acc+=Math.min(0.1,(now-last)/1000);last=now;while(acc>=DT){tick();acc-=DT;}render();requestAnimationFrame(loop);})(last);}
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();R.setSize(innerWidth,innerHeight);perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);});
 if('serviceWorker' in navigator&&!SIM&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{}); /* PWA: Add to Home Screen on iPhone Safari over https */
