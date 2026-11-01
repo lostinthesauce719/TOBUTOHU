@@ -97,10 +97,11 @@ export function createHero(scene, P, boxes) {
   const _wPos0 = _wPos.array.slice(_wv0 * 3, (_wv0 + _wvn) * 3);
   const _wCol0 = _wCol.array.slice(_wv0 * 3, (_wv0 + _wvn) * 3);
   const _tint = new THREE.Color(0x86AE58);
-  let _stubHidden = false;
+  let _stubHidden = null; // null so first setStubWings(false) actually applies #86AE58 (stubs bake cream belly)
   function setStubWings(hide) {
+    hide = !!hide;
     if (hide === _stubHidden) return;
-    _stubHidden = !!hide;
+    _stubHidden = hide;
     for (let i = 0; i < _wvn; i++) {
       const o = (_wv0 + i) * 3, s = i * 3;
       if (hide) { _wPos.array[o] = _wPos.array[o + 1] = _wPos.array[o + 2] = 0; }
@@ -111,7 +112,7 @@ export function createHero(scene, P, boxes) {
     }
     _wPos.needsUpdate = true; if (!hide) _wCol.needsUpdate = true;
   }
-  setStubWings(false); // default: visible, tinted lit green
+  setStubWings(true); // default: collapsed — boxes read as cream wings in chase
   const boneBy = new Map(HM.bones.map(b => [b.name, b])), _inv = new THREE.Matrix4(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
   const bone = (L, i, a, b) => placeBone(THREE, boneBy.get(legName(L, i)), _a.copy(a).applyMatrix4(_inv), _b.copy(b).applyMatrix4(_inv)); // IK points (world) -> body-local
   // antennas are baked into clipkit heroMesh (1 SkinnedMesh draw) — no extra antenna props

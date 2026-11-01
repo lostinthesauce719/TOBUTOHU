@@ -94,9 +94,10 @@ export async function createPowerups(scene, seed, hero) {
     mesh.frustumCulled = false;
     mesh.userData.layer = 'play';
     mesh.userData.side = side;
-    // soft shadow card under the wing (#1C2438 @ ~30%)
+    // soft shadow: same wing PNG alpha as mask, tinted #1C2438 @ ~30% (no grey square quad)
     const shMat = new THREE.MeshBasicMaterial({
-      color: SHADOW, transparent: true, opacity: 0.30, depthWrite: false, fog: true, side: THREE.DoubleSide,
+      map: wingFold.spring, color: SHADOW, transparent: true, opacity: 0.30,
+      depthWrite: false, fog: true, side: THREE.DoubleSide,
     });
     const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), shMat);
     shadow.position.set(0, -0.04, 0.01);
@@ -156,22 +157,29 @@ export async function createPowerups(scene, seed, hero) {
 
   function setWingMaps(season, kind, frame) {
     const L = wingL.material, R = wingR.material;
+    const sL = wingL.userData.shadow.material, sR = wingR.userData.shadow.material;
     L.opacity = 1; R.opacity = 1;
     if (kind === 'flap') {
       const tL = flapL[season], tR = flapR[season];
       const u = (frame % 8) / 8;
       tL.offset.x = u; tR.offset.x = u;
       L.map = tL; R.map = tR;
+      sL.map = tL; sR.map = tR; // share sheet so flap offset masks shadow too
     } else if (kind === 'open') {
       L.map = wingOpen[season]; R.map = wingOpen[season];
+      sL.map = wingOpen[season]; sR.map = wingOpen[season];
     } else {
       L.map = wingFold[season]; R.map = wingFold[season];
+      sL.map = wingFold[season]; sR.map = wingFold[season];
     }
     L.needsUpdate = true; R.needsUpdate = true;
+    sL.needsUpdate = true; sR.needsUpdate = true;
   }
 
   function applyStub() {
-    if (hero.setStubWings) hero.setStubWings(!!active);
+    // Always collapse procedural stubs — tinted boxes still read as cream folded wings in chase.
+    // Paper wings are the only wing read when a power-up is active.
+    if (hero.setStubWings) hero.setStubWings(true);
   }
 
   function equip(season) {

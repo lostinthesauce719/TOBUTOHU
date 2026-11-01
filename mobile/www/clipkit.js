@@ -64,7 +64,7 @@ export function buildHero(THREE) {
   // procedural wing stubs: vertex range recorded so powerups can hide/tint them (visual only)
   let wingVertStart = 0; for (const g of gs) wingVertStart += g.attributes.position.count;
   for (const s of [-1, 1]) {
-    add(new THREE.BoxGeometry(0.055, 0.016, 0.88), M([s * 0.042, 0.055, -0.30], [0.04, s * 0.03, s * 0.1]), (n) => n.y > 0.3 ? top : n.y < -0.3 ? belly : crease); // longer folded wing
+    add(new THREE.BoxGeometry(0.055, 0.016, 0.88), M([s * 0.042, 0.055, -0.30], [0.04, s * 0.03, s * 0.1]), () => top); // stubs always #86AE58 (never cream belly)
   }
   let wingVertEnd = 0; for (const g of gs) wingVertEnd += g.attributes.position.count;
   // leg segments: unit length along +Y in bone space
