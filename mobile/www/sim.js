@@ -8,10 +8,10 @@
 //  * wallet / shop / ads never touch this state; wing loadout enters only via log.wings0 + seeded pickups
 import { ECONOMY } from './economy.js';
 
-export const SIM_VERSION = 'tobu-sim-6'; // 6: wing boost (duration+jumps, seeded lane pickups) + seeded coin pickups; was 5: telegraphed summer lightning
+export const SIM_VERSION = 'tobu-sim-7'; // 7: tap-to-jump buffer 0.14s (press on touchstart; one jump per ground/wall/coyote contact + wing boost). 6 frozen in sim_v6.js (wings+coins). 5 in sim_v5.js.
 export const DT = 1 / 120;
 export function mul(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-export const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.12,
+export const T={runSpeed:12,lateral:7,groundAccel:60,airAccel:16,gravity:32,jumpVy:12.5,coyote:0.10,jumpBuffer:0.14,
  wallRayLen:1.0,wallMinSpeed:5,wallMaxNormalY:0.3,wallEntryVy:4.5,wallGravStart:0.12,wallGravEnd:1.0,wallMaxTime:1.4,wallStick:4,
  wallJumpOut:7.5,wallJumpUp:11,wallJumpKeep:1.0,sameWallCooldown:0.35};
 export const MIST={start:-10,delay:3,ease:2,zoneFrom:[0,120,250,400],mps:[0.75,0.8,0.85,0.85],trail:40, // SEASONS 2026-10-17 01:12

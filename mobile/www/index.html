@@ -6,7 +6,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <title>Tobu</title>
-<style>html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;-webkit-overflow-scrolling:auto;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+<style>html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-overflow-scrolling:auto}canvas{touch-action:none;user-select:none;-webkit-user-select:none;display:block}
 #hud{position:fixed;left:12px;top:10px;color:#fff;text-shadow:0 1px 3px #000;white-space:pre;pointer-events:none;font-weight:600}
 #h{font-size:34px}#zone{position:fixed;left:0;right:0;top:38%;text-align:center;color:#fff;font-size:30px;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none}
 #ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
@@ -85,7 +85,7 @@
 #sb .gems button{margin:4px;padding:10px 18px;border-radius:18px;border:0;font:inherit;font-size:22px;font-weight:800;background:rgba(200,218,235,.75);box-shadow:inset 0 0 0 2px #1C2A44;color:#1C2A44;cursor:pointer}
 </style></head>
 <body><div id="hud"><span id="h">0 m</span><span class="coins" id="hCoins"></span>
-<span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · drag to steer</div>
+<span id="sub"></span></div><div id="zone"></div><div id="hint">Tap to jump · keep tapping to climb · drag to steer</div>
 <div id="ov"><b id="ovT"></b><div id="ovS"></div></div>
 <div id="cw"><div id="cb"><div class="pn"></div>
 <div class="c" style="top:350px;font-size:70px">INTO THE MIST</div><div class="c t2" style="top:470px;font-size:40px;font-weight:800">HEIGHT</div>
@@ -116,7 +116,7 @@
 <div class="gems" id="sGemsBuy"></div>
 <div class="foot">Prices tunable in economy.js · gem IAP = stub (LAUNCH)<br>Ranked: same board + wing glyph when boosted</div>
 </div></div>
-<div id="help">Keys: A/D or arrows steer, Space jump/kick · ?bot ?seed=N ?debug</div>
+<div id="help">Tap / Space = jump · A/D or drag = steer · keep tapping to climb · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';import {kit,cedarZone,zoneMix} from './clipkit.js';
@@ -139,7 +139,7 @@ const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
 const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:!!LAYER}); R.setPixelRatio(Math.min(2,devicePixelRatio)); if(LAYER){R.setClearColor(0x000000,0);} 
-const CAPW=+Q.get('capw')||0,CAPH=+Q.get('caph')||0;R.setSize(CAPW||innerWidth,CAPH||innerHeight);document.body.appendChild(R.domElement); /* ?capw/?caph capture-only size */perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
+const CAPW=+Q.get('capw')||0,CAPH=+Q.get('caph')||0;R.setSize(CAPW||innerWidth,CAPH||innerHeight);document.body.appendChild(R.domElement);R.domElement.style.touchAction='none';R.domElement.style.userSelect='none';R.domElement.style.webkitUserSelect='none'; /* ?capw/?caph capture-only size */perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
 const S=new THREE.Scene();const sky=makeSky();sky.userData.layer='far';S.add(sky);S.fog=new THREE.Fog(LOOK.fog,LOOK.fogNear,LOOK.fogFar);
 const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
 
@@ -274,13 +274,20 @@ function lightDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_rt.set
   bolt.quaternion.copy(cam.quaternion); /* billboard so column faces the lens; depth still tested vs walls */
   const bu=bolt.material.uniforms;bu.ph.value=ph;bu.prog.value=prog;bu.flash.value=fl;bu.glow.value=glow;bu.t.value=P.t;bu.R.value=LT.r;}}
 
-// ---------- input: auto-run, tap = jump / wall-kick, drag = steer. Applied only at the next fixed tick. ----------
+// ---------- input: auto-run; each tap (pointerdown/touchstart) = one jump/wall-kick; drag = steer. Applied at next fixed tick. ----------
 const K={};let steer=0,ptr=null,pending=false;
+const uiBlock=el=>!!(el&&el.closest&&el.closest('button,a,input,textarea,select,#cw,#title,#shop,#ov'));
+function press(){const te=document.getElementById('title');if(te&&te.classList.contains('on'))return;const sh=document.getElementById('shop');if(sh&&sh.classList.contains('on'))return;if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
 addEventListener('keydown',e=>{K[e.code]=1;if(e.code==='Space'){e.preventDefault();press();}});addEventListener('keyup',e=>K[e.code]=0);
-addEventListener('pointerdown',e=>{ptr={x:e.clientX,t:performance.now(),moved:false};});
-addEventListener('pointermove',e=>{if(!ptr)return;const dx=e.clientX-ptr.x;if(Math.abs(dx)>14)ptr.moved=true;if(ptr.moved)steer=THREE.MathUtils.clamp(dx/110,-1,1);});
-addEventListener('pointerup',()=>{if(ptr&&!ptr.moved&&performance.now()-ptr.t<350)press();ptr=null;steer=0;});
-function press(){const te=document.getElementById('title');if(te&&te.classList.contains('on'))return;if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
+// Jump on finger-down (not release). Steer while dragging. No hold/charge.
+addEventListener('pointerdown',e=>{if(uiBlock(e.target))return;if(e.cancelable)e.preventDefault();ptr={x:e.clientX,id:e.pointerId,moved:false};press();},{passive:false});
+addEventListener('pointermove',e=>{if(!ptr||(ptr.id!=null&&e.pointerId!==ptr.id))return;if(e.cancelable)e.preventDefault();const dx=e.clientX-ptr.x;if(Math.abs(dx)>14)ptr.moved=true;if(ptr.moved)steer=THREE.MathUtils.clamp(dx/110,-1,1);},{passive:false});
+addEventListener('pointerup',e=>{if(ptr&&ptr.id!=null&&e.pointerId!==ptr.id)return;ptr=null;steer=0;});
+addEventListener('pointercancel',()=>{ptr=null;steer=0;});
+// iOS: kill double-tap zoom / long-press callout / pinch (jump already handled via pointerdown)
+addEventListener('touchstart',e=>{if(uiBlock(e.target))return;if(e.cancelable)e.preventDefault();},{passive:false});
+addEventListener('touchmove',e=>{if(uiBlock(e.target))return;if(e.cancelable)e.preventDefault();},{passive:false});
+addEventListener('gesturestart',e=>{e.preventDefault();});
 // No thanks: end the run where it stands. Nothing is spent; the log simply ends on the Catch screen and the server replays it as declined.
 function declineCatch(){if(P.mode!=='catch')return;pending=false;sim.decline();}
 window.declineCatch=declineCatch;addEventListener('keydown',e=>{if(e.code==='KeyN')declineCatch();});
@@ -421,7 +428,7 @@ if(SIM){let t=0,TR=[],tk=0;
   document.title="CLIP "+JSON.stringify({n:frames.length,fps:cfps,t0:c0,py:+P.pos.y.toFixed(1),draws:post.U.draws,maxDraws,shake:maxShake});}
  else{for(;t<SIM;t+=DT){tick();if(Q.has('trace')&&tk++%12===0){const m=modAt(P.pos.z);TR.push([t.toFixed(1),P.mode,P.state,P.pos.x.toFixed(1),P.pos.y.toFixed(1),P.pos.z.toFixed(1),P.vel.y.toFixed(1),m?m.type+'@'+m.edge.toFixed(0)+'/'+m.y0.toFixed(1):'-',mistY.v.toFixed(1)].join(' '))}if(P.mode==='dead')break;if(SHOT&&t>=+SHOT)break;if(Q.has('catchshot')&&P.mode==='catch')break;}render();if(TR.length){const pre=document.createElement('pre');pre.id='trace';pre.textContent=TR.join('\n');document.body.appendChild(pre);}
  if(Q.has('runlog')&&window.__run){const pre=document.createElement('pre');pre.id='run';pre.textContent=JSON.stringify(window.__run);document.body.appendChild(pre);}
- if(Q.has('catchtest')&&P.mode==='catch'){MANUAL=true;const R2=[];const ev=(t,el=window)=>el.dispatchEvent(new PointerEvent(t,{bubbles:true,clientX:100,clientY:100}));
+ if(Q.has('catchtest')&&P.mode==='catch'){MANUAL=true;const R2=[];const ev=(t,el=window)=>el.dispatchEvent(new PointerEvent(t,{bubbles:true,cancelable:true,clientX:100,clientY:100,pointerId:1}));
   catchShown=performance.now();ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button <0.5 s',P.mode]);catchShown=performance.now()-600;ev('pointerdown');ev('pointerup');tick();R2.push(['tap anywhere >0.5 s',P.mode]);
   $('bCatch').click();tick();R2.push(['Catch button >0.5 s',P.mode]);window.__cw={...window.__cw,test:R2.map(r=>r.join('=')).join(';')};}

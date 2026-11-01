@@ -1,6 +1,7 @@
 // node server/wing_test.mjs — wing boost + coins + dual-version replay
 import { createSim, replay, packLog, unpackLog, SIM_VERSION, WING, T } from '../sim.js';
 import * as sim5 from '../sim_v5.js';
+import * as sim6 from '../sim_v6.js';
 import { verifyRun, seedFor, periodKey } from './verify.mjs';
 import { createWallet } from '../wallet.js';
 import { ECONOMY } from '../economy.js';
@@ -8,7 +9,8 @@ import { ECONOMY } from '../economy.js';
 let pass = 0, fail = 0;
 const expect = (name, cond, extra = '') => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 
-expect('SIM_VERSION is tobu-sim-6', SIM_VERSION === 'tobu-sim-6');
+expect('SIM_VERSION is tobu-sim-7', SIM_VERSION === 'tobu-sim-7');
+expect('frozen v6 still tobu-sim-6', sim6.SIM_VERSION === 'tobu-sim-6');
 expect('frozen v5 still tobu-sim-5', sim5.SIM_VERSION === 'tobu-sim-5');
 
 // boosted jump
@@ -89,15 +91,26 @@ expect('frozen v5 still tobu-sim-5', sim5.SIM_VERSION === 'tobu-sim-5');
   expect('ranked policy tag', ECONOMY.ranked.policy === 'tag-same-board');
 }
 
-// verify accepts sim-6; rejects unknown; still notes v5 path exists
+// verify accepts sim-7; rejects unknown; still accepts frozen v5/v6
 {
   const sim = createSim({ seed: 2, miss: 0.25 });
   let t = 0; while (sim.P.mode !== 'dead' && t++ < 20 * 60 * 120) sim.tick(sim.botInput());
   const h = Math.round(sim.P.maxH * 10) / 10;
   const ok = verifyRun({ log: sim.log, claim: { height: h, powered: !!sim.powered, wings: sim.log.wings0 ? [sim.log.wings0] : [] } });
-  expect('verify sim-6 honest', ok.ok, JSON.stringify(ok));
+  expect('verify sim-7 honest', ok.ok, JSON.stringify(ok));
   const bad = { ...sim.log, v: 'tobu-sim-0' };
   expect('unknown version rejected', !verifyRun({ log: bad, claim: { height: h } }).ok);
+}
+
+// v6 log still verifiable via frozen module
+{
+  const s6 = sim6.createSim({ seed: 4, miss: 0.3 });
+  let t = 0; while (s6.P.mode !== 'dead' && t++ < 20 * 60 * 120) s6.tick(s6.botInput());
+  const h = Math.round(s6.P.maxH * 10) / 10;
+  const r = sim6.replay(s6.log);
+  expect('v6 frozen replay', r.ok && Math.abs(r.height - h) < 0.05, JSON.stringify(r));
+  const v = verifyRun({ log: s6.log, claim: { height: h } });
+  expect('verify accepts tobu-sim-6', v.ok, JSON.stringify(v));
 }
 
 // v5 log still verifiable via frozen module (direct replay)

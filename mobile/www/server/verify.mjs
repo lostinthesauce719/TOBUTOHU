@@ -1,9 +1,10 @@
 // Tobu replay check. The phone sends {log, claim:{height}}; we rerun sim.js and only accept the height we reproduce.
 // Run: node server/verify.mjs [port]   POST /verify   GET /seed?board=daily|weekly
-// Known sim versions: tobu-sim-6 (current), tobu-sim-5 (frozen in sim_v5.js). Unknown versions rejected.
+// Known sim versions: tobu-sim-7 (current), tobu-sim-6 (sim_v6.js), tobu-sim-5 (sim_v5.js). Unknown versions rejected.
 import http from 'node:http';
 import { createHash } from 'node:crypto';
-import { replay as replay6, unpackLog, SIM_VERSION, DT, ADAPT_MIN, ADAPT_MAX } from '../sim.js';
+import { replay as replay7, unpackLog, SIM_VERSION, DT, ADAPT_MIN, ADAPT_MAX } from '../sim.js';
+import { replay as replay6, SIM_VERSION as SIM_V6 } from '../sim_v6.js';
 import { replay as replay5, SIM_VERSION as SIM_V5 } from '../sim_v5.js';
 
 const SALT = process.env.TOBU_SEED_SALT || 'dev-salt-change-me';
@@ -19,10 +20,11 @@ export function seedFor(board, key, salt = SALT) { return createHash('sha256').u
 
 const MAX_TAPS_PER_SEC = 25;
 const GRACE_MS = 15 * 60 * 1000;
-const KNOWN = new Set([SIM_VERSION, SIM_V5]);
+const KNOWN = new Set([SIM_VERSION, SIM_V6, SIM_V5]);
 
 function replayFor(log) {
-  if (log.v === SIM_VERSION) return replay6(log);
+  if (log.v === SIM_VERSION) return replay7(log);
+  if (log.v === SIM_V6) return replay6(log);
   if (log.v === SIM_V5) return replay5(log);
   return { ok: false, reason: 'version' };
 }
