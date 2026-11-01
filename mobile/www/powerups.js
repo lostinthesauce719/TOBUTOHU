@@ -5,10 +5,10 @@ import { ECONOMY } from './economy.js';
 
 export const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 export const SEASON_META = {
-  spring: { label: 'Wings · Spring', blurb: 'Boosted jump + short glide', unlockH: 0 },
-  summer: { label: 'Wings · Summer', blurb: 'Mint glide through the cliffs', unlockH: 120 },
-  autumn: { label: 'Wings · Autumn', blurb: 'Gold-tinted glide', unlockH: 250 },
-  winter: { label: 'Wings · Winter', blurb: 'Unlocks at height 400 m', unlockH: 400 },
+  spring: { label: 'Wings', blurb: 'Boosted jump + short glide', unlockH: 0 },
+  summer: { label: 'Wings', blurb: 'Mint glide through the cliffs', unlockH: 120 },
+  autumn: { label: 'Wings', blurb: 'Gold-tinted glide', unlockH: 250 },
+  winter: { label: 'Wings', blurb: 'Unlocks at height 400 m', unlockH: 400 },
 };
 export const SHOP_MODE = 'rows'; // four seasonal rows (colour by season)
 
