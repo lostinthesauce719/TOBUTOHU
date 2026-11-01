@@ -1,0 +1,41 @@
+name: Deploy Pages
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble static site
+        run: |
+          mkdir -p _site
+          # Core web + PWA
+          for f in index.html hero.js scenery.js look.js flash.js saves.js wallet.js economy.js \
+                   sim.js sim_v5.js powerups.js clipkit.js palettes.json package.json README.md \
+                   manifest.webmanifest sw.js; do
+            [ -f "$f" ] && cp -a "$f" _site/
+          done
+          for d in vendor icons art; do
+            [ -d "$d" ] && cp -a "$d" _site/
+          done
+          # GitHub Pages: skip Jekyll so underscore paths and raw files serve
+          touch _site/.nojekyll
+          ls -la _site | head -40
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
