@@ -60,8 +60,13 @@ export function buildHero(THREE) {
   for (const s of [-1, 1]) {
     add(new THREE.SphereGeometry(0.032, 6, 4), M([s * 0.055, 0.038, 0.32], [0, 0, 0], [0.7, 1.1, 1.15]), () => crease); // eye (on fuller head)
     add(new THREE.CylinderGeometry(0.005, 0.01, 0.16, 4), M([s * 0.035, 0.08, 0.40], [0.7, 0, s * -0.22]), () => crease); // short antenna
+  }
+  // procedural wing stubs: vertex range recorded so powerups can hide/tint them (visual only)
+  let wingVertStart = 0; for (const g of gs) wingVertStart += g.attributes.position.count;
+  for (const s of [-1, 1]) {
     add(new THREE.BoxGeometry(0.055, 0.016, 0.88), M([s * 0.042, 0.055, -0.30], [0.04, s * 0.03, s * 0.1]), (n) => n.y > 0.3 ? top : n.y < -0.3 ? belly : crease); // longer folded wing
   }
+  let wingVertEnd = 0; for (const g of gs) wingVertEnd += g.attributes.position.count;
   // leg segments: unit length along +Y in bone space
   let bi = 1; const boneDefs = [{ name: 'root' }];
   for (const L of LEGS) {
@@ -77,7 +82,7 @@ export function buildHero(THREE) {
   const geo = merge(THREE, gs, ['skinIndex', 'skinWeight']);
   const bones = boneDefs.map(d => { const b = new THREE.Bone(); b.name = d.name; return b; });
   const root = bones[0]; for (let i = 1; i < bones.length; i++) root.add(bones[i]);
-  return { geometry: geo, bones, boneDefs, tris: tris(geo) };
+  return { geometry: geo, bones, boneDefs, tris: tris(geo), wingVertStart, wingVertCount: wingVertEnd - wingVertStart };
 }
 // bind: put the authored (bone-local) geometry into rest pose and make the SkinnedMesh
 export function heroMesh(THREE, material) {

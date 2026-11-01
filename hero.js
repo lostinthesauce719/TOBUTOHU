@@ -91,6 +91,27 @@ for (const s of [-1, 1]) {
 
 export function createHero(scene, P, boxes) {
   const root = new THREE.Group(); const HM = heroMesh(THREE, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })); const body = HM.mesh; body.bindMode = 'attached'; /* bones are children of the mesh: attached keeps them out of double model transforms */ root.add(body); root.userData.layer = 'play'; scene.add(root);
+  // procedural wing stubs (clipkit): hide while paper wings active, else tint #86AE58
+  const _wv0 = HM.wingVertStart|0, _wvn = HM.wingVertCount|0;
+  const _wPos = body.geometry.attributes.position, _wCol = body.geometry.attributes.color;
+  const _wPos0 = _wPos.array.slice(_wv0 * 3, (_wv0 + _wvn) * 3);
+  const _wCol0 = _wCol.array.slice(_wv0 * 3, (_wv0 + _wvn) * 3);
+  const _tint = new THREE.Color(0x86AE58);
+  let _stubHidden = false;
+  function setStubWings(hide) {
+    if (hide === _stubHidden) return;
+    _stubHidden = !!hide;
+    for (let i = 0; i < _wvn; i++) {
+      const o = (_wv0 + i) * 3, s = i * 3;
+      if (hide) { _wPos.array[o] = _wPos.array[o + 1] = _wPos.array[o + 2] = 0; }
+      else {
+        _wPos.array[o] = _wPos0[s]; _wPos.array[o + 1] = _wPos0[s + 1]; _wPos.array[o + 2] = _wPos0[s + 2];
+        _wCol.array[o] = _tint.r; _wCol.array[o + 1] = _tint.g; _wCol.array[o + 2] = _tint.b;
+      }
+    }
+    _wPos.needsUpdate = true; if (!hide) _wCol.needsUpdate = true;
+  }
+  setStubWings(false); // default: visible, tinted lit green
   const boneBy = new Map(HM.bones.map(b => [b.name, b])), _inv = new THREE.Matrix4(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
   const bone = (L, i, a, b) => placeBone(THREE, boneBy.get(legName(L, i)), _a.copy(a).applyMatrix4(_inv), _b.copy(b).applyMatrix4(_inv)); // IK points (world) -> body-local
   // antennas are baked into clipkit heroMesh (1 SkinnedMesh draw) — no extra antenna props
@@ -263,5 +284,5 @@ export function createHero(scene, P, boxes) {
 
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
-  return { legs: LEGS, update, root, parts: [body], mesh: body, bones: [...boneBy.keys()], fx };
+  return { legs: LEGS, update, root, parts: [body], mesh: body, bones: [...boneBy.keys()], fx, setStubWings };
 }
