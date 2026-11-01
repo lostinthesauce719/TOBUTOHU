@@ -161,7 +161,8 @@ export function createSim(opt={}){
   for(const s of wingPickups){
    if(s.taken)continue;
    const dx=s.x-px, dy=s.y-py;
-   if(dx*dx+dy*dy<wr*wr){s.taken=true;P.stats.wing_picks++;activateWings(s.season);}
+   // Casual only: free lane wing pickups. Ranked (daily/weekly/alltime) uses shop-equipped wings0 only.
+   if(dx*dx+dy*dy<wr*wr){s.taken=true;if(board==='free'){P.stats.wing_picks++;activateWings(s.season);}}
   }
   for(const c of coinPickups){
    if(c.taken)continue;

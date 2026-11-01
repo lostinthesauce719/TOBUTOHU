@@ -50,6 +50,14 @@ expect('frozen v5 still tobu-sim-5', sim5.SIM_VERSION === 'tobu-sim-5');
   expect('packed wing log replays', r2.ok && Math.abs(r2.height - h) < 0.05);
 }
 
+// ranked: lane wing pickups do not grant boost
+{
+  const s = createSim({ seed: 11, board: 'daily', nomist: true });
+  const w = s.wingPickups[0];
+  s.P.pos.x = w.x; s.P.pos.y = w.y; s.tick({ press: false, steer: 0 });
+  expect('ranked lane wing no boost', w.taken && !s.P.wings && !s.powered);
+}
+
 // coins accumulate from seeded pickups (forced proximity)
 {
   const s = createSim({ seed: 9, nomist: true });
