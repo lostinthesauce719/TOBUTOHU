@@ -12,6 +12,14 @@ Tuning tables: T (movement), MIST (rising bottom), ZONES.
 - Rejected: wrong height, edited inputs, a seed that isn't the current period's, adaptation not set to 1 on daily or weekly, a run cut before death, tapping faster than 25/s, or an old sim version.
 - `node server/test.mjs` runs the tests. Play in the browser with `?verify=http://localhost:8787&board=daily`.
 - Any change to physics or tuning must bump `SIM_VERSION`.
+- Current: `tobu-sim-6` (wing boost + seeded coins). Frozen `sim_v5.js` keeps `tobu-sim-5` replays verifiable.
+
+## Economy / power-ups
+- Tunable prices and earn rates live in `economy.js` only.
+- Coins: seeded lane pickups during a run; banked into `wallet.js` on death.
+- Gems: premium currency; real-money packs are **UI stubs** (LAUNCH owns store).
+- Wings: buy with coins or gems in the frosted shop; equip grants a real jump boost + short glide (`WING` in `sim.js`).
+- Ranked policy (**tag-same-board**): powered runs stay on the daily/weekly/alltime board; `claim.powered` + wing glyph. Difficulty never reads spending or ads.
 
 ## iOS / PWA
 - Capacitor wrapper: `mobile/` (see `mobile/IOS_README.md`). Needs Apple Developer + GitHub secrets for TestFlight.

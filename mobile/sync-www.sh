@@ -6,10 +6,11 @@ MOBILE="$(cd "$(dirname "$0")" && pwd)"
 rm -rf "$MOBILE/www"
 mkdir -p "$MOBILE/www"
 cp -a "$ROOT/index.html" "$ROOT/hero.js" "$ROOT/scenery.js" "$ROOT/look.js" \
-  "$ROOT/flash.js" "$ROOT/saves.js" "$ROOT/sim.js" "$ROOT/clipkit.js" \
+  "$ROOT/flash.js" "$ROOT/saves.js" "$ROOT/wallet.js" "$ROOT/economy.js" \
+  "$ROOT/sim.js" "$ROOT/sim_v5.js" "$ROOT/powerups.js" "$ROOT/clipkit.js" \
   "$ROOT/palettes.json" "$ROOT/package.json" "$ROOT/README.md" \
   "$ROOT/manifest.webmanifest" "$ROOT/sw.js" "$MOBILE/www/"
-cp -a "$ROOT/vendor" "$ROOT/icons" "$ROOT/server" "$MOBILE/www/"
+cp -a "$ROOT/vendor" "$ROOT/icons" "$ROOT/server" "$ROOT/art" "$MOBILE/www/"
 cd "$MOBILE"
 npx cap sync ios
 echo "Synced web → ios/App/App/public"

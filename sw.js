@@ -1,6 +1,11 @@
 // Tobu PWA shell — cache the greybox for Add to Home Screen / offline reopen.
-const CACHE = 'tobu-v1';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const CACHE = 'tobu-v2-sim6';
+const ASSETS = [
+  './', './index.html', './manifest.webmanifest',
+  './sim.js', './economy.js', './wallet.js', './powerups.js', './saves.js',
+  './hero.js', './look.js', './scenery.js', './clipkit.js', './flash.js',
+  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
+];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
