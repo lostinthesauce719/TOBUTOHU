@@ -28,9 +28,18 @@ export const ECONOMY = {
 
   // --- wing power-ups (seasonal rows; colour changes with season) ---
   // TUNABLE prices — edit here only. Prefer coins for grind, gems for shortcut.
+  // Tuned 2026-11-02 from measured earn (seeds 1–20, node sim): coins are seeded up to
+  // yMax 520 m, ~22 per climb max, ~4 by 100 m, ~9 by 200 m, ~13 by 300 m, ~17 by 400 m.
+  // Reference bot (strong player) averaged 16.7 coins/run. Targets (one-time unlocks):
+  //   spring 40  ≈ 2–3 strong runs, ~10 runs for a new player reaching ~100 m
+  //   summer 70  ≈ 4 strong runs (needs best 120 m first)
+  //   autumn 100 ≈ 6 strong runs (best 250 m)
+  //   winter 140 ≈ 8 strong runs (best 400 m)
+  // All four = 350 coins (~21 strong runs). Gems ≈ 10 coins each; all four = 28 gems,
+  // covered by one 60-gem pack with change, so no pack is sized to strand leftovers.
   wings: {
-    coinPrice: { spring: 80, summer: 120, autumn: 160, winter: 200 },
-    gemPrice: { spring: 5, summer: 8, autumn: 10, winter: 12 },
+    coinPrice: { spring: 40, summer: 70, autumn: 100, winter: 140 },
+    gemPrice: { spring: 4, summer: 6, autumn: 8, winter: 10 },
   },
 
   // --- wing boost (sim; mirrored in sim.js WING) ---
