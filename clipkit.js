@@ -228,15 +228,20 @@ export const triCount = tris;
 // ---------------- C) scenery (backdrop, no colliders) — see ../scenery_spec.md ----------------
 // Role colours per zone. Atmosphere (sky, fog, steam) is exempt from the 105-200 scenery band; everything solid is inside it.
 export const ZONES = {
-  spring: { y0: 0,   sky: [0x4A86D0, 0xB4D8FA], fog: 0xCFE6FB, fogD: 0.0038, trunk: 0x9AA2D8, tierA: 0xC4C2DC, tierB: 0xCDB4CC, pinkShare: 0.4, mtn: [0x8E98CC, 0xA4B0DA, 0xBAC6E4], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE6F0FA, 0.25], bird: 0x6F7FA0 },
-  summer: { y0: 120, sky: [0x34609A, 0xA8D2F6], fog: 0xC9E2F6, fogD: 0.0042, trunk: 0x7F90B8, tierA: 0x5E8C8A, tierB: 0x6E9C98, mtn: [0x7486B4, 0x8E9ECC, 0xAEBEE0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE2EEF8, 0.35], bird: 0x6F7FA0 },
-  autumn: { y0: 250, sky: [0x4C7CC0, 0xB2D2F2], fog: 0xD0E2F2, fogD: 0.0040, trunk: 0x9298C8, tierA: 0x9AA052, tierB: 0xD8B76A, mtn: [0x8A90C4, 0xA2A8D4, 0xBCC2E2], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE4ECF6, 0.40], bird: 0x6F7FA0 }, /* B gold-corrected olive/gold */
-  winter: { y0: 400, sky: [0x6C9AD4, 0xC8E2FA], fog: 0xDCEBF8, fogD: 0.0048, trunk: 0x8E9CC8, tierA: 0xA6B4DC, tierB: 0xC0C6DE, snow: 0xC0C6DE, mtn: [0x9CA8D2, 0xB2BEDE, 0xBCC6E0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xEAF2FA, 0.30], bird: 0xFFFFFF },
+  // hemi = soft hemisphere light [sky, ground] (visual only; no red/orange). Climbables stay global.
+  spring: { y0: 0,   sky: [0x4A86D0, 0xB4D8FA], fog: 0xCFE6FB, fogD: 0.0038, hemi: [0xf2f8ff, 0x7a8f7a], trunk: 0x9AA2D8, tierA: 0xC4C2DC, tierB: 0xCDB4CC, pinkShare: 0.4, mtn: [0x8E98CC, 0xA4B0DA, 0xBAC6E4], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE6F0FA, 0.25], bird: 0x6F7FA0 },
+  summer: { y0: 120, sky: [0x34609A, 0xA8D2F6], fog: 0xC9E2F6, fogD: 0.0042, hemi: [0xf5fbff, 0x6f7f9a], trunk: 0x7F90B8, tierA: 0x5E8C8A, tierB: 0x6E9C98, mtn: [0x7486B4, 0x8E9ECC, 0xAEBEE0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE2EEF8, 0.35], bird: 0x6F7FA0 },
+  autumn: { y0: 250, sky: [0x4C7CC0, 0xB2D2F2], fog: 0xD0E2F2, fogD: 0.0040, hemi: [0xf0f4ee, 0x7a7f6a], trunk: 0x9298C8, tierA: 0x9AA052, tierB: 0xD8B76A, mtn: [0x8A90C4, 0xA2A8D4, 0xBCC2E2], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xE4ECF6, 0.40], bird: 0x6F7FA0 }, /* B gold-corrected olive/gold */
+  winter: { y0: 400, sky: [0x6C9AD4, 0xC8E2FA], fog: 0xDCEBF8, fogD: 0.0048, hemi: [0xf4f8ff, 0x8a9aaa], trunk: 0x8E9CC8, tierA: 0xA6B4DC, tierB: 0xC0C6DE, snow: 0xC0C6DE, mtn: [0x9CA8D2, 0xB2BEDE, 0xBCC6E0], fall: [0xA6BEDC, 0xB4CCE6], steam: [0xEAF2FA, 0.30], bird: 0xFFFFFF },
 };
-export const XFADE_M = 15; // metres of cross-fade centred on each boundary
-export function zoneMix(y) { // -> {a, b, t}: blend from zone a to b by t (0..1)
+export const XFADE_M = 18; // metres of smooth cross-fade centred on each season-gate / torii boundary
+export const SEASON_BOUNDS = [120, 250, 400]; // torii season gates (visual only)
+export function zoneMix(y) { // -> {a, b, t}: blend from zone a to b by t (0..1), smoothstepped
   const ks = Object.keys(ZONES); for (let i = ks.length - 1; i >= 0; i--) { const y0 = ZONES[ks[i]].y0;
-    if (i > 0 && Math.abs(y - y0) < XFADE_M / 2) return { a: ks[i - 1], b: ks[i], t: (y - y0 + XFADE_M / 2) / XFADE_M };
+    if (i > 0 && Math.abs(y - y0) < XFADE_M / 2) {
+      let u = (y - y0 + XFADE_M / 2) / XFADE_M; u = u * u * (3 - 2 * u); // smoothstep
+      return { a: ks[i - 1], b: ks[i], t: u };
+    }
     if (y >= y0) return { a: ks[i], b: ks[i], t: 0 }; }
 }
 // seasonal cedar: same silhouette as kit.cedar; tiers recoloured per zone (spring: 60% white / 40% pink per tier by hash; winter: snow caps on tier tops)

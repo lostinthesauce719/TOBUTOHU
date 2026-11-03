@@ -1,5 +1,5 @@
 // Tobu PWA shell — cache the greybox for Add to Home Screen / offline reopen.
-const CACHE = 'tobu-v3-sim7-econ1';
+const CACHE = 'tobu-v3-sim7-torii1';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './sim.js', './economy.js', './wallet.js', './powerups.js', './saves.js',

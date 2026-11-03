@@ -6,6 +6,8 @@ import * as THREE from './vendor/three.module.min.js';
 export const KEY = new THREE.Vector3(0.35, 0.85, 0.4).normalize();   // soft key, world space
 export const LOOK = { skyTop: 0x4367A0, skyHor: 0xA5C8FB, fog: 0xD2EBFE, cloud: 0xDBE5FD, fogNear: 10, fogFar: 120,
   hemiSky: 0xf2f8ff, hemiGround: 0x6f7f9a, grid: 0xffffff };
+// Shared hemisphere light colours — every grid/perf material reads these same Color objects so season fade can lerp them live (visual only).
+export const HEMI = { hS: new THREE.Color(LOOK.hemiSky), hG: new THREE.Color(LOOK.hemiGround) };
 
 const lib = THREE.UniformsLib.fog;
 const VS = `#include <fog_pars_vertex>
@@ -39,8 +41,8 @@ export function gridMat(color, o = {}) {
   const k = color + '|' + JSON.stringify(o); if (cache.has(k)) return cache.get(k);
   const gA = o.gA ?? 0.7, gAV = o.gAV ?? gA;
   const m = new THREE.ShaderMaterial({ fog: true, vertexColors: !!o.vc,
-    uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(color) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
-      hG: { value: new THREE.Color(LOOK.hemiGround) }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
+    uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(color) }, hS: { value: HEMI.hS },
+      hG: { value: HEMI.hG }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
       cell: { value: o.cell || 1 }, gA: { value: gA }, gAV: { value: gAV }, gW: { value: o.gW || 1.1 } }]),
     vertexShader: VS,
     fragmentShader: `#include <fog_pars_fragment>
@@ -51,7 +53,7 @@ export function gridMat(color, o = {}) {
         gl_FragColor=vec4(c,1.);
         #include <fog_fragment>
       }` });
-  m.uniforms.gridPx = gridU.px; cache.set(k, m); return m;
+  m.uniforms.gridPx = gridU.px; m.uniforms.hS.value = HEMI.hS; m.uniforms.hG.value = HEMI.hG; cache.set(k, m); return m;
 }
 
 // breakables: same grid look, warm tint, plus a dark dashed perforation across the card's tear line and along the long
@@ -64,8 +66,8 @@ export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0', o = {})
   const topC = o.top || '#4A5D80', faceC = o.face || color || '#46587A', sideC = o.side || '#3A4A68', deepC = o.deep || '#2F3D58';
   const lipC = o.lip || '#D6DCC6';
   const m = new THREE.ShaderMaterial({ fog: true, 
-    uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(faceC) }, hS: { value: new THREE.Color(LOOK.hemiSky) },
-      hG: { value: new THREE.Color(LOOK.hemiGround) }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
+    uniforms: THREE.UniformsUtils.merge([lib, { base: { value: new THREE.Color(faceC) }, hS: { value: HEMI.hS },
+      hG: { value: HEMI.hG }, key: { value: KEY }, gC: { value: new THREE.Color(LOOK.grid) },
       cell: { value: 1 }, gA: { value: 0.0 }, gW: { value: 1.1 }, // no white lattice on breakable cards
       pC: { value: new THREE.Color(perf) }, tC: { value: new THREE.Color(tear) }, lip: { value: new THREE.Color(lipC) },
       topCol: { value: new THREE.Color(topC) }, sideCol: { value: new THREE.Color(sideC) }, deepCol: { value: new THREE.Color(deepC) },
@@ -94,7 +96,7 @@ export function perfMat(color, half, perf = '#140F0A', tear = '#EEF2E0', o = {})
         gl_FragColor=vec4(c,1.);
         #include <fog_fragment>
       }` });
-  m.uniforms.minPx = perfU.minPx; m.uniforms.gridPx = gridU.px; return m;
+  m.uniforms.minPx = perfU.minPx; m.uniforms.gridPx = gridU.px; m.uniforms.hS.value = HEMI.hS; m.uniforms.hG.value = HEMI.hG; return m;
 }
 
 // sky dome: vertical cyan gradient + soft procedural clouds; follows the camera, no fog, drawn first

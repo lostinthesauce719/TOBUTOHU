@@ -119,8 +119,8 @@
 <div id="help">Tap / Space = jump · A/D or drag = steer · keep tapping to climb · ?bot ?seed=N ?debug</div>
 <script type="module">
 import * as THREE from './vendor/three.module.min.js';
-import {createHero} from './hero.js';import {kit,cedarZone,zoneMix} from './clipkit.js';
-import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK} from './look.js';const CLS={};
+import {createHero} from './hero.js';import {kit,cedarZone,zoneMix,ZONES as SCN_Z,SEASON_BOUNDS,XFADE_M} from './clipkit.js';
+import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK,HEMI} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';import {createWallet} from './wallet.js';import {ECONOMY} from './economy.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
 import {createPowerups,SEASONS} from './powerups.js';
@@ -195,6 +195,18 @@ function decor(z0,z1,y){const zc=zoneAt(y),places=[];
   if(!gs.length)continue;const g=merge(gs);per[zn]=Float32Array.from(g.getAttribute('color').array);if(!geo)geo=g;}
  if(!geo)return;
  const m=new THREE.Mesh(geo,VC);m.position.z=0;m.userData.zEnd=z1;m.userData.zStart=z0;m.userData.layer='mid';m.userData.par=0.5;m.userData.per=per;m.userData.y0=y;m.userData.fadeKey='';S.add(m);deco.push(m);}
+// ---- Torii season gates (visual only): one merged mesh, spawned as the climber enters each boundary fade ----
+const gateState={placed:new Set(),mesh:null,per:null,fadeKey:'',side:1};
+function rebuildGates(){const ZK=['spring','summer','autumn','winter'],items=[...gateState.placed].sort((a,b)=>a-b);if(!items.length)return;
+ const per={};let geo=null;for(const zn of ZK){const gs=[];for(const bh of items){const s=bh===250?-1:1;const tg=kit.torii(THREE,12,11);tg.rotateY(s*0.35);tg.translate(s*30,bh-1,gateState.zOf.get(bh));gs.push(tg);}
+  const g=merge(gs);per[zn]=Float32Array.from(g.getAttribute('color').array);if(!geo)geo=g;}
+ if(gateState.mesh){S.remove(gateState.mesh);gateState.mesh.geometry.dispose();}
+ const m=new THREE.Mesh(geo,VC);m.frustumCulled=false;m.userData.layer='mid';m.userData.per=per;m.userData.fadeKey='';S.add(m);gateState.mesh=m;gateState.per=per;}
+gateState.zOf=new Map();
+function maybeSpawnGate(h,pz){for(const bh of SEASON_BOUNDS){if(gateState.placed.has(bh))continue;if(h<bh-XFADE_M/2)continue;
+  gateState.placed.add(bh);gateState.zOf.set(bh,pz-14);rebuildGates();}}
+function fadeGates(h){const m=gateState.mesh;if(!m||!m.userData.per)return;const zm=zoneMix(Math.max(0,h)),key=zm.a+zm.b+zm.t.toFixed(3);if(key===m.userData.fadeKey)return;m.userData.fadeKey=key;
+ const a=m.userData.per[zm.a],b=m.userData.per[zm.b],c=m.geometry.getAttribute('color'),o=c.array,tt=zm.t;for(let i=0;i<o.length;i++)o[i]=a[i]+(b[i]-a[i])*tt;c.needsUpdate=true;}
 const mtns=new THREE.Group();S.add(mtns);{const gs=[];
 for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,h,6),0xC7D6EB);const a=(i/14)*Math.PI*2;g.translate(Math.sin(a)*170,h/2-40,Math.cos(a)*170-60);gs.push(g);}
 /* cone mountains replaced by scenery.js backdrop */}
@@ -312,7 +324,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  mtns.position.set(0,P.pos.y*0.85,P.pos.z);
  deco.forEach(d=>{const par=d.userData.par??0.5;d.position.x=-cam.position.x*(1-par)*0.2; /* mid-layer lateral parallax */ if(d.userData.steam){d.position.y+=dt*1.5;d.material.opacity=Math.max(0,d.material.opacity-dt*0.02);}
   /* live season colour cross-fade (visual only; same as scenery far cedars) */
-  if(d.userData.per){const zm=zoneMix(Math.max(0,d.userData.y0)),key=zm.a+zm.b+zm.t.toFixed(3);if(key!==d.userData.fadeKey){d.userData.fadeKey=key;const a=d.userData.per[zm.a],b=d.userData.per[zm.b],c=d.geometry.getAttribute('color'),o=c.array,tt=zm.t;for(let i=0;i<o.length;i++)o[i]=a[i]+(b[i]-a[i])*tt;c.needsUpdate=true;}}});
+  if(d.userData.per){const zm=zoneMix(Math.max(0,P.pos.y)),key=zm.a+zm.b+zm.t.toFixed(3);if(key!==d.userData.fadeKey){d.userData.fadeKey=key;const a=d.userData.per[zm.a],b=d.userData.per[zm.b],c=d.geometry.getAttribute('color'),o=c.array,tt=zm.t;for(let i=0;i<o.length;i++)o[i]=a[i]+(b[i]-a[i])*tt;c.needsUpdate=true;}}}); maybeSpawnGate(P.pos.y,P.pos.z);fadeGates(P.pos.y);
  for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+60){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-70;} /* cull mid cedars past 70 m — was fogFar+10 (~130), caused 41 draws in long clips */
  const decoCap=4;while(deco.length>decoCap){const d=deco.shift();S.remove(d);d.geometry.dispose();} /* hard cap 4 (winter back to 4 now breakables are distance-culled; peak ≤32 with wings) */
  /* cull fully-fogged kit meshes (one merged draw per module) so long clips stay ≤40 */
@@ -325,7 +337,10 @@ const MENUQ=Q.get('menu'); // title/gameover capture + cold-start gate
 // earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
 function toast(t){const z=document.getElementById('zone');z.textContent=t;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,2200);}
 function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.min(ZONES.length-1,i+1)];
- const t=b===a?0:THREE.MathUtils.clamp((h-(b.h-20))/20,0,1);S.fog.color.setHex(LOOK.fog).lerp(_cb.setHex(b.fog),0.18*t*0); /* single pale-blue fog for the reset */
+ /* Atmosphere fog/sky owned by scenery.update via zoneMix. Hemi light lerps here (shared HEMI → all climb mats). */
+ const zm=zoneMix(Math.max(0,h)),A=SCN_Z[zm.a],B=SCN_Z[zm.b];
+ _ca.setHex(A.hemi[0]).lerp(_cb.setHex(B.hemi[0]),zm.t);HEMI.hS.copy(_ca);
+ _ca.setHex(A.hemi[1]).lerp(_cb.setHex(B.hemi[1]),zm.t);HEMI.hG.copy(_ca);
  if(a.n!==lastZone){if(lastZone&&!AUTO&&SAVES.zone(a.n))toast('+1 save · first time in '+a.n);lastZone=a.n;const z=document.getElementById('zone');z.textContent=a.n;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,1800);}}
 
 const hE=document.getElementById('h'),sE=document.getElementById('sub'),ov=document.getElementById('ov');
