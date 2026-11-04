@@ -15,7 +15,7 @@ expect(`honest daily run (${dh} m, Catch used: ${D.P.stats.catch > 0})`, verifyR
 // 2) cheats
 const L = D.log;
 let r = verifyRun({ log: L, claim: { height: dh + 50 } }); expect('inflated height rejected', !r.ok, r.reason);
-let x = clone(L); x.taps.splice(x.taps.length >> 1, 1); r = verifyRun({ log: x, claim: { height: dh } }); expect('edited taps rejected', !r.ok, r.reason);
+let x = clone(L); x.taps.splice(x.taps.length >> 1, 10); r = verifyRun({ log: x, claim: { height: dh } }); expect('edited taps rejected', !r.ok, r.reason); // 10 taps: a single dropped tap can be a true no-op (e.g. a buffered tap mid-air), which replays identically and isn't a cheat
 x = clone(L); x.seed = 12345; r = verifyRun({ log: x, claim: { height: dh } }); expect('picked own seed on daily rejected', !r.ok, r.reason);
 x = clone(L); x.adapt = 0.85; r = verifyRun({ log: x, claim: { height: dh } }); expect('slower mist on daily rejected', !r.ok, r.reason);
 x = clone(L); x.end -= 240; r = verifyRun({ log: x, claim: { height: dh } }); expect('run cut short before death rejected', !r.ok, r.reason);
