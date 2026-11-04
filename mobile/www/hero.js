@@ -123,7 +123,7 @@ export function createHero(scene, P, boxes) {
     L.plant = null; L.n = new THREE.Vector3(0, 1, 0); L.swing = 0; L.from = new THREE.Vector3(); L.foot = new THREE.Vector3(); L.hold = 0;
   }
   const st = { prev: 'air', q: new THREE.Quaternion(), off: new THREE.Vector3(), latch: 9, land: 9, kick: 9, fwd: new THREE.Vector3(0, 0, -1), sq: 0, turn: 0, gait: 0, breath: 0, idleShift: 0 };
-  const fx = { trail: 0, spark: 0, rim: 0.4, state: 'air', speed: 0, kick: 9 };
+  const fx = { trail: 0, spark: 0, rim: 0.4, state: 'air', speed: 0, kick: 9, air: 0, splay: 0, tuck: 0, slot: null }; // fx.slot: enchantment hook (BRUSH designs pending Apollo approval) — fn(fx, hero) called each frame, render-only
   const mat = new THREE.Matrix4(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const world = (v, out) => out.copy(v).applyMatrix4(root.matrixWorld);
 
@@ -148,7 +148,12 @@ export function createHero(scene, P, boxes) {
           const hw = world(L.hipV, new THREE.Vector3()), side = new THREE.Vector3(L.s, 0, 0).applyQuaternion(st.q);
           if (st.lastSf.kind === 'ground' || side.x * st.lastSf.side > -0.1) { L.plant = project(world(L.restV, new THREE.Vector3()), st.lastSf); L.n.copy(st.lastSf.n); }
           L.hold = 0.18; } else if (L.plant) L.hold = L.kind === 'front' ? 0.2 : 0.08; } } // §8.2.4: forelegs release last (each claw stays pinned only while in reach, so it never floats)
-    st.latch += dt; st.land += dt; st.kick += dt;
+    st.latch += dt; st.land += dt; st.kick += dt; st.air = state === 'air' ? (st.air || 0) + dt : 0;
+    // legs pose weights (render-only): launch extension -> mid-air tuck by airtime; splay on land/grab
+    const ext = st.kick < 0.22 ? 1 - st.kick / 0.22 : 0;
+    const tuck = state === 'air' ? THREE.MathUtils.smoothstep(st.air, 0.12, 0.4) * (P.vel.y < 2 ? 1 : 0.6) : 0;
+    const sinceC = state === 'wall' ? st.latch : state === 'ground' ? st.land : 9;
+    const splay = sinceC < 0.3 ? Math.sin(Math.PI * Math.min(1, sinceC / 0.3))  : 0;
 
     // ---- orientation: yaw to travel, pitch to velocity, roll toward wall / into steer (brief §6) ----
     const hs = Math.hypot(P.vel.x, P.vel.z); if (hs > 1) st.fwd.set(P.vel.x / hs, 0, P.vel.z / hs);
@@ -207,6 +212,8 @@ export function createHero(scene, P, boxes) {
         if (ahead.lengthSq() < 1e-4) ahead.copy(bodyFwd); else ahead.normalize();
         const goal = project(restW.clone().addScaledVector(ahead, strideLen * (0.5 - ph)), sf);
         // idle micro-shift when nearly still (livelier stance: occasional weight transfer)
+        if (splay > 0) goal.addScaledVector(sideW, (L.kind === 'mid' ? 0.05 : 0.07) * splay).addScaledVector(bodyFwd, (L.kind === 'front' ? 0.04 : L.kind === 'hind' ? -0.04 : 0) * splay); // land / grab splay
+        if (state === 'wall' && speed < 0.55) { const sw = Math.sin(P.t * 1.3 + L.grp * Math.PI + kindOff * 2); goal.y += 0.025 * sw; goal.z += 0.012 * Math.cos(P.t * 0.8 + L.s); } // clinging idle sway
         if (speed < 0.55) {
           const pulse = Math.sin(P.t * 1.7 + L.s + kindOff * 6);
           const kick = Math.sin(P.t * 0.37 + L.grp * 2.1); // occasional bigger shift
@@ -241,16 +248,11 @@ export function createHero(scene, P, boxes) {
           L.plant = null; L.swing = 0;
           const fall = state === 'air' && P.vel.y < -4;
           const kickOn = st.kick < 0.22; // big hind extension on launch
-          const loc = L.restV.clone();
-          if (L.kind === 'hind') {
-            if (kickOn) loc.set(L.s * 0.22, -0.35, -0.72); // fully extended back-down
-            else if (fall) loc.set(L.s * 0.28, -0.08, -0.28); // tuck under belly
-            else loc.set(L.s * 0.18, -0.1, -0.4);
-          } else {
-            if (kickOn) loc.set(L.s * 0.14, -0.06, L.kind === 'front' ? 0.38 : 0.1); // reach forward on launch
-            else if (fall) loc.set(L.s * 0.12, -0.02, L.kind === 'front' ? 0.18 : 0.02); // tuck
-            else loc.set(L.s * 0.17, -0.12, L.kind === 'front' ? 0.34 : 0.05);
-          }
+          const loc = L.restV.clone(), A = new THREE.Vector3(), T = new THREE.Vector3();
+          // continuous blend: cruise pose -> tuck (by airtime) -> push-off extension (fresh tap) on top
+          if (L.kind === 'hind') { loc.set(L.s * 0.18, -0.1, -0.4); T.set(L.s * 0.28, -0.06, -0.26); A.set(L.s * 0.22, -0.35, -0.72); }
+          else { const fr = L.kind === 'front'; loc.set(L.s * 0.17, -0.12, fr ? 0.34 : 0.05); T.set(L.s * 0.11, -0.01, fr ? 0.16 : 0.0); A.set(L.s * 0.14, -0.06, fr ? 0.38 : 0.1); }
+          loc.lerp(T, Math.max(tuck, fall ? 1 : 0)).lerp(A, ext);
           if (state === 'wall') loc.y += 0.05;
           world(loc, tmp); L.foot.add(delta).lerp(tmp, 1 - Math.exp(-dt / (kickOn ? 0.025 : 0.05)));
         }
@@ -281,9 +283,11 @@ export function createHero(scene, P, boxes) {
     fx.spark = Math.max(0, fx.spark - dt * 1.8);
     const idleGlow = idle ? 0.05 + 0.03 * Math.sin(P.t * 2.2) : 0;
     fx.rim = Math.min(1, 0.14 + 0.18 * fx.trail + 0.22 * fx.spark + idleGlow);
-    fx.state = state; fx.speed = speed; fx.kick = st.kick;
+    fx.state = state; fx.speed = speed; fx.kick = st.kick; fx.air = st.air; fx.splay = splay; fx.tuck = tuck;
+    if (typeof fx.slot === 'function') fx.slot(fx, api);
 
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
-  return { legs: LEGS, update, root, parts: [body], mesh: body, bones: [...boneBy.keys()], fx, setStubWings };
+  const api = { legs: LEGS, update, root, parts: [body], mesh: body, bones: [...boneBy.keys()], fx, setStubWings };
+  return api;
 }
