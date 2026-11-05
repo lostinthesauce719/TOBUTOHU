@@ -19,7 +19,7 @@
     "autumn",
     "winter"
   ],
-  "palette_rules": "No red/orange except sash (hero) and autumn gold. Vermilion hazards only.",
+  "palette_rules": "Scenery: no red/orange. Spring pale sakura #E9D6D8/#D9B8BE and #F4F3EE. Autumn near/mid/pads olive #9AA052/#8EA038; far gold #D8B76A/#E0C050/#E8C050. Vermilion hazards only. Hero yellow sash allowed.",
   "nine_slice_frame": {
     "left": 125,
     "right": 125,
@@ -70,25 +70,25 @@
       "right": 157
     },
     "pads/autumn/pad_00.png": {
-      "top_y": 0,
-      "width": 7,
+      "top_y": 119,
+      "width": 252,
       "center_x": 140,
-      "left": 137,
-      "right": 143
+      "left": 15,
+      "right": 266
     },
     "pads/autumn/pad_01.png": {
-      "top_y": 0,
-      "width": 7,
-      "center_x": 133,
-      "left": 130,
-      "right": 136
+      "top_y": 126,
+      "width": 253,
+      "center_x": 139,
+      "left": 13,
+      "right": 265
     },
     "pads/autumn/pad_02.png": {
-      "top_y": 0,
-      "width": 25,
-      "center_x": 131,
-      "left": 119,
-      "right": 143
+      "top_y": 114,
+      "width": 258,
+      "center_x": 136,
+      "left": 8,
+      "right": 265
     },
     "pads/winter/pad_00.png": {
       "top_y": 0,
@@ -133,7 +133,7 @@
     },
     {
       "path": "spring/layer_01_far.png",
-      "bytes": 1417791,
+      "bytes": 1511088,
       "width": 1080,
       "height": 1920,
       "season": "spring",
@@ -144,7 +144,7 @@
     },
     {
       "path": "spring/layer_02_mid.png",
-      "bytes": 1875831,
+      "bytes": 1467900,
       "width": 1080,
       "height": 1920,
       "season": "spring",
@@ -155,7 +155,7 @@
     },
     {
       "path": "spring/layer_03_mist.png",
-      "bytes": 855588,
+      "bytes": 857341,
       "width": 1080,
       "height": 1920,
       "season": "spring",
@@ -166,7 +166,7 @@
     },
     {
       "path": "spring/layer_04_near.png",
-      "bytes": 861070,
+      "bytes": 409964,
       "width": 1080,
       "height": 1920,
       "season": "spring",
@@ -188,7 +188,7 @@
     },
     {
       "path": "summer/layer_01_far.png",
-      "bytes": 2852218,
+      "bytes": 2910572,
       "width": 1080,
       "height": 1920,
       "season": "summer",
@@ -199,7 +199,7 @@
     },
     {
       "path": "summer/layer_02_mid.png",
-      "bytes": 1469358,
+      "bytes": 1362128,
       "width": 1080,
       "height": 1920,
       "season": "summer",
@@ -210,7 +210,7 @@
     },
     {
       "path": "summer/layer_03_mist.png",
-      "bytes": 814365,
+      "bytes": 830356,
       "width": 1080,
       "height": 1920,
       "season": "summer",
@@ -221,7 +221,7 @@
     },
     {
       "path": "summer/layer_04_near.png",
-      "bytes": 2031571,
+      "bytes": 2052794,
       "width": 1080,
       "height": 1920,
       "season": "summer",
@@ -232,7 +232,7 @@
     },
     {
       "path": "autumn/layer_00_sky.png",
-      "bytes": 3230831,
+      "bytes": 126174,
       "width": 1080,
       "height": 1920,
       "season": "autumn",
@@ -243,7 +243,7 @@
     },
     {
       "path": "autumn/layer_01_far.png",
-      "bytes": 2807409,
+      "bytes": 254651,
       "width": 1080,
       "height": 1920,
       "season": "autumn",
@@ -254,7 +254,7 @@
     },
     {
       "path": "autumn/layer_02_mid.png",
-      "bytes": 1828864,
+      "bytes": 479713,
       "width": 1080,
       "height": 1920,
       "season": "autumn",
@@ -265,7 +265,7 @@
     },
     {
       "path": "autumn/layer_03_mist.png",
-      "bytes": 788699,
+      "bytes": 208141,
       "width": 1080,
       "height": 1920,
       "season": "autumn",
@@ -276,7 +276,7 @@
     },
     {
       "path": "autumn/layer_04_near.png",
-      "bytes": 1695182,
+      "bytes": 347182,
       "width": 1080,
       "height": 1920,
       "season": "autumn",
@@ -298,7 +298,7 @@
     },
     {
       "path": "winter/layer_01_far.png",
-      "bytes": 1199640,
+      "bytes": 1254947,
       "width": 1080,
       "height": 1920,
       "season": "winter",
@@ -309,7 +309,7 @@
     },
     {
       "path": "winter/layer_02_mid.png",
-      "bytes": 1491868,
+      "bytes": 1502184,
       "width": 1080,
       "height": 1920,
       "season": "winter",
@@ -331,7 +331,7 @@
     },
     {
       "path": "winter/layer_04_near.png",
-      "bytes": 1426650,
+      "bytes": 1433602,
       "width": 1080,
       "height": 1920,
       "season": "winter",
@@ -342,7 +342,7 @@
     },
     {
       "path": "pads/spring/pad_00.png",
-      "bytes": 41158,
+      "bytes": 40948,
       "width": 280,
       "height": 267,
       "season": "spring",
@@ -354,16 +354,20 @@
         "center_x": 140,
         "left": 106,
         "right": 174
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_00@2x.png",
-      "bytes": 131257,
+      "bytes": 129274,
       "width": 560,
       "height": 534,
       "season": "spring",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_00_shadow.png",
@@ -372,7 +376,9 @@
       "height": 267,
       "season": "spring",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_00_shadow@2x.png",
@@ -381,11 +387,13 @@
       "height": 534,
       "season": "spring",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_01.png",
-      "bytes": 41573,
+      "bytes": 40267,
       "width": 280,
       "height": 244,
       "season": "spring",
@@ -397,16 +405,20 @@
         "center_x": 136,
         "left": 108,
         "right": 164
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_01@2x.png",
-      "bytes": 132551,
+      "bytes": 126235,
       "width": 560,
       "height": 488,
       "season": "spring",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_01_shadow.png",
@@ -415,7 +427,9 @@
       "height": 244,
       "season": "spring",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_01_shadow@2x.png",
@@ -424,11 +438,13 @@
       "height": 488,
       "season": "spring",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_02.png",
-      "bytes": 26297,
+      "bytes": 23499,
       "width": 251,
       "height": 263,
       "season": "spring",
@@ -440,16 +456,20 @@
         "center_x": 121,
         "left": 102,
         "right": 140
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_02@2x.png",
-      "bytes": 122603,
+      "bytes": 114639,
       "width": 502,
       "height": 526,
       "season": "spring",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_02_shadow.png",
@@ -458,7 +478,9 @@
       "height": 263,
       "season": "spring",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/spring/pad_02_shadow@2x.png",
@@ -467,11 +489,13 @@
       "height": 526,
       "season": "spring",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_00.png",
-      "bytes": 126811,
+      "bytes": 128013,
       "width": 280,
       "height": 275,
       "season": "summer",
@@ -483,16 +507,20 @@
         "center_x": 134,
         "left": 91,
         "right": 177
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_00@2x.png",
-      "bytes": 397624,
+      "bytes": 401535,
       "width": 560,
       "height": 550,
       "season": "summer",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_00_shadow.png",
@@ -501,7 +529,9 @@
       "height": 275,
       "season": "summer",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_00_shadow@2x.png",
@@ -510,11 +540,13 @@
       "height": 550,
       "season": "summer",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_01.png",
-      "bytes": 96369,
+      "bytes": 95477,
       "width": 254,
       "height": 263,
       "season": "summer",
@@ -526,16 +558,20 @@
         "center_x": 119,
         "left": 78,
         "right": 160
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_01@2x.png",
-      "bytes": 310553,
+      "bytes": 314615,
       "width": 508,
       "height": 526,
       "season": "summer",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_01_shadow.png",
@@ -544,7 +580,9 @@
       "height": 263,
       "season": "summer",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_01_shadow@2x.png",
@@ -553,11 +591,13 @@
       "height": 526,
       "season": "summer",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_02.png",
-      "bytes": 78838,
+      "bytes": 70463,
       "width": 280,
       "height": 247,
       "season": "summer",
@@ -569,16 +609,20 @@
         "center_x": 132,
         "left": 108,
         "right": 157
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_02@2x.png",
-      "bytes": 237098,
+      "bytes": 208320,
       "width": 560,
       "height": 494,
       "season": "summer",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_02_shadow.png",
@@ -587,7 +631,9 @@
       "height": 247,
       "season": "summer",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/summer/pad_02_shadow@2x.png",
@@ -596,32 +642,45 @@
       "height": 494,
       "season": "summer",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_00.png",
-      "bytes": 109606,
+      "bytes": 12961,
       "width": 280,
       "height": 286,
       "season": "autumn",
       "role": "pad",
       "scale": 1,
       "hitbox": {
-        "top_y": 0,
-        "width": 7,
+        "top_y": 119,
+        "width": 252,
         "center_x": 140,
-        "left": 137,
-        "right": 143
-      }
+        "left": 15,
+        "right": 266
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_00@2x.png",
-      "bytes": 356078,
+      "bytes": 34793,
       "width": 560,
       "height": 572,
       "season": "autumn",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "hitbox": {
+        "top_y": 239,
+        "width": 505,
+        "center_x": 281,
+        "left": 29,
+        "right": 533
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_00_shadow.png",
@@ -630,7 +689,9 @@
       "height": 286,
       "season": "autumn",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_00_shadow@2x.png",
@@ -639,32 +700,45 @@
       "height": 572,
       "season": "autumn",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_01.png",
-      "bytes": 113182,
+      "bytes": 13150,
       "width": 280,
       "height": 300,
       "season": "autumn",
       "role": "pad",
       "scale": 1,
       "hitbox": {
-        "top_y": 0,
-        "width": 7,
-        "center_x": 133,
-        "left": 130,
-        "right": 136
-      }
+        "top_y": 126,
+        "width": 253,
+        "center_x": 139,
+        "left": 13,
+        "right": 265
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_01@2x.png",
-      "bytes": 361797,
+      "bytes": 36729,
       "width": 560,
       "height": 600,
       "season": "autumn",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "hitbox": {
+        "top_y": 253,
+        "width": 506,
+        "center_x": 278,
+        "left": 26,
+        "right": 531
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_01_shadow.png",
@@ -673,7 +747,9 @@
       "height": 300,
       "season": "autumn",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_01_shadow@2x.png",
@@ -682,32 +758,45 @@
       "height": 600,
       "season": "autumn",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_02.png",
-      "bytes": 106043,
+      "bytes": 3459,
       "width": 277,
       "height": 306,
       "season": "autumn",
       "role": "pad",
       "scale": 1,
       "hitbox": {
-        "top_y": 0,
-        "width": 25,
-        "center_x": 131,
-        "left": 119,
-        "right": 143
-      }
+        "top_y": 114,
+        "width": 258,
+        "center_x": 136,
+        "left": 8,
+        "right": 265
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_02@2x.png",
-      "bytes": 358162,
+      "bytes": 24248,
       "width": 554,
       "height": 612,
       "season": "autumn",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "hitbox": {
+        "top_y": 228,
+        "width": 516,
+        "center_x": 273,
+        "left": 16,
+        "right": 531
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_02_shadow.png",
@@ -716,7 +805,9 @@
       "height": 306,
       "season": "autumn",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_02_shadow@2x.png",
@@ -725,11 +816,13 @@
       "height": 612,
       "season": "autumn",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_00.png",
-      "bytes": 147311,
+      "bytes": 148375,
       "width": 280,
       "height": 307,
       "season": "winter",
@@ -741,16 +834,20 @@
         "center_x": 137,
         "left": 68,
         "right": 206
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_00@2x.png",
-      "bytes": 471869,
+      "bytes": 480185,
       "width": 560,
       "height": 614,
       "season": "winter",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_00_shadow.png",
@@ -759,7 +856,9 @@
       "height": 307,
       "season": "winter",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_00_shadow@2x.png",
@@ -768,11 +867,13 @@
       "height": 614,
       "season": "winter",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_01.png",
-      "bytes": 153643,
+      "bytes": 154479,
       "width": 280,
       "height": 312,
       "season": "winter",
@@ -784,16 +885,20 @@
         "center_x": 136,
         "left": 91,
         "right": 181
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_01@2x.png",
-      "bytes": 486831,
+      "bytes": 492746,
       "width": 560,
       "height": 624,
       "season": "winter",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_01_shadow.png",
@@ -802,7 +907,9 @@
       "height": 312,
       "season": "winter",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_01_shadow@2x.png",
@@ -811,7 +918,9 @@
       "height": 624,
       "season": "winter",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_02.png",
@@ -827,16 +936,20 @@
         "center_x": 127,
         "left": 66,
         "right": 189
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_02@2x.png",
-      "bytes": 430310,
+      "bytes": 438946,
       "width": 534,
       "height": 610,
       "season": "winter",
       "role": "pad",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_02_shadow.png",
@@ -845,7 +958,9 @@
       "height": 305,
       "season": "winter",
       "role": "pad_shadow",
-      "scale": 1
+      "scale": 1,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "pads/winter/pad_02_shadow@2x.png",
@@ -854,7 +969,9 @@
       "height": 610,
       "season": "winter",
       "role": "pad_shadow",
-      "scale": 2
+      "scale": 2,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "torii/torii.png",
@@ -863,7 +980,9 @@
       "height": 343,
       "role": "torii",
       "scale": 1,
-      "season": null
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "torii/torii@2x.png",
@@ -872,7 +991,9 @@
       "height": 686,
       "role": "torii",
       "scale": 2,
-      "season": null
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "torii/torii_glow.png",
@@ -881,7 +1002,9 @@
       "height": 343,
       "role": "torii_glow",
       "scale": 1,
-      "season": null
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "torii/torii_glow@2x.png",
@@ -890,7 +1013,9 @@
       "height": 686,
       "role": "torii_glow",
       "scale": 2,
-      "season": null
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "transitions/flat_bottom_edge.png",
@@ -898,15 +1023,19 @@
       "width": 1080,
       "height": 160,
       "role": "transition_edge",
-      "season": null
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "transitions/flat_panel_autumn.png",
-      "bytes": 92025,
+      "bytes": 17511,
       "width": 1080,
       "height": 600,
       "role": "transition_panel",
-      "season": "autumn"
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "transitions/flat_panel_spring.png",
@@ -914,15 +1043,19 @@
       "width": 1080,
       "height": 1920,
       "role": "transition_panel",
-      "season": "spring"
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "transitions/flat_panel_summer.png",
-      "bytes": 92701,
+      "bytes": 25918,
       "width": 1080,
       "height": 600,
       "role": "transition_panel",
-      "season": "summer"
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "transitions/flat_panel_winter.png",
@@ -930,7 +1063,9 @@
       "width": 1080,
       "height": 1920,
       "role": "transition_panel",
-      "season": "winter"
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "transitions/flat_top_edge.png",
@@ -938,7 +1073,9 @@
       "width": 1080,
       "height": 160,
       "role": "transition_edge",
-      "season": null
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "frame/hud_coin_icon.png",
@@ -947,7 +1084,9 @@
       "height": 48,
       "role": "hud_coin_icon",
       "season": null,
-      "nine_slice": null
+      "nine_slice": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "frame/hud_currency_bar.png",
@@ -956,7 +1095,9 @@
       "height": 56,
       "role": "hud_currency_bar",
       "season": null,
-      "nine_slice": null
+      "nine_slice": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "frame/hud_distance_plaque.png",
@@ -965,7 +1106,9 @@
       "height": 70,
       "role": "hud_distance_plaque",
       "season": null,
-      "nine_slice": null
+      "nine_slice": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "frame/hud_gem_icon.png",
@@ -974,7 +1117,9 @@
       "height": 48,
       "role": "hud_gem_icon",
       "season": null,
-      "nine_slice": null
+      "nine_slice": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "frame/stage_frame_1080x1920.png",
@@ -988,21 +1133,549 @@
         "right": 125,
         "top": 225,
         "bottom": 175
-      }
+      },
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "preview.png",
-      "bytes": 2737204,
+      "bytes": 2579177,
       "width": 1080,
       "height": 1920,
-      "role": "preview"
+      "role": "preview",
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
     },
     {
       "path": "preview_summer.png",
+      "bytes": 3029600,
+      "width": 1080,
+      "height": 1920,
+      "role": "preview_summer",
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "autumn/layer_00_sky_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 3230831,
+      "width": 1080,
+      "height": 1920,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "autumn/layer_01_far_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 2807409,
+      "width": 1080,
+      "height": 1920,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "autumn/layer_02_mid_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1828864,
+      "width": 1080,
+      "height": 1920,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "autumn/layer_03_mist_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 788699,
+      "width": 1080,
+      "height": 1920,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "autumn/layer_04_near_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1695182,
+      "width": 1080,
+      "height": 1920,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/_sheet.png",
+      "role": "preview",
+      "bytes": 406438,
+      "width": 1024,
+      "height": 1024,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/_sheet_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 768527,
+      "width": 1024,
+      "height": 1024,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_00@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 356078,
+      "width": 560,
+      "height": 572,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_00_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 109606,
+      "width": 280,
+      "height": 286,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_01@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 361797,
+      "width": 560,
+      "height": 600,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_01_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 113182,
+      "width": 280,
+      "height": 300,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_02@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 358162,
+      "width": 554,
+      "height": 612,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_02_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 106043,
+      "width": 277,
+      "height": 306,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/_sheet.png",
+      "role": "preview",
+      "bytes": 632508,
+      "width": 1024,
+      "height": 1024,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/_sheet_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 740400,
+      "width": 1024,
+      "height": 1024,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/pad_00@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 131257,
+      "width": 560,
+      "height": 534,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/pad_00_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 41158,
+      "width": 280,
+      "height": 267,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/pad_01@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 132551,
+      "width": 560,
+      "height": 488,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/pad_01_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 41573,
+      "width": 280,
+      "height": 244,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/pad_02@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 122603,
+      "width": 502,
+      "height": 526,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/spring/pad_02_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 26297,
+      "width": 251,
+      "height": 263,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/_sheet.png",
+      "role": "preview",
+      "bytes": 715612,
+      "width": 1024,
+      "height": 1024,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/_sheet_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 730526,
+      "width": 1024,
+      "height": 1024,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/pad_00@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 397624,
+      "width": 560,
+      "height": 550,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/pad_00_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 126811,
+      "width": 280,
+      "height": 275,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/pad_01@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 310553,
+      "width": 508,
+      "height": 526,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/pad_01_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 96369,
+      "width": 254,
+      "height": 263,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/pad_02@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 237098,
+      "width": 560,
+      "height": 494,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/summer/pad_02_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 78838,
+      "width": 280,
+      "height": 247,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/winter/_sheet.png",
+      "role": "preview",
+      "bytes": 896642,
+      "width": 1024,
+      "height": 1024,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/winter/pad_00@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 471869,
+      "width": 560,
+      "height": 614,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/winter/pad_00_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 147311,
+      "width": 280,
+      "height": 307,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/winter/pad_01@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 486831,
+      "width": 560,
+      "height": 624,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/winter/pad_01_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 153643,
+      "width": 280,
+      "height": 312,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "pads/winter/pad_02@2x_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 430310,
+      "width": 534,
+      "height": 610,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "preview_autumn.png",
+      "role": "preview",
+      "bytes": 1501866,
+      "width": 1080,
+      "height": 1920,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "preview_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 2737204,
+      "width": 1080,
+      "height": 1920,
+      "season": null,
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "preview_summer_pre_palette.png",
+      "role": "palette_backup",
       "bytes": 3027795,
       "width": 1080,
       "height": 1920,
-      "role": "preview_summer"
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "preview_winter.png",
+      "role": "preview",
+      "bytes": 3067196,
+      "width": 1080,
+      "height": 1920,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "spring/layer_01_far_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1417791,
+      "width": 1080,
+      "height": 1920,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "spring/layer_02_mid_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1875831,
+      "width": 1080,
+      "height": 1920,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "spring/layer_03_mist_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 855588,
+      "width": 1080,
+      "height": 1920,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "spring/layer_04_near_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 861070,
+      "width": 1080,
+      "height": 1920,
+      "season": "spring",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "summer/layer_01_far_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 2852218,
+      "width": 1080,
+      "height": 1920,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "summer/layer_02_mid_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1469358,
+      "width": 1080,
+      "height": 1920,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "summer/layer_03_mist_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 814365,
+      "width": 1080,
+      "height": 1920,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "summer/layer_04_near_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 2031571,
+      "width": 1080,
+      "height": 1920,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "transitions/flat_panel_autumn_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 92025,
+      "width": 1080,
+      "height": 600,
+      "season": "autumn",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "transitions/flat_panel_summer_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 92701,
+      "width": 1080,
+      "height": 600,
+      "season": "summer",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "winter/layer_01_far_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1199640,
+      "width": 1080,
+      "height": 1920,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "winter/layer_02_mid_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1491868,
+      "width": 1080,
+      "height": 1920,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
+    },
+    {
+      "path": "winter/layer_04_near_pre_palette.png",
+      "role": "palette_backup",
+      "bytes": 1426650,
+      "width": 1080,
+      "height": 1920,
+      "season": "winter",
+      "layer_order": null,
+      "parallax_factor": null
     }
   ]
 }

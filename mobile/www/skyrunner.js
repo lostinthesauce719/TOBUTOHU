@@ -142,8 +142,8 @@ export async function createSkyrunner(scene, opts = {}) {
     const idx = ((b.id * 2654435761) >>> 0) % 3;
     const meta = padMeta[season][idx];
     const hit = meta.hit;
-    // Prefer visual width of the art; autumn hitboxes of ~7 px are a known pack gap.
-    const hitW = Math.max(hit.width || 1, meta.w * 0.35);
+    // Manifest hitbox.width (1x px) drives pad scale; floor keeps tiny legacy gaps playable.
+    const hitW = Math.max(hit.width || 1, 40);
     const worldW = Math.max(PAD_WORLD_W, (b.hx || 4) * 2.1);
     const aspect = meta.h / meta.w;
     const worldH = worldW * aspect;
@@ -155,8 +155,11 @@ export async function createSkyrunner(scene, opts = {}) {
     const cxNorm = ((hit.center_x || meta.w / 2) - meta.w / 2) / meta.w;
     const xOff = -cxNorm * worldW * 0.15;
     const topY = (b.top != null ? b.top : (b.y + b.hy)) + 0.04;
+    // hit.top_y is px from sprite top to landing surface; map into worldH.
+    const topFrac = Math.max(0, Math.min(0.85, (hit.top_y || 0) / Math.max(1, meta.h)));
     slot.mesh.scale.set(worldW, worldH, 1);
-    slot.mesh.position.set(b.x + xOff, topY + worldH * 0.28, b.z);
+    const yLift = worldH * (0.5 - topFrac);
+    slot.mesh.position.set(b.x + xOff, topY + yLift, b.z);
     // Slight tilt so the paper pad reads facing the chase cam.
     slot.mesh.rotation.set(-0.55, 0, 0);
     slot.mesh.visible = true;
@@ -164,7 +167,7 @@ export async function createSkyrunner(scene, opts = {}) {
     slot.shadow.position.set(b.x + xOff + 0.15, topY + 0.02, b.z + 0.35);
     slot.shadow.rotation.set(-Math.PI / 2, 0, 0);
     slot.shadow.visible = true;
-    padByBox.set(b.id, { slot, season, idx, b, worldW, worldH, xOff, hitW });
+    padByBox.set(b.id, { slot, season, idx, b, worldW, worldH, xOff, hitW, yLift });
   }
 
   function removePad(b) {
@@ -186,7 +189,7 @@ export async function createSkyrunner(scene, opts = {}) {
         // Keep pad glued to the box (breakables shake is visual-only on mesh, not box).
         const ent = padByBox.get(b.id);
         const topY = (b.top != null ? b.top : (b.y + b.hy)) + 0.04;
-        ent.slot.mesh.position.set(b.x + ent.xOff, topY + ent.worldH * 0.28, b.z);
+        ent.slot.mesh.position.set(b.x + ent.xOff, topY + (ent.yLift ?? ent.worldH * 0.28), b.z);
         ent.slot.shadow.position.set(b.x + ent.xOff + 0.15, topY + 0.02, b.z + 0.35);
         // Soft season swap when the climber has crossed a gate past this shelf.
         const want = seasonAt(b.y);
