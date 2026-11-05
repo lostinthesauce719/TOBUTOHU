@@ -84,11 +84,11 @@
       "right": 265
     },
     "pads/autumn/pad_02.png": {
-      "top_y": 114,
-      "width": 258,
-      "center_x": 136,
-      "left": 8,
-      "right": 265
+      "top_y": 103,
+      "width": 236,
+      "center_x": 140,
+      "left": 22,
+      "right": 257
     },
     "pads/winter/pad_00.png": {
       "top_y": 0,
@@ -764,45 +764,45 @@
     },
     {
       "path": "pads/autumn/pad_02.png",
-      "bytes": 3459,
-      "width": 277,
-      "height": 306,
+      "bytes": 49332,
+      "width": 280,
+      "height": 300,
       "season": "autumn",
       "role": "pad",
       "scale": 1,
       "hitbox": {
-        "top_y": 114,
-        "width": 258,
-        "center_x": 136,
-        "left": 8,
-        "right": 265
+        "top_y": 103,
+        "width": 236,
+        "center_x": 140,
+        "left": 22,
+        "right": 257
       },
       "layer_order": null,
       "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_02@2x.png",
-      "bytes": 24248,
-      "width": 554,
-      "height": 612,
+      "bytes": 151597,
+      "width": 560,
+      "height": 600,
       "season": "autumn",
       "role": "pad",
       "scale": 2,
       "hitbox": {
-        "top_y": 228,
-        "width": 516,
-        "center_x": 273,
-        "left": 16,
-        "right": 531
+        "top_y": 206,
+        "width": 472,
+        "center_x": 280,
+        "left": 44,
+        "right": 514
       },
       "layer_order": null,
       "parallax_factor": null
     },
     {
       "path": "pads/autumn/pad_02_shadow.png",
-      "bytes": 11378,
-      "width": 277,
-      "height": 306,
+      "bytes": 12422,
+      "width": 280,
+      "height": 300,
       "season": "autumn",
       "role": "pad_shadow",
       "scale": 1,
@@ -811,9 +811,9 @@
     },
     {
       "path": "pads/autumn/pad_02_shadow@2x.png",
-      "bytes": 32374,
-      "width": 554,
-      "height": 612,
+      "bytes": 35243,
+      "width": 560,
+      "height": 600,
       "season": "autumn",
       "role": "pad_shadow",
       "scale": 2,
@@ -1676,6 +1676,14 @@
       "season": "winter",
       "layer_order": null,
       "parallax_factor": null
+    },
+    {
+      "path": "pads/autumn/pad_02_empty.png",
+      "season": "autumn",
+      "role": "empty_backup",
+      "bytes": 3459,
+      "width": 277,
+      "height": 306
     }
   ]
 }
