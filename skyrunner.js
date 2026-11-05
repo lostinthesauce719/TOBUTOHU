@@ -121,11 +121,20 @@ export async function createSkyrunner(scene, opts = {}) {
   let fadeT = 0; // 0..1 during short wipe
 
   function applySeasonMaps(season) {
+    const maps = tex[season];
+    if (!maps) return;
     for (let i = 0; i < layers.length; i++) {
       const m = layers[i];
-      const map = tex[season][i];
-      if (m.userData.edgeMask) m.material.uniforms.map.value = map;
-      else { m.material.map = map; m.material.needsUpdate = true; }
+      const map = maps[i];
+      if (!map) continue;
+      if (m.userData.edgeMask) {
+        m.material.uniforms.map.value = map;
+        m.material.uniformsNeedUpdate = true;
+      } else {
+        m.material.map = map;
+        m.material.needsUpdate = true;
+      }
+      m.userData.season = season;
     }
     activeSeason = season;
   }
@@ -320,16 +329,16 @@ export async function createSkyrunner(scene, opts = {}) {
 
     const zm = zoneMix(Math.max(0, h));
     // One season opaque; short wipe (~6 m) around gates instead of double stacks.
+    // IMPORTANT: apply maps immediately on season change. Shot/SIM mode only calls
+    // update() once at dump time — a multi-frame fadeT gate left every capture on spring.
     const gateNear = SEASON_BOUNDS.some(bh => Math.abs(h - bh) < 6);
     const want = zm.t < 0.55 ? zm.a : zm.b;
-    if (want !== activeSeason && !fadeSeason) {
+    if (want !== activeSeason) {
+      applySeasonMaps(want);
       fadeSeason = want;
       fadeT = 0;
-    }
-    if (fadeSeason) {
+    } else if (fadeSeason) {
       fadeT = Math.min(1, fadeT + (reduceMotion ? 0.08 : 0.045));
-      // Mid-wipe: swap maps once past halfway.
-      if (fadeT >= 0.5 && activeSeason !== fadeSeason) applySeasonMaps(fadeSeason);
       if (fadeT >= 1) { fadeSeason = null; fadeT = 0; }
     }
 
