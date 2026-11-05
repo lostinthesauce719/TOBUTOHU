@@ -7,6 +7,7 @@
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <title>Tobu</title>
 <style>html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-overflow-scrolling:auto}canvas{touch-action:none;user-select:none;-webkit-user-select:none;display:block}
+#skyFrame{position:fixed;inset:0;pointer-events:none;z-index:4}
 #hud{position:fixed;left:12px;top:10px;color:#fff;text-shadow:0 1px 3px #000;white-space:pre;pointer-events:none;font-weight:600}
 #h{font-size:34px}#zone{position:fixed;left:0;right:0;top:38%;text-align:center;color:#fff;font-size:30px;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none}
 #ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
@@ -170,6 +171,7 @@ import {createHero} from './hero.js';import {kit,cedarZone,zoneMix,ZONES as SCN_
 import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK,HEMI} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
 import {createSaves} from './saves.js';import {createAge,yearChoices} from './age.js';import {createWallet} from './wallet.js';import {ECONOMY} from './economy.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
+import {createSkyrunner} from './skyrunner.js';
 import {createPowerups,SEASONS} from './powerups.js';
 import {SHOP_ICON_URIS} from './art/powerups/shop_icon_uris.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
@@ -192,7 +194,7 @@ const S=new THREE.Scene();const sky=makeSky();sky.userData.layer='far';S.add(sky
 const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
 
 // ---------- course meshes mirror sim boxes ----------
-const meshes=new Map(),cracked=new Set();
+const meshes=new Map(),cracked=new Set();let SKY=null; /* assigned after createSkyrunner */
 // batched course: plain trunks/ledges go into one InstancedMesh per material (unit box scaled per instance); breakables stay
 // separate meshes because each carries its own tear uniform. Mirrors sim boxes only.
 const UB=new THREE.BoxGeometry(1,1,1),_m4=new THREE.Matrix4(),_q0=new THREE.Quaternion(),_v1=new THREE.Vector3(),_v2=new THREE.Vector3();
@@ -202,15 +204,19 @@ function poolDel(e){const p=e.pool,i=p.ids.indexOf(e.b),l=--p.im.count;if(i<0)re
 function meshFor(b,mat){const m=new THREE.Mesh(UB,mat);m.scale.set(b.hx*2,b.hy*2,b.hz*2);m.position.set(b.x,b.y,b.z);m.userData.b=b;m.userData.layer='play';S.add(m);meshes.set(b.id,m);return m;}
 const hooks={
  add(b){pendKit.push(b);}, // built when the module closes (brk flags are set by then): merged kit geometry per module // breakable flag may arrive after add (flushed after each tick)
- crack(b){flushKit();let m=meshes.get(b.id);if(!m)return;if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));}m.material.uniforms.tearK.value=0;cracked.add(m);if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
- remove(b){const m=meshes.get(b.id);if(!m)return;if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
+ crack(b){flushKit();let m=meshes.get(b.id);if(!m)return;if(m.skyPad){if(SKY)SKY.placePad(b);return;}if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));}m.material.uniforms.tearK.value=0;cracked.add(m);if(b.kind==='shelf'){m.visible=false;if(SKY)SKY.placePad(b);}if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ remove(b){const m=meshes.get(b.id);if(SKY)SKY.removePad(b);if(!m)return;if(m.skyPad){meshes.delete(b.id);return;}if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
  module(m){flushKit();decor(m.z0,m.z1,m.y0);}};
 // BRUSH clipkit: branch ledges + curved bark walls (visual only; contact faces sit on the flat sim colliders), one merged draw per module
 const KM=gridMat(0xffffff,{vc:1,gAV:0}),pendKit=[]; /* Walls C: no grid on vertical rock; ledge tops keep gA */
 function flushKit(){if(!pendKit.length)return;const gs=[],ent={n:0,mesh:null};
- for(const b of pendKit){if(b.gone)continue;if(b.brk){meshFor(b,climbMat(b,zoneAt(b.y)));continue;}
-  gs.push(b.kind==='shelf'?kit.ledge(THREE,b):kit.wall(THREE,b,Math.sign(b.x)||1));ent.n++;meshes.set(b.id,{kit:ent,b});}
- pendKit.length=0;if(!gs.length)return;const g=mergeKit(gs);ent.mesh=new THREE.Mesh(g,KM);ent.mesh.frustumCulled=false;ent.mesh.userData.layer='play';S.add(ent.mesh);}
+ for(const b of pendKit){if(b.gone)continue;if(b.brk){const mm=meshFor(b,climbMat(b,zoneAt(b.y)));if(b.kind==='shelf'){mm.visible=false;if(SKY)SKY.placePad(b);}continue;}
+  if(b.kind==='shelf'){ /* sky-runner: shelf collision stays; visual = pad sprite (no ledge mesh) */
+   meshes.set(b.id,{skyPad:1,b});if(SKY)SKY.placePad(b);continue;}
+  gs.push(kit.wall(THREE,b,Math.sign(b.x)||1));ent.n++;meshes.set(b.id,{kit:ent,b});}
+ pendKit.length=0;if(!gs.length)return;const g=mergeKit(gs);ent.mesh=new THREE.Mesh(g,KM);ent.mesh.frustumCulled=false;ent.mesh.userData.layer='play';
+ /* Sky-runner preview: keep wall colliders, hide kit walls so paper pads/layers match the hybrid mockups. */
+ ent.mesh.visible=false;S.add(ent.mesh);}
 function mergeKit(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;const o=new THREE.BufferGeometry();for(const a of['position','normal','color']){const arr=new Float32Array(n*3);let k=0;for(const g of gs){arr.set(g.attributes[a].array,k);k+=g.attributes[a].array.length;}o.setAttribute(a,new THREE.BufferAttribute(arr,3));}return o;}
 
 // climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
@@ -289,8 +295,21 @@ function mistDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_mv.set(
  const off=y<0,d=Math.max(0,P.pos.y-mistY.v);mRead.style.display=off&&P.mode!=='dead'?'block':'none';mRead.textContent='mist '+d.toFixed(0)+' m';mRead.classList.toggle('warn',mWarnA>0.5);}
 
 // ---------- lightning visuals: ring decal (3D) + depth-tested 3D bolt column (walls occlude). Visual only: reads sim.strikes. ----------
-const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const scen=createScenery(S,SEED,RM);const SCENQ=Q.has('scenonly')?1:Q.has('noscen')?2:0; /* luma capture only: 1 = sky+scenery, 2 = sky alone */ /* kamishibai: ?layer=far|mid|play|fg|mtn|all */const flashUntil=new Map();
-function applyCaptureLayer(){const name=LAYER;if(!name||name==='all'){scen.applyLayer('all');sky.visible=true;S.traverse(o=>{if(o.userData&&o.userData.layer&&o!==sky)o.visible=true;});return;}scen.applyLayer(name);sky.visible=name==='far'; /* mtn=mountains-only (scenery.applyLayer); no sky */S.traverse(o=>{if(o===S||o===scen.root||o===sky)return;if(o.isLight)return;/* never override scenery-owned meshes */let p=o.parent;while(p){if(p===scen.root)return;p=p.parent;}if(o===scen.birds||o===scen.weather)return;const L=o.userData&&o.userData.layer;if(L){o.visible=L===name;return;}if(o.isMesh||o.isInstancedMesh)o.visible=name==='play';});} 
+const RM=Q.has('reducemotion')||matchMedia('(prefers-reduced-motion: reduce)').matches;const FL=createFlashLimiter({reduceMotion:RM});const scen=createScenery(S,SEED,RM);const SCENQ=Q.has('scenonly')?1:Q.has('noscen')?2:0;
+/* Sky-runner hybrid preview (BRUSH pack): paper parallax + pads + torii + walnut frame. Visual only; sim stays tobu-sim-7. */
+SKY=await createSkyrunner(S,{reduceMotion:RM});
+scen.root.visible=false;scen.birds.visible=false;scen.weather.visible=false;sky.visible=false;mtns.visible=false;
+/* Drop any mid-cedar / procedural decor already spawned during createSim. */
+while(deco.length){const d=deco.pop();S.remove(d);if(d.geometry)d.geometry.dispose();}
+if(gateState.mesh){S.remove(gateState.mesh);gateState.mesh.geometry&&gateState.mesh.geometry.dispose();gateState.mesh=null;}
+SKY.syncPads(sim.boxes);
+
+/* Suppress procedural mid-cedar / procedural torii draws — skyrunner owns backdrop + gates. */
+const _decoPush=deco.push.bind(deco);deco.push=function(){for(const m of arguments){S.remove(m);if(m.geometry)m.geometry.dispose();}return deco.length;};
+const _maybeSpawnGate=maybeSpawnGate;maybeSpawnGate=function(){}; /* skyrunner torii replaces procedural gates */
+const _fadeGates=fadeGates;fadeGates=function(){}; if(gateState.mesh){S.remove(gateState.mesh);gateState.mesh=null;}
+ /* luma capture only: 1 = sky+scenery, 2 = sky alone */ /* kamishibai: ?layer=far|mid|play|fg|mtn|all */const flashUntil=new Map();
+function applyCaptureLayer(){const name=LAYER;if(SKY){SKY.applyLayer(name||'all');scen.applyLayer('all');scen.root.visible=false;scen.birds.visible=false;scen.weather.visible=false;sky.visible=false;if(!name||name==='all'){S.traverse(o=>{if(o.userData&&o.userData.layer&&o!==sky&&o!==scen.root)o.visible=true;});return;}S.traverse(o=>{if(o===S||o===SKY.root||o===sky||o===scen.root)return;if(o.isLight)return;let p=o.parent;while(p){if(p===SKY.root||p===scen.root)return;p=p.parent;}const L=o.userData&&o.userData.layer;if(L){o.visible=L===name;return;}if(o.isMesh||o.isInstancedMesh)o.visible=name==='play';});return;}if(!name||name==='all'){scen.applyLayer('all');sky.visible=true;S.traverse(o=>{if(o.userData&&o.userData.layer&&o!==sky)o.visible=true;});return;}scen.applyLayer(name);sky.visible=name==='far'; /* mtn=mountains-only (scenery.applyLayer); no sky */S.traverse(o=>{if(o===S||o===scen.root||o===sky)return;if(o.isLight)return;/* never override scenery-owned meshes */let p=o.parent;while(p){if(p===scen.root)return;p=p.parent;}if(o===scen.birds||o===scen.weather)return;const L=o.userData&&o.userData.layer;if(L){o.visible=L===name;return;}if(o.isMesh||o.isInstancedMesh)o.visible=name==='play';});} 
 const ringMat=()=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,depthTest:true,polygonOffset:true,polygonOffsetFactor:-3,uniforms:{R:{value:LT.r},prog:{value:0},ph:{value:1},fade:{value:1},px:{value:1}},
  vertexShader:`varying vec2 vP; void main(){ vP=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
  fragmentShader:`uniform float R,prog,ph,fade,px; varying vec2 vP; void main(){ float r=length(vP), fw=fwidth(r)/px; vec4 o=vec4(0.);
@@ -479,7 +498,7 @@ $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});cons
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'&&!EVERY?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}const hc=$('hCoins');if(hc)hc.textContent=P.coinsRun?(' · '+P.coinsRun+'c'):(P.wings?(' · ✦'):'');mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky,P.pos);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
+ else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}const hc=$('hCoins');if(hc)hc.textContent=P.coinsRun?(' · '+P.coinsRun+'c'):(P.wings?(' · ✦'):'');mistDraw();lightDraw();if(SKY){SKY.update(cam,P.pos.y,P.t,sim.boxes);S.fog.color.setHex(0xD8E4F0);S.fog.near=18;S.fog.far=110;}else{scen.update(cam,P.pos.y,P.t,S.fog.color,sky,P.pos);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}}
  // grasshopper enchantments → post overlay (0 draws)
  const _hv=_mv.set(hero.root.position.x,hero.root.position.y,hero.root.position.z).project(cam);
  post.U.hUV.value.set(_hv.x*0.5+0.5,_hv.y*0.5+0.5);

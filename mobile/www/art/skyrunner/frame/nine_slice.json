@@ -1,0 +1,11 @@
+{
+  "file": "stage_frame_1080x1920.png",
+  "insets": {
+    "left": 125,
+    "right": 125,
+    "top": 225,
+    "bottom": 175
+  },
+  "center_fill": "transparent",
+  "note": "Stretch edges; keep corners; center is clear playfield"
+}
