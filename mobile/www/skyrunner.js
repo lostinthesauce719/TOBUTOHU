@@ -1,47 +1,63 @@
-// skyrunner.js — BRUSH skyrunner_prod hybrid (A walnut frame + C paper layers).
-// PREVIEW BRANCH ONLY. VISUAL ONLY: reads camera / climber height / sim time / shelf boxes.
-// Never writes sim state. Pad hitboxes from the manifest align sprites to shelf tops;
-// collision stays on the existing tobu-sim-7 shelf/wall boxes (honest systems).
+// skyrunner.js — BRUSH skyrunner hybrid PREVIEW. VISUAL ONLY; never writes sim.
+// sky4: frustum-fit depth-tested layers, one-season stack, edge-masked near/fg,
+// short gate wipe, big torii, border-only frame + live HUD, decorative pads.
 import * as THREE from './vendor/three.module.min.js';
 import { zoneMix, SEASON_BOUNDS, XFADE_M } from './clipkit.js';
 
 const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 const LAYER_KEYS = [
-  { file: 'layer_00_sky', role: 'sky', factor: 0.15, z: -92, tag: 'far' },
-  { file: 'layer_01_far', role: 'far', factor: 0.35, z: -74, tag: 'far' },
-  { file: 'layer_02_mid', role: 'mid', factor: 0.55, z: -56, tag: 'mid' },
-  { file: 'layer_03_mist', role: 'mist', factor: 0.70, z: -42, tag: 'mid' },
-  { file: 'layer_04_near', role: 'near', factor: 0.90, z: -28, tag: 'fg' },
+  { file: 'layer_00_sky', role: 'sky', factor: 0.15, z: -150, tag: 'far', edgeMask: false },
+  { file: 'layer_01_far', role: 'far', factor: 0.35, z: -120, tag: 'far', edgeMask: false },
+  { file: 'layer_02_mid', role: 'mid', factor: 0.55, z: -92, tag: 'mid', edgeMask: false },
+  { file: 'layer_03_mist', role: 'mist', factor: 0.70, z: -70, tag: 'mid', edgeMask: true },
+  { file: 'layer_04_near', role: 'near', factor: 0.90, z: -48, tag: 'fg', edgeMask: true },
 ];
 const BASE = './art/skyrunner';
-// World width of a full layer plane (lane ~8 u wide; walls sit near ±4.6).
-const LAYER_W = 72;
-const LAYER_H = LAYER_W * (1920 / 1080);
-// Shelf tops are 8 u wide; pad sprites scale so their opaque top reads across that span.
-const PAD_WORLD_W = 9.2;
+const PAD_MAX = 3; // visible pad budget (draws); shadows off to stay ≤45
 
-function loadTex(loader, url, { wrap = false, flipY = true } = {}) {
+function loadTex(loader, url, { wrap = false } = {}) {
   return new Promise((res, rej) => loader.load(url, t => {
-    t.colorSpace = THREE.SRGBColorSpace || THREE.NoColorSpace;
+    t.colorSpace = THREE.SRGBColorSpace;
     t.magFilter = THREE.LinearFilter;
     t.minFilter = THREE.LinearFilter;
     t.generateMipmaps = false;
-    t.flipY = flipY;
-    if (wrap) {
-      t.wrapS = THREE.ClampToEdgeWrapping;
-      t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(1, 1);
-    } else {
-      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-    }
+    t.flipY = true;
+    if (wrap) { t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; }
+    else { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
     res(t);
   }, undefined, rej));
 }
 
-function matFor(map, opacity = 1) {
+function basicMat(map, { opacity = 1, depthTest = true, depthWrite = true, transparent = false } = {}) {
   return new THREE.MeshBasicMaterial({
-    map, transparent: true, opacity, depthWrite: false, depthTest: false,
-    fog: false, side: THREE.DoubleSide, toneMapped: false,
+    map, transparent: transparent || opacity < 1, opacity,
+    depthTest, depthWrite, fog: false, side: THREE.DoubleSide, toneMapped: false,
+  });
+}
+
+// Near/mist: keep left/right edges, clear center play lane.
+function edgeMaskMat(map, opacity = 1) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: map },
+      opacity: { value: opacity },
+      // uv |x-0.5| below clearR → fully clear; above edgeR → full art
+      clearR: { value: 0.18 },
+      edgeR: { value: 0.42 },
+    },
+    transparent: true, depthTest: true, depthWrite: false, fog: false, side: THREE.DoubleSide,
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `
+      uniform sampler2D map; uniform float opacity, clearR, edgeR;
+      varying vec2 vUv;
+      void main(){
+        vec4 c = texture2D(map, vUv);
+        float ax = abs(vUv.x - 0.5);
+        float edge = smoothstep(clearR, edgeR, ax);
+        float a = c.a * opacity * edge;
+        if (a < 0.02) discard;
+        gl_FragColor = vec4(c.rgb, a);
+      }`,
   });
 }
 
@@ -53,83 +69,97 @@ export async function createSkyrunner(scene, opts = {}) {
   root.userData.skyrunner = 1;
   root.userData.layer = 'far';
   scene.add(root);
+  scene.background = new THREE.Color(0xC8D8EC);
+  // layerRig rides the camera (pos+quat) so billboard local -Z is the view axis — kills black frustum voids.
+  const layerRig = new THREE.Group();
+  layerRig.userData.layer = 'far';
+  root.add(layerRig);
+  const worldFx = new THREE.Group(); // pads / torii / wipe in world-ish space under root
+  worldFx.userData.layer = 'mid';
+  root.add(worldFx);
 
-  // ---- load manifest (hitboxes + nine-slice) ----
   const manifest = await (await fetch(`${BASE}/manifest.json`)).json();
   const hitboxes = manifest.pad_hitboxes_1x || {};
 
-  // ---- parallax layers: one mesh per (season, layer); opacity cross-fades ----
-  const layerMeshes = {}; // season -> [5 meshes]
+  // ---- textures per season/layer (loaded once) ----
+  const tex = {}; // season -> [5 textures]
   await Promise.all(SEASONS.map(async season => {
-    const list = [];
-    for (let i = 0; i < LAYER_KEYS.length; i++) {
-      const L = LAYER_KEYS[i];
-      const tex = await loadTex(loader, `${BASE}/${season}/${L.file}.png`, { wrap: true });
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(LAYER_W, LAYER_H), matFor(tex, 0));
-      m.frustumCulled = false;
-      m.renderOrder = -20 + i;
-      m.userData.layer = L.tag;
-      m.userData.factor = L.factor;
-      m.userData.role = L.role;
-      m.userData.season = season;
-      m.position.set(0, 0, L.z);
-      root.add(m);
-      list.push(m);
+    tex[season] = [];
+    for (const L of LAYER_KEYS) {
+      tex[season].push(await loadTex(loader, `${BASE}/${season}/${L.file}.png`, { wrap: true }));
     }
-    layerMeshes[season] = list;
   }));
 
-  // ---- pads (shelf toppers) ----
-  const padMaps = {}; // season -> [3 textures]
-  const padShadowMaps = {};
-  const padMeta = {}; // season -> [{w,h,hit}]
+  // ---- ONE set of 5 layer meshes; maps swap on season change ----
+  const layers = LAYER_KEYS.map((L, i) => {
+    const map = tex.spring[i];
+    let mat;
+    if (L.edgeMask) {
+      mat = edgeMaskMat(map, 1);
+    } else if (L.role === 'sky') {
+      // Full-frame fill — no depth test so transparent holes in far/mid never flash black clear-color.
+      mat = basicMat(map, { depthTest: false, depthWrite: false, transparent: false, opacity: 1 });
+    } else {
+      // far/mid: depth-tested paper; alphaTest punches soft edges without black voids (sky shows through).
+      mat = basicMat(map, { depthTest: true, depthWrite: true, transparent: true, opacity: 1 });
+      mat.alphaTest = 0.08;
+    }
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    m.frustumCulled = false;
+    m.renderOrder = L.role === 'sky' ? -40 : (-30 + i);
+    m.userData.layer = L.tag;
+    m.userData.factor = L.factor;
+    m.userData.role = L.role;
+    m.userData.z0 = L.z;
+    m.userData.edgeMask = L.edgeMask;
+    m.position.set(0, 0, L.z);
+    layerRig.add(m);
+    return m;
+  });
+  let activeSeason = 'spring';
+  let fadeSeason = null;
+  let fadeT = 0; // 0..1 during short wipe
+
+  function applySeasonMaps(season) {
+    for (let i = 0; i < layers.length; i++) {
+      const m = layers[i];
+      const map = tex[season][i];
+      if (m.userData.edgeMask) m.material.uniforms.map.value = map;
+      else { m.material.map = map; m.material.needsUpdate = true; }
+    }
+    activeSeason = season;
+  }
+  applySeasonMaps('spring');
+
+  // ---- pads (decorative, flat on shelf tops) ----
+  const padMaps = {}, padShadowMaps = {}, padMeta = {};
   await Promise.all(SEASONS.map(async season => {
-    padMaps[season] = [];
-    padShadowMaps[season] = [];
-    padMeta[season] = [];
+    padMaps[season] = []; padShadowMaps[season] = []; padMeta[season] = [];
     for (let i = 0; i < 3; i++) {
       const rel = `pads/${season}/pad_${String(i).padStart(2, '0')}.png`;
-      const tex = await loadTex(loader, `${BASE}/${rel}`);
+      const t = await loadTex(loader, `${BASE}/${rel}`);
       const sh = await loadTex(loader, `${BASE}/pads/${season}/pad_${String(i).padStart(2, '0')}_shadow.png`);
-      padMaps[season].push(tex);
-      padShadowMaps[season].push(sh);
+      padMaps[season].push(t); padShadowMaps[season].push(sh);
       const asset = (manifest.assets || []).find(a => a.path === rel) || {};
-      const hit = hitboxes[rel] || asset.hitbox || { top_y: 0, width: 80, center_x: 140, left: 100, right: 180 };
-      padMeta[season].push({
-        w: asset.width || tex.image.width,
-        h: asset.height || tex.image.height,
-        hit,
-      });
+      const hit = hitboxes[rel] || asset.hitbox || { top_y: 0, width: 80, center_x: 140 };
+      padMeta[season].push({ w: asset.width || t.image.width, h: asset.height || t.image.height, hit });
     }
   }));
 
-  const padByBox = new Map(); // box.id -> { mesh, shadow, season, idx }
-  const PAD_POOL = 48;
+  const padByBox = new Map();
   const padPool = [];
-  for (let i = 0; i < PAD_POOL; i++) {
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matFor(padMaps.spring[0]));
-    mesh.frustumCulled = false;
-    mesh.renderOrder = 1;
-    mesh.userData.layer = 'play';
-    mesh.visible = false;
-    root.add(mesh);
-    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matFor(padShadowMaps.spring[0], 0.55));
-    shadow.frustumCulled = false;
-    shadow.renderOrder = 0;
-    shadow.userData.layer = 'play';
-    shadow.visible = false;
-    root.add(shadow);
+  for (let i = 0; i < 24; i++) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), basicMat(padMaps.spring[0], { transparent: true, depthTest: true, depthWrite: false, opacity: 0.82 }));
+    mesh.frustumCulled = false; mesh.renderOrder = 2; mesh.userData.layer = 'play'; mesh.visible = false; worldFx.add(mesh);
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), basicMat(padShadowMaps.spring[0], { transparent: true, depthTest: true, depthWrite: false, opacity: 0.22 }));
+    shadow.frustumCulled = false; shadow.renderOrder = 1; shadow.userData.layer = 'play'; shadow.visible = false; worldFx.add(shadow);
     padPool.push({ mesh, shadow, used: false });
   }
+  function allocPad() { for (const p of padPool) if (!p.used) { p.used = true; return p; } return null; }
 
   function seasonAt(y) {
     const zm = zoneMix(Math.max(0, y));
     return zm.t < 0.5 ? zm.a : zm.b;
-  }
-
-  function allocPad() {
-    for (const p of padPool) if (!p.used) { p.used = true; return p; }
-    return null;
   }
 
   function placePad(b) {
@@ -138,60 +168,50 @@ export async function createSkyrunner(scene, opts = {}) {
     const slot = allocPad();
     if (!slot) return;
     const season = seasonAt(b.y);
-    // Deterministic variant from box id (no Math.random).
     const idx = ((b.id * 2654435761) >>> 0) % 3;
     const meta = padMeta[season][idx];
     const hit = meta.hit;
-    // Manifest hitbox.width (1x px) drives pad scale; floor keeps tiny legacy gaps playable.
-    const hitW = Math.max(hit.width || 1, 40);
-    const worldW = Math.max(PAD_WORLD_W, (b.hx || 4) * 2.1);
-    const aspect = meta.h / meta.w;
-    const worldH = worldW * aspect;
+    const worldW = Math.max(6.5, (b.hx || 4) * 1.85);
+    const aspect = meta.h / Math.max(1, meta.w);
+    const worldH = worldW * aspect * 0.42; // flatter decorative footprint
     slot.mesh.material.map = padMaps[season][idx];
     slot.mesh.material.needsUpdate = true;
     slot.shadow.material.map = padShadowMaps[season][idx];
     slot.shadow.material.needsUpdate = true;
-    // Center of the pad sprite aligns to the shelf center; hitbox.center_x shifts slightly.
-    const cxNorm = ((hit.center_x || meta.w / 2) - meta.w / 2) / meta.w;
-    const xOff = -cxNorm * worldW * 0.15;
-    const topY = (b.top != null ? b.top : (b.y + b.hy)) + 0.04;
-    // hit.top_y is px from sprite top to landing surface; map into worldH.
-    const topFrac = Math.max(0, Math.min(0.85, (hit.top_y || 0) / Math.max(1, meta.h)));
+    const topY = (b.top != null ? b.top : (b.y + b.hy)) + 0.03;
+    const topFrac = Math.max(0, Math.min(0.7, (hit.top_y || 0) / Math.max(1, meta.h)));
     slot.mesh.scale.set(worldW, worldH, 1);
-    const yLift = worldH * (0.5 - topFrac);
-    slot.mesh.position.set(b.x + xOff, topY + yLift, b.z);
-    // Slight tilt so the paper pad reads facing the chase cam.
-    slot.mesh.rotation.set(-0.55, 0, 0);
+    // Flat on shelf top — decorative, collider is the shelf ghost underneath.
+    slot.mesh.rotation.set(-Math.PI / 2, 0, 0);
+    slot.mesh.position.set(b.x, topY + 0.04, b.z);
     slot.mesh.visible = true;
-    slot.shadow.scale.set(worldW * 1.05, worldH * 1.05, 1);
-    slot.shadow.position.set(b.x + xOff + 0.15, topY + 0.02, b.z + 0.35);
+    slot.shadow.scale.set(worldW * 1.05, worldH * 0.9, 1);
     slot.shadow.rotation.set(-Math.PI / 2, 0, 0);
-    slot.shadow.visible = true;
-    padByBox.set(b.id, { slot, season, idx, b, worldW, worldH, xOff, hitW, yLift });
+    slot.shadow.position.set(b.x + 0.1, topY + 0.01, b.z + 0.2);
+    slot.shadow.visible = false; // muted: no orphan/extra shadow discs
+    padByBox.set(b.id, { slot, season, idx, b, worldW, worldH });
   }
 
   function removePad(b) {
     const ent = padByBox.get(b && b.id);
     if (!ent) return;
-    ent.slot.mesh.visible = false;
-    ent.slot.shadow.visible = false;
-    ent.slot.used = false;
+    ent.slot.mesh.visible = false; ent.slot.shadow.visible = false; ent.slot.used = false;
     padByBox.delete(b.id);
   }
 
-  function syncPads(boxes) {
+  function syncPads(boxes, heroZ) {
     const live = new Set();
+    const ranked = [];
     for (const b of boxes) {
       if (b.kind !== 'shelf' || b.gone) continue;
       live.add(b.id);
+      ranked.push(b);
       if (!padByBox.has(b.id)) placePad(b);
       else {
-        // Keep pad glued to the box (breakables shake is visual-only on mesh, not box).
         const ent = padByBox.get(b.id);
-        const topY = (b.top != null ? b.top : (b.y + b.hy)) + 0.04;
-        ent.slot.mesh.position.set(b.x + ent.xOff, topY + (ent.yLift ?? ent.worldH * 0.28), b.z);
-        ent.slot.shadow.position.set(b.x + ent.xOff + 0.15, topY + 0.02, b.z + 0.35);
-        // Soft season swap when the climber has crossed a gate past this shelf.
+        const topY = (b.top != null ? b.top : (b.y + b.hy)) + 0.03;
+        ent.slot.mesh.position.set(b.x, topY + 0.04, b.z);
+        ent.slot.shadow.position.set(b.x + 0.1, topY + 0.01, b.z + 0.2);
         const want = seasonAt(b.y);
         if (want !== ent.season) {
           ent.season = want;
@@ -202,188 +222,200 @@ export async function createSkyrunner(scene, opts = {}) {
         }
       }
     }
-    for (const [id, ent] of [...padByBox]) {
-      if (!live.has(id)) removePad(ent.b);
+    for (const [id, ent] of [...padByBox]) if (!live.has(id)) removePad(ent.b);
+    // Cull distant pads for draw budget — keep PAD_MAX nearest to hero.
+    if (heroZ != null && padByBox.size > PAD_MAX) {
+      const arr = [...padByBox.values()].sort((a, b) => Math.abs(a.b.z - heroZ) - Math.abs(b.b.z - heroZ));
+      arr.forEach((ent, i) => {
+        const on = i < PAD_MAX;
+        ent.slot.mesh.visible = on;
+        ent.slot.shadow.visible = false;
+      });
     }
   }
 
-  // ---- torii + glow at season gates ----
+  // ---- torii (bigger, readable) ----
   const toriiTex = await loadTex(loader, `${BASE}/torii/torii.png`);
   const glowTex = await loadTex(loader, `${BASE}/torii/torii_glow.png`);
-  // Tint glow toward gold #E8C050 per INTEGRATION.md note.
-  const glowMat = matFor(glowTex, 0.85);
-  glowMat.color = new THREE.Color(0xE8C050);
-  const toriiGroup = new THREE.Group();
-  toriiGroup.userData.layer = 'mid';
-  root.add(toriiGroup);
-  const gateMeshes = SEASON_BOUNDS.map((bh, i) => {
+  const toriiGroup = new THREE.Group(); toriiGroup.userData.layer = 'mid'; worldFx.add(toriiGroup);
+  const gateMeshes = SEASON_BOUNDS.map((bh) => {
     const side = bh === 250 ? -1 : 1;
     const g = new THREE.Group();
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(14, 12), glowMat.clone());
-    glow.position.set(0, 0, -0.2);
-    glow.frustumCulled = false;
-    glow.renderOrder = 3;
-    glow.userData.layer = 'mid';
-    const gate = new THREE.Mesh(new THREE.PlaneGeometry(12, 10.3), matFor(toriiTex));
-    gate.frustumCulled = false;
-    gate.renderOrder = 4;
-    gate.userData.layer = 'mid';
-    g.add(glow); g.add(gate);
-    g.position.set(side * 9.5, bh + 3.5, 0);
-    g.rotation.y = side * 0.25;
-    g.visible = false;
-    g.userData.bh = bh;
-    g.userData.side = side;
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(22, 19), basicMat(glowTex, { transparent: true, depthTest: true, depthWrite: false, opacity: 0.9 }));
+    glow.material.color = new THREE.Color(0xE8C050);
+    glow.position.set(0, 0, -0.3); glow.frustumCulled = false; glow.renderOrder = 3; glow.userData.layer = 'mid';
+    const gate = new THREE.Mesh(new THREE.PlaneGeometry(18, 15.5), basicMat(toriiTex, { transparent: true, depthTest: true, depthWrite: false, opacity: 1 }));
+    gate.frustumCulled = false; gate.renderOrder = 4; gate.userData.layer = 'mid';
+    glow.visible=false; g.add(glow); g.add(gate); // glow off: draw budget at gates
+    g.position.set(side * 7.5, bh + 5, -16);
+    g.rotation.y = side * 0.2;
+    g.visible = false; g.userData.bh = bh; g.userData.side = side;
     toriiGroup.add(g);
     return g;
   });
 
-  // ---- transition flats (slide + crossfade near gates) ----
+  // ---- short gate wipe (edges only, low panel) ----
   const edgeTop = await loadTex(loader, `${BASE}/transitions/flat_top_edge.png`);
   const edgeBot = await loadTex(loader, `${BASE}/transitions/flat_bottom_edge.png`);
-  const panelTex = {};
-  await Promise.all(SEASONS.map(async s => {
-    panelTex[s] = await loadTex(loader, `${BASE}/transitions/flat_panel_${s}.png`);
-  }));
-  const xfade = new THREE.Group();
-  xfade.userData.layer = 'mid';
-  root.add(xfade);
-  const panelMesh = new THREE.Mesh(new THREE.PlaneGeometry(LAYER_W * 0.95, 22), matFor(panelTex.spring, 0));
-  panelMesh.frustumCulled = false;
-  panelMesh.renderOrder = 5;
-  panelMesh.position.z = -24;
-  xfade.add(panelMesh);
-  const topEdge = new THREE.Mesh(new THREE.PlaneGeometry(LAYER_W * 0.95, 4), matFor(edgeTop, 0));
-  topEdge.frustumCulled = false;
-  topEdge.renderOrder = 6;
-  topEdge.position.set(0, 10, -23.5);
-  xfade.add(topEdge);
-  const botEdge = new THREE.Mesh(new THREE.PlaneGeometry(LAYER_W * 0.95, 4), matFor(edgeBot, 0));
-  botEdge.frustumCulled = false;
-  botEdge.renderOrder = 6;
-  botEdge.position.set(0, -10, -23.5);
-  xfade.add(botEdge);
+  const xfade = new THREE.Group(); xfade.userData.layer = 'mid'; worldFx.add(xfade);
+  const topE = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), basicMat(edgeTop, { transparent: true, depthTest: false, depthWrite: false, opacity: 0 }));
+  topE.frustumCulled = false; topE.renderOrder = 8; xfade.add(topE);
+  const botE = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), basicMat(edgeBot, { transparent: true, depthTest: false, depthWrite: false, opacity: 0 }));
+  botE.frustumCulled = false; botE.renderOrder = 8; xfade.add(botE);
+  // Soft veil (no big season panel art)
+  const veil = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ color: 0xF2EDE0, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false })
+  );
+  veil.frustumCulled = false; veil.renderOrder = 7; xfade.add(veil);
 
-  // ---- walnut stage frame (DOM HUD overlay) ----
+  // ---- border-only walnut frame + live HUD ----
   const frameEl = document.createElement('div');
   frameEl.id = 'skyFrame';
   frameEl.setAttribute('aria-hidden', 'true');
+  const inset = manifest.nine_slice_frame || { left: 125, right: 125, top: 225, bottom: 175 };
   Object.assign(frameEl.style, {
-    position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '40',
+    position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '4',
     background: `url(${BASE}/frame/stage_frame_1080x1920.png) center / cover no-repeat`,
-    opacity: '1',
   });
+  // Live HUD strip inside the top wood (percent of viewport approximating 9-slice top)
+  const hud = document.createElement('div');
+  hud.id = 'skyHud';
+  Object.assign(hud.style, {
+    position: 'absolute', left: '12%', right: '12%', top: '3.5%', height: '7%',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    fontFamily: "Nunito,'Trebuchet MS',system-ui,sans-serif", fontWeight: '900',
+    color: '#F2E8CC', textShadow: '0 1px 2px #1C1408', pointerEvents: 'none',
+  });
+  hud.innerHTML = `<span id="skyHudH" style="font-size:clamp(14px,3.6vw,28px)">0 m</span>
+    <span style="display:flex;gap:14px;font-size:clamp(12px,3vw,22px)">
+      <span id="skyHudGems">0 ◆</span><span id="skyHudCoins">0 ●</span>
+    </span>`;
+  frameEl.appendChild(hud);
   document.body.appendChild(frameEl);
 
-  // Soft letterbox so the clear center of the 9-slice reads on non-9:16 viewports.
-  // Insets from manifest: L125 R125 T225 B175 on 1080×1920.
-  const inset = manifest.nine_slice_frame || { left: 125, right: 125, top: 225, bottom: 175 };
+  // Hide default top-left hud while sky frame owns height readout (keep accessible via skyHud)
+  const legacyHud = document.getElementById('hud');
+  if (legacyHud) legacyHud.style.opacity = '0';
 
-  function update(cam, h, t, boxes) {
-    // Root tracks camera so layers fill the view; Y scroll is parallax-only.
-    root.position.set(cam.position.x, cam.position.y, cam.position.z);
+  function fitLayerToFrustum(m, cam) {
+    const z = m.userData.z0;
+    const dist = Math.max(4, Math.abs(z));
+    const vFov = cam.fov * Math.PI / 180;
+    // Heavy overscan: portrait + cam pitch must never reveal clear-color gutters.
+    const h = 2 * Math.tan(vFov / 2) * dist * 1.9;
+    const aspect = Math.max(cam.aspect || 0.5, 0.5);
+    const w = h * aspect * 2.4;
+    m.scale.set(w, h, 1);
+    m.position.z = z;
+  }
+
+  function update(cam, h, t, boxes, heroZ, hudState) {
+    // root stays at origin; layerRig tracks camera so local -Z == view axis.
+    layerRig.position.copy(cam.position);
+    layerRig.quaternion.copy(cam.quaternion);
+    // worldFx keeps world positions for pads; only origin (no cam parent offset)
+    worldFx.position.set(0, 0, 0);
+    worldFx.quaternion.identity();
+
     const zm = zoneMix(Math.max(0, h));
-    const W = { spring: 0, summer: 0, autumn: 0, winter: 0 };
-    W[zm.a] += 1 - zm.t; W[zm.b] += zm.t;
-
-    for (const season of SEASONS) {
-      const op = W[season];
-      const list = layerMeshes[season];
-      for (let i = 0; i < list.length; i++) {
-        const m = list[i];
-        const factor = m.userData.factor;
-        // Vertical tile scroll: UV offset tracks rise × factor (near scrolls more).
-        const tex = m.material.map;
-        if (tex) {
-          const tile = reduceMotion ? 0 : (h * factor) / LAYER_H;
-          tex.offset.y = -tile;
-        }
-        // Lateral depth cue from camera X.
-        m.position.x = -cam.position.x * (1 - factor) * 0.15;
-        m.position.y = -h * (1 - factor) * 0.08;
-        // Face the chase cam so the paper stack fills the portrait frame.
-        m.quaternion.copy(cam.quaternion);
-        m.material.opacity = op;
-        m.visible = op > 0.01;
-      }
+    // One season opaque; short wipe (~6 m) around gates instead of double stacks.
+    const gateNear = SEASON_BOUNDS.some(bh => Math.abs(h - bh) < 6);
+    const want = zm.t < 0.55 ? zm.a : zm.b;
+    if (want !== activeSeason && !fadeSeason) {
+      fadeSeason = want;
+      fadeT = 0;
+    }
+    if (fadeSeason) {
+      fadeT = Math.min(1, fadeT + (reduceMotion ? 0.08 : 0.045));
+      // Mid-wipe: swap maps once past halfway.
+      if (fadeT >= 0.5 && activeSeason !== fadeSeason) applySeasonMaps(fadeSeason);
+      if (fadeT >= 1) { fadeSeason = null; fadeT = 0; }
     }
 
-    // Torii: reveal as climber approaches each gate; park at climber depth.
+    for (const m of layers) {
+      const factor = m.userData.factor;
+      fitLayerToFrustum(m, cam);
+      m.quaternion.identity(); // facing camera via layerRig
+      const map = m.userData.edgeMask ? m.material.uniforms.map.value : m.material.map;
+      if (map) {
+        map.offset.y = reduceMotion ? 0 : -((h * factor) * 0.002) % 1;
+      }
+      // Mild view-space parallax (x/y) — keep z from fitLayer
+      m.position.x = -cam.position.x * (1 - factor) * 0.05;
+      m.position.y = -h * (1 - factor) * 0.03;
+      if (m.userData.edgeMask) {
+        m.material.uniforms.opacity.value = m.userData.role === 'near' ? 0.95 : 0.75;
+        m.material.uniforms.clearR.value = m.userData.role === 'near' ? 0.28 : 0.18;
+        m.material.uniforms.edgeR.value = m.userData.role === 'near' ? 0.48 : 0.40;
+      } else if (m.material.opacity != null) {
+        m.material.opacity = 1;
+      }
+      // Drop mist plane (near edges + mid/far carry season); keeps draw count ≤45 at gates.
+      m.visible = m.userData.role !== 'mist';
+    }
+
+    // Torii — larger window, stronger presence
     for (const g of gateMeshes) {
       const bh = g.userData.bh;
       const dist = h - bh;
-      const show = h >= bh - XFADE_M && h <= bh + XFADE_M * 2.5;
+      const show = h >= bh - 14 && h <= bh + 28;
       g.visible = show;
       if (show) {
-        const k = 1 - Math.min(1, Math.abs(dist) / (XFADE_M * 1.5));
-        g.position.z = -14;
-        g.children.forEach(c => { if (c.material) c.material.opacity = 0.35 + 0.65 * k; });
-        // Soft bob (seeded by gate height, no wall clock).
-        g.position.y = bh + 3.5 + (reduceMotion ? 0 : 0.15 * Math.sin(t * 1.1 + bh * 0.01));
+        const k = 1 - Math.min(1, Math.abs(dist) / 18);
+        g.position.z = -18;
+        g.position.y = bh + 4.5; // world space under worldFx
+        g.children.forEach(c => { if (c.material) c.material.opacity = 0.55 + 0.45 * k; });
+        // Face camera roughly
+        g.quaternion.copy(cam.quaternion);
+        g.rotateY(g.userData.side * 0.15);
       }
     }
 
-    // Transition flats: strongest inside the gate fade window.
-    let gateT = 0, nextSeason = zm.b;
-    for (const bh of SEASON_BOUNDS) {
-      const u = (h - bh + XFADE_M / 2) / XFADE_M;
-      if (u >= 0 && u <= 1) {
-        const s = u * u * (3 - 2 * u);
-        const peak = 4 * s * (1 - s); // mid-fade peak
-        if (peak > gateT) {
-          gateT = peak;
-          const idx = SEASON_BOUNDS.indexOf(bh);
-          nextSeason = SEASONS[Math.min(3, idx + 1)];
-        }
-      }
-    }
-    const pop = Math.min(1, gateT * 1.4);
-    panelMesh.material.map = panelTex[nextSeason];
-    panelMesh.material.needsUpdate = true;
-    panelMesh.material.opacity = pop * 0.85;
-    topEdge.material.opacity = pop;
-    botEdge.material.opacity = pop;
-    // Slide panel upward through the gate.
-    panelMesh.position.y = (1 - pop) * -8 + pop * 2;
-    panelMesh.quaternion.copy(cam.quaternion);
-    topEdge.quaternion.copy(cam.quaternion);
-    botEdge.quaternion.copy(cam.quaternion);
+    // Short wipe veil + torn edges (no full season panel stack)
+    const wipe = fadeSeason ? Math.sin(fadeT * Math.PI) : (gateNear ? 0.15 : 0);
+    const pop = Math.min(0.55, wipe * (reduceMotion ? 0.5 : 1));
+    const fillW = 2 * Math.tan(cam.fov * Math.PI / 360) * 24 * Math.max(cam.aspect, 0.5) * 1.4;
+    const fillH = 2 * Math.tan(cam.fov * Math.PI / 360) * 24 * 1.3;
+    veil.scale.set(fillW, fillH, 1); veil.position.set(0, 0, -24); veil.quaternion.copy(cam.quaternion);
+    veil.material.opacity = 0; // muted full veil — edges-only wipe
+    topE.scale.set(fillW, fillH * 0.08, 1); topE.position.set(0, fillH * 0.42, -23.5); topE.quaternion.copy(cam.quaternion);
+    botE.scale.set(fillW, fillH * 0.08, 1); botE.position.set(0, -fillH * 0.42, -23.5); botE.quaternion.copy(cam.quaternion);
+    topE.material.opacity = pop * 0.7; botE.material.opacity = pop * 0.7;
     xfade.visible = pop > 0.02;
 
-    if (boxes) syncPads(boxes);
+    if (boxes) syncPads(boxes, heroZ);
+
+    // Live HUD
+    if (hudState) {
+      const he = document.getElementById('skyHudH');
+      const ge = document.getElementById('skyHudGems');
+      const ce = document.getElementById('skyHudCoins');
+      if (he) he.textContent = (hudState.height | 0) + ' m';
+      if (ge) ge.textContent = (hudState.gems | 0) + ' ◆';
+      if (ce) ce.textContent = (hudState.coins | 0) + ' ●';
+    }
   }
 
   function applyLayer(name) {
     const all = !name || name === 'all';
-    for (const season of SEASONS) for (const m of layerMeshes[season]) {
-      m.visible = all || m.userData.layer === name;
-    }
+    for (const m of layers) m.visible = all || m.userData.layer === name;
     toriiGroup.visible = all || name === 'mid';
-    xfade.visible = all || name === 'mid';
+    xfade.visible = (all || name === 'mid') && xfade.visible;
     for (const [, ent] of padByBox) {
       const on = all || name === 'play';
-      ent.slot.mesh.visible = on;
-      ent.slot.shadow.visible = on;
+      ent.slot.mesh.visible = on; ent.slot.shadow.visible = false;
     }
     if (frameEl) frameEl.style.display = (all || name === 'fg') ? '' : 'none';
   }
 
   return {
-    root,
-    frameEl,
-    inset,
-    placePad,
-    removePad,
-    syncPads,
-    update,
-    applyLayer,
-    // Draw budget hint for SIM title dumps.
+    root, frameEl, inset, placePad, removePad, syncPads, update, applyLayer,
     get draws() {
-      let n = 0;
-      for (const s of SEASONS) for (const m of layerMeshes[s]) if (m.visible && m.material.opacity > 0.01) n++;
-      n += padByBox.size * 2;
-      for (const g of gateMeshes) if (g.visible) n += 2;
-      if (xfade.visible) n += 3;
+      let n = layers.filter(m => m.visible).length;
+      for (const [, ent] of padByBox) if (ent.slot.mesh.visible) n += 1;
+      for (const g of gateMeshes) if (g.visible) n += 1;
+      if (xfade.visible) n += (veil.material.opacity > 0.02 ? 3 : 2);
       return n;
     },
   };

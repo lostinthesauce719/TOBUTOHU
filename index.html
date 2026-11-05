@@ -7,7 +7,7 @@
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <title>Tobu</title>
 <style>html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#cfd8d4;font:15px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none;-webkit-overflow-scrolling:auto}canvas{touch-action:none;user-select:none;-webkit-user-select:none;display:block}
-#skyFrame{position:fixed;inset:0;pointer-events:none;z-index:4}
+#skyFrame{position:fixed;inset:0;pointer-events:none;z-index:4}#skyHud{pointer-events:none}
 #hud{position:fixed;left:12px;top:10px;color:#fff;text-shadow:0 1px 3px #000;white-space:pre;pointer-events:none;font-weight:600}
 #h{font-size:34px}#zone{position:fixed;left:0;right:0;top:38%;text-align:center;color:#fff;font-size:30px;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none}
 #ov{position:fixed;inset:0;background:rgba(20,18,16,.72);color:#f4eee0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
@@ -188,7 +188,7 @@ const ZONES=['spring','summer','autumn','winter'].map((k,i)=>{const p=PAL[k];ret
 const zoneAt=h=>ZONES[zoneIdx(Math.max(0,h))];
 
 // ---------- scene ----------
-const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:!!LAYER}); R.setPixelRatio(Math.min(2,devicePixelRatio)); if(LAYER){R.setClearColor(0x000000,0);} 
+const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:!!LAYER}); R.setPixelRatio(Math.min(2,devicePixelRatio)); if(LAYER){R.setClearColor(0x000000,0);}else{R.setClearColor(0xC8D8EC,1);} 
 const CAPW=+Q.get('capw')||0,CAPH=+Q.get('caph')||0;R.setSize(CAPW||innerWidth,CAPH||innerHeight);document.body.appendChild(R.domElement);R.domElement.style.touchAction='none';R.domElement.style.userSelect='none';R.domElement.style.webkitUserSelect='none'; /* ?capw/?caph capture-only size */perfU.minPx.value=Math.max(2,R.domElement.width/180);gridU.px.value=Math.max(0.5,R.domElement.width/1080);const post=createPost(R,PAL); // look reset: shader-lit grid, no environment shadows
 const S=new THREE.Scene();const sky=makeSky();sky.userData.layer='far';S.add(sky);S.fog=new THREE.Fog(LOOK.fog,LOOK.fogNear,LOOK.fogFar);
 const cam=new THREE.PerspectiveCamera(T.fovBase,innerWidth/innerHeight,0.1,600);
@@ -204,19 +204,28 @@ function poolDel(e){const p=e.pool,i=p.ids.indexOf(e.b),l=--p.im.count;if(i<0)re
 function meshFor(b,mat){const m=new THREE.Mesh(UB,mat);m.scale.set(b.hx*2,b.hy*2,b.hz*2);m.position.set(b.x,b.y,b.z);m.userData.b=b;m.userData.layer='play';S.add(m);meshes.set(b.id,m);return m;}
 const hooks={
  add(b){pendKit.push(b);}, // built when the module closes (brk flags are set by then): merged kit geometry per module // breakable flag may arrive after add (flushed after each tick)
- crack(b){flushKit();let m=meshes.get(b.id);if(!m)return;if(m.skyPad){if(SKY)SKY.placePad(b);return;}if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));}m.material.uniforms.tearK.value=0;cracked.add(m);if(b.kind==='shelf'){m.visible=false;if(SKY)SKY.placePad(b);}if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
- remove(b){const m=meshes.get(b.id);if(SKY)SKY.removePad(b);if(!m)return;if(m.skyPad){meshes.delete(b.id);return;}if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
+ crack(b){flushKit();let m=meshes.get(b.id);if(!m)return;if(m.skySkip){if(SKY&&b.kind==='shelf')SKY.placePad(b);return;}if(m.skyPad){if(SKY)SKY.placePad(b);if(m.ghost)m.ghost.visible=true;return;}if(m.kit)return;if(m.pool){poolDel(m);m=meshFor(b,climbMat(b,zoneAt(b.y)));}if(!m.material||!m.material.uniforms||!m.material.uniforms.tearK){m.material=climbMat(b,zoneAt(b.y));if(SKY){m.material.transparent=true;m.material.opacity=0.45;m.material.depthWrite=false;}}m.material.uniforms.tearK.value=0;cracked.add(m);if(b.kind==='shelf'){m.visible=false;if(SKY)SKY.placePad(b);}if(!AUTO&&navigator.vibrate)navigator.vibrate(25);},
+ remove(b){const m=meshes.get(b.id);if(SKY)SKY.removePad(b);if(!m)return;if(m.skySkip){meshes.delete(b.id);return;}if(m.skyPad){if(m.ghost){S.remove(m.ghost);m.ghost.geometry&&m.ghost.geometry.dispose();}meshes.delete(b.id);return;}if(m.kit){if(--m.kit.n<=0){S.remove(m.kit.mesh);m.kit.mesh.geometry.dispose();}}else if(m.pool)poolDel(m);else{S.remove(m);m.material.dispose();cracked.delete(m);}meshes.delete(b.id);},
  module(m){flushKit();decor(m.z0,m.z1,m.y0);}};
 // BRUSH clipkit: branch ledges + curved bark walls (visual only; contact faces sit on the flat sim colliders), one merged draw per module
 const KM=gridMat(0xffffff,{vc:1,gAV:0}),pendKit=[]; /* Walls C: no grid on vertical rock; ledge tops keep gA */
+/* Sky-runner honest readout: dim ghost climbables (sim unchanged) + decorative pads on shelves. */
+const GHOST_KIT=new THREE.MeshBasicMaterial({color:0x5A6E8C,transparent:true,opacity:0.38,depthWrite:false,fog:true,vertexColors:true});
+const GHOST_BRK=new THREE.MeshBasicMaterial({color:0x5A6A82,transparent:true,opacity:0.42,depthWrite:false,fog:false});
 function flushKit(){if(!pendKit.length)return;const gs=[],ent={n:0,mesh:null};
- for(const b of pendKit){if(b.gone)continue;if(b.brk){const mm=meshFor(b,climbMat(b,zoneAt(b.y)));if(b.kind==='shelf'){mm.visible=false;if(SKY)SKY.placePad(b);}continue;}
-  if(b.kind==='shelf'){ /* sky-runner: shelf collision stays; visual = pad sprite (no ledge mesh) */
-   meshes.set(b.id,{skyPad:1,b});if(SKY)SKY.placePad(b);continue;}
+ for(const b of pendKit){if(b.gone)continue;if(b.brk){
+   if(SKY&&b.kind!=='shelf'){meshes.set(b.id,{skySkip:1,b});continue;} /* draw budget: ghost kit walls already read; skip brk wall meshes */
+   const mm=meshFor(b,climbMat(b,zoneAt(b.y)));
+   if(SKY){mm.material=GHOST_BRK;mm.material.transparent=true;mm.material.opacity=0.45;mm.material.depthWrite=false;if(b.kind==='shelf')SKY.placePad(b);}
+   continue;}
+  if(b.kind==='shelf'){
+   if(SKY){ /* ghost shelf box so landing height reads; pad is decoration on top */
+    const mm=meshFor(b,GHOST_BRK);mm.scale.set(b.hx*2,Math.max(0.12,b.hy*0.35),b.hz*2);mm.position.set(b.x,b.y+b.hy*0.65,b.z);
+    meshes.set(b.id,{skyPad:1,ghost:mm,b});SKY.placePad(b);continue;}
+   gs.push(kit.ledge(THREE,b));ent.n++;meshes.set(b.id,{kit:ent,b});continue;}
   gs.push(kit.wall(THREE,b,Math.sign(b.x)||1));ent.n++;meshes.set(b.id,{kit:ent,b});}
- pendKit.length=0;if(!gs.length)return;const g=mergeKit(gs);ent.mesh=new THREE.Mesh(g,KM);ent.mesh.frustumCulled=false;ent.mesh.userData.layer='play';
- /* Sky-runner preview: keep wall colliders, hide kit walls so paper pads/layers match the hybrid mockups. */
- ent.mesh.visible=false;S.add(ent.mesh);}
+ pendKit.length=0;if(!gs.length)return;const g=mergeKit(gs);ent.mesh=new THREE.Mesh(g,SKY?GHOST_KIT:KM);ent.mesh.frustumCulled=false;ent.mesh.userData.layer='play';
+ S.add(ent.mesh);}
 function mergeKit(gs){let n=0;for(const g of gs)n+=g.attributes.position.count;const o=new THREE.BufferGeometry();for(const a of['position','normal','color']){const arr=new Float32Array(n*3);let k=0;for(const g of gs){arr.set(g.attributes[a].array,k);k+=g.attributes[a].array.length;}o.setAttribute(a,new THREE.BufferAttribute(arr,3));}return o;}
 
 // climbables stay dark (luma 45-95): bark or ridge rock walls, moss shelf tops, ice in winter
@@ -266,9 +275,15 @@ for(let i=0;i<14;i++){const h=60+rD()*90,g=colored(new THREE.ConeGeometry(h*0.7,
 /* cone mountains replaced by scenery.js backdrop */}
 // drop shadow: crisp dark disc on the highest surface under the climber (reads sim boxes, never writes)
 const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.5,32),new THREE.MeshBasicMaterial({color:0x1C2438,transparent:true,opacity:0.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,fog:false}));shadow.rotation.x=-Math.PI/2;shadow.userData.layer='play';S.add(shadow);
-function shadowTick(){let top=-1e9;for(const b of sim.boxes){const t=b.y+b.hy;if(t<=P.pos.y+0.05&&t>top&&Math.abs(P.pos.x-b.x)<=b.hx&&Math.abs(P.pos.z-b.z)<=b.hz)top=t;}
- if(P.state==='wall'&&P.lastWall){const b=P.lastWall,sd=P.wallSide;shadow.visible=true;shadow.position.set(b.x-sd*b.hx-sd*0.02,P.pos.y-0.05,P.pos.z);shadow.rotation.set(0,-sd*Math.PI/2,0);shadow.scale.set(0.8,0.4,1);shadow.material.opacity=0.85;return;} /* wall-run: hard shadow projected onto the wall plane */
- shadow.rotation.set(-Math.PI/2,0,0);const h=P.pos.y-top;shadow.visible=top>-1e8&&h<12;if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.85*k;} /* hard edge #1C2438 85% (clipstyle) */
+function shadowTick(){let top=-1e9,topB=null;for(const b of sim.boxes){const t=b.y+b.hy;if(t<=P.pos.y+0.05&&t>top&&Math.abs(P.pos.x-b.x)<=b.hx&&Math.abs(P.pos.z-b.z)<=b.hz){top=t;topB=b;}}
+ if(P.state==='wall'&&P.lastWall){const b=P.lastWall,sd=P.wallSide;shadow.visible=!!SKY; /* dim wall contact cue only in sky preview */
+  if(SKY){shadow.position.set(b.x-sd*b.hx-sd*0.02,P.pos.y-0.05,P.pos.z);shadow.rotation.set(0,-sd*Math.PI/2,0);shadow.scale.set(0.7,0.35,1);shadow.material.opacity=0.35;}
+  else{shadow.visible=true;shadow.position.set(b.x-sd*b.hx-sd*0.02,P.pos.y-0.05,P.pos.z);shadow.rotation.set(0,-sd*Math.PI/2,0);shadow.scale.set(0.8,0.4,1);shadow.material.opacity=0.85;}
+  return;}
+ shadow.rotation.set(-Math.PI/2,0,0);const h=P.pos.y-top;
+ /* Mute orphan discs: only when a real shelf is underfoot (ghost shelf reads the land). */
+ if(SKY){shadow.visible=!!(topB&&topB.kind==='shelf'&&h<4);if(!shadow.visible)return;shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.55);shadow.material.opacity=0.35;return;}
+ shadow.visible=top>-1e8&&h<12;if(!shadow.visible)return;const k=THREE.MathUtils.clamp(1-h/12,0.35,1);shadow.position.set(P.pos.x,top+0.02,P.pos.z);shadow.scale.setScalar(0.75*k+0.25);shadow.material.opacity=0.85*k;}
 // ---------- the run ----------
 const WALLET=createWallet();
 // migrate legacy powerups store owned skins into wallet once
@@ -395,7 +410,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  for(let i=deco.length-1;i>=0;i--){const d=deco[i],z=d.userData.zEnd??d.position.z;if(z>P.pos.z+60){S.remove(d);d.geometry.dispose();deco.splice(i,1);continue;}d.visible=(d.userData.zStart??d.position.z)>P.pos.z-70;} /* cull mid cedars past 70 m — was fogFar+10 (~130), caused 41 draws in long clips */
  const decoCap=4;while(deco.length>decoCap){const d=deco.shift();S.remove(d);d.geometry.dispose();} /* hard cap 4 (winter back to 4 now breakables are distance-culled; peak ≤32 with wings) */
  /* cull fully-fogged kit meshes (one merged draw per module) so long clips stay ≤40 */
- for(const [id,m] of [...meshes]){if(!m)continue;if(m.isMesh&&m.userData.b){const b=m.userData.b;m.visible=b.z+(b.hz||0)<=P.pos.z+50&&(b.z-(b.hz||0))>P.pos.z-65;continue;} /* phone perf: breakables use the same window as the kit (were drawn up to ~280 m ahead, fully fogged) */ if(!m.kit||!m.kit.mesh)continue;const z=m.b.z+(m.b.hz||0);const mesh=m.kit.mesh;if(z>P.pos.z+50){mesh.visible=false;continue;}mesh.visible=(m.b.z-(m.b.hz||0))>P.pos.z-65;}
+ for(const [id,m] of [...meshes]){if(!m)continue;const zAhead=SKY?32:50,zBehind=SKY?40:65;if(m.isMesh&&m.userData.b){const b=m.userData.b;m.visible=b.z+(b.hz||0)<=P.pos.z+zAhead&&(b.z-(b.hz||0))>P.pos.z-zBehind;continue;} if(!m.kit||!m.kit.mesh)continue;const z=m.b.z+(m.b.hz||0);const mesh=m.kit.mesh;if(z>P.pos.z+zAhead){mesh.visible=false;continue;}mesh.visible=(m.b.z-(m.b.hz||0))>P.pos.z-zBehind;}
  for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
 if(SIM&&Q.has('demo')){const [n,fu]=Q.get('demo').split(',');localStorage.setItem('tobu_saves_v1',JSON.stringify({n:+n,zones:[],daily:'',free:fu==='1'?new Date(Date.now()-7*3600e3).toISOString().slice(0,10):''}));} // capture states only
@@ -498,7 +513,7 @@ $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});cons
 function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'&&!EVERY?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
- else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}const hc=$('hCoins');if(hc)hc.textContent=P.coinsRun?(' · '+P.coinsRun+'c'):(P.wings?(' · ✦'):'');mistDraw();lightDraw();if(SKY){SKY.update(cam,P.pos.y,P.t,sim.boxes);S.fog.color.setHex(0xD8E4F0);S.fog.near=18;S.fog.far=110;}else{scen.update(cam,P.pos.y,P.t,S.fog.color,sky,P.pos);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}}
+ else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}const hc=$('hCoins');if(hc)hc.textContent=P.coinsRun?(' · '+P.coinsRun+'c'):(P.wings?(' · ✦'):'');if(SKY){post.U.mistY.value=-1e4;post.U.warn.value=0;mRead.style.display='none';}else mistDraw();lightDraw();if(SKY){const W=WALLET.snapshot();SKY.update(cam,P.pos.y,P.t,sim.boxes,P.pos.z,{height:P.maxH,coins:W.coins,gems:W.gems});S.fog.color.setHex(0xD8E4F0);S.fog.near=22;S.fog.far=95;post.U.spd.value=0; /* mute radial speed lines in sky preview */}else{scen.update(cam,P.pos.y,P.t,S.fog.color,sky,P.pos);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}}
  // grasshopper enchantments → post overlay (0 draws)
  const _hv=_mv.set(hero.root.position.x,hero.root.position.y,hero.root.position.z).project(cam);
  post.U.hUV.value.set(_hv.x*0.5+0.5,_hv.y*0.5+0.5);
