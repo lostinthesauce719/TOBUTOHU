@@ -2,7 +2,8 @@
 // VISUAL ONLY: reads the sim's player state (P) and course boxes, never writes to them,
 // so replays, break timings and the server check are untouched.
 import * as THREE from './vendor/three.module.min.js';
-import { heroMesh, placeBone, legName } from './clipkit.js'; // BRUSH production kit: 1 SkinnedMesh, 15 bones, 1 draw
+import { heroMesh, placeBone, legName } from './clipkit.js';
+import { installEnch1 } from './ench.js'; // enchantment look #1 (visual only, +2 draws) // BRUSH production kit: 1 SkinnedMesh, 15 bones, 1 draw
 THREE.ColorManagement.enabled = false; // style D hexes are authored in sRGB and written as-is (no linear workflow)
 
 const C = { lit: 0x86AE58, base: 0x6E9A42, shade: 0x6E9A42, belly: 0xF2EEE0, sash: 0xFFD23F, sashS: 0xFFD23F, // BRUSH clipstyle green hero (2026-10-22)
@@ -289,5 +290,6 @@ export function createHero(scene, P, boxes) {
     st.prev = state; if (state !== 'air') st.lastSf = sf;
   }
   const api = { legs: LEGS, update, root, parts: [body], mesh: body, bones: [...boneBy.keys()], fx, setStubWings };
+  if (typeof document !== 'undefined') installEnch1(scene, P, api);
   return api;
 }
