@@ -12,7 +12,7 @@ Tuning tables: T (movement), MIST (rising bottom), ZONES.
 - Rejected: wrong height, edited inputs, a seed that isn't the current period's, adaptation not set to 1 on daily or weekly, a run cut before death, tapping faster than 25/s, or an old sim version.
 - `node server/test.mjs` runs the tests. Play in the browser with `?verify=http://localhost:8787&board=daily`.
 - Any change to physics or tuning must bump `SIM_VERSION`.
-- Current: `tobu-sim-6` (wing boost + seeded coins). Frozen `sim_v5.js` keeps `tobu-sim-5` replays verifiable.
+- Current: `tobu-sim-7` (tap-to-jump buffer). Frozen `sim_v6.js` keeps `tobu-sim-6` replays verifiable; `sim_v5.js` keeps `tobu-sim-5`.
 
 ## Economy / power-ups
 - Tunable prices and earn rates live in `economy.js` only.

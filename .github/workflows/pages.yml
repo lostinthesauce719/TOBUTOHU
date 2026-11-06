@@ -1,7 +1,7 @@
 name: Deploy Pages
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
           # Core web + PWA
           for f in index.html hero.js scenery.js look.js flash.js saves.js wallet.js economy.js \
                    sim.js sim_v5.js powerups.js clipkit.js palettes.json package.json README.md \
-                   manifest.webmanifest sw.js; do
+                   manifest.webmanifest sw.js age.js ench.js; do
             [ -f "$f" ] && cp -a "$f" _site/
           done
           for d in vendor icons art; do

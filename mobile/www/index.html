@@ -48,6 +48,32 @@
 #tb .hud{position:absolute;left:48px;bottom:80px;padding:14px 28px;border-radius:20px;background:rgba(200,218,235,.5);box-shadow:inset 0 0 0 2px #1E2A3A;font-size:32px;font-weight:800}
 #tb .ver{position:absolute;left:0;right:0;bottom:40px;text-align:center;font-size:22px;font-weight:700;color:#7A8A9A}
 
+/* Neutral age screen (plan §5.2): one-time birth year, no default, no hint */
+#age{position:fixed;inset:0;display:none;z-index:9;background:linear-gradient(180deg,#9EC9D8 0%,#B8C8E4 45%,#C4B8D8 100%);font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#1E2A3A;font-weight:900}
+#age.on{display:block}
+#ab{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--tu,1))}
+#ab .q{position:absolute;left:0;right:0;top:640px;text-align:center;font-size:64px}
+#ab select{position:absolute;left:240px;top:780px;width:600px;height:130px;border-radius:32px;background:rgba(200,218,235,.7);border:0;box-shadow:inset 0 0 0 3px #1E2A3A;font:inherit;font-size:52px;font-weight:800;color:#1E2A3A;text-align:center;text-align-last:center}
+#ab .go{position:absolute;left:290px;top:980px;width:500px;height:130px;border-radius:36px;background:rgba(200,218,235,.6);box-shadow:inset 0 0 0 3px #1E2A3A;border:0;font:inherit;font-size:56px;font-weight:900;color:#1E2A3A;cursor:pointer}
+#ab .go:disabled{opacity:.4;cursor:default}
+/* Settings (D kit settings_1080x1920 / settings_u13_1080x1920) */
+#settings{position:fixed;inset:0;display:none;z-index:8;background:rgba(40,60,90,.55);font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#F2E8CC;font-weight:800}
+#settings.on{display:block}
+#stb{position:absolute;left:50%;top:50%;width:1080px;height:1920px;transform:translate(-50%,-50%) scale(var(--tu,1))}
+#stb .pan{position:absolute;left:62px;top:90px;width:956px;height:1740px;border-radius:44px;background:#2B3A55;box-shadow:inset 0 0 0 3px #1E2630}
+#stb .hd{position:absolute;left:0;right:0;top:190px;text-align:center;font-size:72px;font-weight:900;transform:translateY(-50%)}
+#stb .bk{position:absolute;left:100px;top:130px;width:150px;height:120px;border-radius:30px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;border:0;color:#F2E8CC;font:inherit;font-size:60px;cursor:pointer}
+#stb .rows{position:absolute;left:112px;top:320px;width:856px;display:flex;flex-direction:column;gap:32px}
+#stb .r{min-height:136px;border-radius:30px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;display:flex;align-items:center;padding:0 40px;box-sizing:border-box;border:0;color:#F2E8CC;font:inherit;font-size:48px;text-align:left;cursor:pointer}
+#stb .r .l{flex:1}#stb .r small{display:block;font-size:30px;font-weight:700}
+#stb .r .v{font-size:32px;margin-right:24px}
+#stb .r .sw{width:150px;height:74px;border-radius:37px;box-shadow:inset 0 0 0 3px #1E2630;background:#2B3A55;position:relative}
+#stb .r .sw::after{content:'';position:absolute;top:9px;left:10px;width:56px;height:56px;border-radius:50%;background:#F2E8CC}
+#stb .r.on .sw{background:#D8B76A}#stb .r.on .sw::after{left:auto;right:10px;background:#2B3A55}
+#stb .gap{height:18px}
+#stb .back{position:absolute;left:340px;top:1450px;width:400px;height:130px;border-radius:65px;background:#3E5C76;box-shadow:inset 0 0 0 3px #1E2630;border:0;color:#F2E8CC;font:inherit;font-size:60px;font-weight:900;cursor:pointer}
+#stb .ver{position:absolute;left:0;right:0;top:1680px;text-align:center;font-size:28px;font-weight:700;color:#B9C2CC}
+#stb .note{position:absolute;left:0;right:0;top:1380px;text-align:center;font-size:30px;font-weight:700;color:#B9C2CC}
 /* Power-ups shop (BRUSH frosted, prices TBD; no currency) */
 #shop{position:fixed;inset:0;display:none;z-index:7;background:linear-gradient(180deg,#9EC9D8 0%,#B8C8E4 45%,#C4B8D8 100%);font-family:Nunito,'Trebuchet MS',system-ui,sans-serif;color:#1C2A44;font-weight:900}
 #shop.on{display:block}
@@ -105,7 +131,28 @@
 <button class="shopbtn" id="tShop" aria-label="shop"><img src="./art/powerups/shop/shop_button.png" alt="Shop"></button>
 <div class="wallet" id="tWallet"><span id="tCoins">0 coins</span><span id="tGems">0 gems</span></div>
 <div class="hud" id="tHud">HUD 0 m</div>
-<div class="ver">Tobu 0.1.0 · sim-6</div>
+<div class="ver">Tobu 0.1.0 · sim-7</div>
+</div></div>
+<div id="age"><div id="ab">
+<div class="logo" style="position:absolute;left:0;right:0;top:420px;text-align:center;font-size:140px;letter-spacing:4px">TOBU</div>
+<div class="q">What year were you born?</div>
+<select id="aYear" aria-label="birth year"></select>
+<button class="go" id="aGo" disabled>Continue</button>
+</div></div>
+<div id="settings"><div id="stb"><div class="pan"></div>
+<button class="bk" id="stBk" aria-label="back">&#x2039;</button><div class="hd">SETTINGS</div>
+<div class="rows">
+<button class="r" data-k="sound"><span class="l">Sound</span><span class="v"></span><span class="sw"></span></button>
+<button class="r" data-k="music"><span class="l">Music</span><span class="v"></span><span class="sw"></span></button>
+<button class="r" data-k="haptics"><span class="l">Haptics</span><span class="v"></span><span class="sw"></span></button>
+<div class="gap"></div>
+<button class="r" id="stPriv"><span class="l">Privacy options<small>Review your ad and data choices</small></span><span>&#x203A;</span></button>
+<button class="r" id="stRestore"><span class="l">Restore purchases<small>Remove-ads and season skins</small></span><span>&#x203A;</span></button>
+<button class="r" id="stPolicy"><span class="l">Privacy policy<small>Opens in your browser</small></span><span>&#x2197;</span></button>
+</div>
+<div class="note" id="stNote"></div>
+<button class="back" id="stBack">BACK</button>
+<div class="ver">Tobu 0.1.0 (12)</div>
 </div></div>
 <div id="shop"><div id="sb">
 <button class="back" id="sBack">&lt; SHOP</button>
@@ -122,13 +169,14 @@ import * as THREE from './vendor/three.module.min.js';
 import {createHero} from './hero.js';import {kit,cedarZone,zoneMix,ZONES as SCN_Z,SEASON_BOUNDS,XFADE_M} from './clipkit.js';
 import {createPost,gridMat,perfMat,perfU,gridU,makeSky,LOOK,HEMI} from './look.js';const CLS={};
 const PAL=await (await fetch('./palettes.json')).json(),G=PAL.global,CB=G.climbable; // style D palette (Art, final)
-import {createSaves} from './saves.js';import {createWallet} from './wallet.js';import {ECONOMY} from './economy.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
+import {createSaves} from './saves.js';import {createAge,yearChoices} from './age.js';import {createWallet} from './wallet.js';import {ECONOMY} from './economy.js';import {createScenery} from './scenery.js';import {createFlashLimiter} from './flash.js';
 import {createPowerups,SEASONS} from './powerups.js';
 import {SHOP_ICON_URIS} from './art/powerups/shop_icon_uris.js';
 import {createSim,packLog,mul,DT,ZONES as ZN,zoneIdx,LIGHTNING as LT} from './sim.js';
 const Q=new URLSearchParams(location.search),DEBUG=Q.has('debug'),SIM=+Q.get('sim')||0,AUTO=Q.has('bot')||SIM>0,SHOT=Q.get('shot'),CLIP=Q.get('clip'),MISS=+Q.get('miss')||0,LAYER=Q.get('layer'); /* clip=t0,secs,fps capture-only; layer=far|mid|play|fg|mtn|all for kamishibai PNG dumps */
 const VERIFY=Q.get('verify'); // e.g. ?verify=http://localhost:8787 : on death, send the run to the replay check
 let BOARD=Q.get('board')||'free',SEED=(+(Q.get('seed')||1))>>>0;
+const AGE=createAge(),U13=Q.has('u13')||AGE.u13;if(U13)BOARD='free'; // under-13 limited mode (Apollo 2026-10-14): no boards, no ads, no tracking, free Catch every run
 if(VERIFY&&(BOARD==='daily'||BOARD==='weekly')){try{SEED=(await (await fetch(VERIFY+'/seed?board='+BOARD)).json()).seed>>>0;}catch(e){BOARD='free';}} // ranked seeds come from the server
 const rD=mul(SEED^0xDEC0); // decor stream: visuals only, never read by sim.js
 // camera tuning (visual only; physics tuning lives in sim.js)
@@ -288,8 +336,8 @@ function lightDraw(){R.getDrawingBufferSize(_sz);cam.updateMatrixWorld();_rt.set
 
 // ---------- input: auto-run; each tap (pointerdown/touchstart) = one jump/wall-kick; drag = steer. Applied at next fixed tick. ----------
 const K={};let steer=0,ptr=null,pending=false;
-const uiBlock=el=>!!(el&&el.closest&&el.closest('button,a,input,textarea,select,#cw,#title,#shop,#ov'));
-function press(){const te=document.getElementById('title');if(te&&te.classList.contains('on'))return;const sh=document.getElementById('shop');if(sh&&sh.classList.contains('on'))return;if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
+const uiBlock=el=>!!(el&&el.closest&&el.closest('button,a,input,textarea,select,#cw,#title,#shop,#ov,#age,#settings'));
+function press(){const te=document.getElementById('title');if(te&&te.classList.contains('on'))return;for(const id of['age','settings']){const m=document.getElementById(id);if(m&&m.classList.contains('on'))return;}const sh=document.getElementById('shop');if(sh&&sh.classList.contains('on'))return;if(P.mode==='dead'){restart();return}if(P.mode==='catch')return; /* only the Catch button takes the Catch */pending=true;hideHint();}
 addEventListener('keydown',e=>{K[e.code]=1;if(e.code==='Space'){e.preventDefault();press();}});addEventListener('keyup',e=>K[e.code]=0);
 // Jump on finger-down (not release). Steer while dragging. No hold/charge.
 addEventListener('pointerdown',e=>{if(uiBlock(e.target))return;if(e.cancelable)e.preventDefault();ptr={x:e.clientX,id:e.pointerId,moved:false};press();},{passive:false});
@@ -332,7 +380,7 @@ function updateCam(dt){const sp=Math.hypot(P.vel.x,P.vel.z);
  for(const m of cracked){const b=m.userData.b,dl=b.dl||0.6,k=Math.min(1,(P.t-b.crackAt)/dl);if(m.material.uniforms.tearK)m.material.uniforms.tearK.value=k;m.position.x=b.x+Math.sin(P.t*70)*0.03*k;} /* shake is visual only */}
 const _ca=new THREE.Color(),_cb=new THREE.Color();let lastZone='';
 if(SIM&&Q.has('demo')){const [n,fu]=Q.get('demo').split(',');localStorage.setItem('tobu_saves_v1',JSON.stringify({n:+n,zones:[],daily:'',free:fu==='1'?new Date(Date.now()-7*3600e3).toISOString().slice(0,10):''}));} // capture states only
-const SAVES=createSaves();const EVERY=BOARD!=='free'||Q.has('u13')||localStorage.getItem('tobu_noads')==='1';let catchSrc=null,catchDone=false;
+const SAVES=createSaves();const EVERY=BOARD!=='free'||U13||localStorage.getItem('tobu_noads')==='1';let catchSrc=null,catchDone=false;
 const MENUQ=Q.get('menu'); // title/gameover capture + cold-start gate
 // earned saves (§9.8): local only, never in the checked sim; spending waits on Apollo's free-Catch call
 function toast(t){const z=document.getElementById('zone');z.textContent=t;z.style.opacity=1;setTimeout(()=>z.style.opacity=0,2200);}
@@ -346,7 +394,7 @@ function zoneTint(){const h=P.pos.y,i=zoneIdx(h);const a=ZONES[i],b=ZONES[Math.m
 const hE=document.getElementById('h'),sE=document.getElementById('sub'),ov=document.getElementById('ov');
 let best=+(localStorage.getItem('tobu3d_best')||0),verdict='',sent=false;
 function onDeath(){if(sent)return;sent=true;if(BOARD==='daily'&&!AUTO&&SAVES.daily())toast('+1 save · daily run done');if(!AUTO&&P.coinsRun){WALLET.addCoins(P.coinsRun);toast('+'+P.coinsRun+' coins');}const h=Math.round(P.maxH*10)/10;const powered=!!sim.powered;const wings=sim.log.wings0?[sim.log.wings0]:[];window.__run={log:packLog(sim.log),claim:{height:h,powered,wings}};
- if(VERIFY&&!AUTO){verdict='checking run…';fetch(VERIFY+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(window.__run)})
+ if(VERIFY&&!AUTO&&!U13){verdict='checking run…';fetch(VERIFY+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(window.__run)})
   .then(r=>r.json()).then(j=>verdict=j.ok?`verified ${j.height} m`:`not accepted: ${j.reason}`).catch(()=>verdict='offline: run not submitted');}}
 // ---- Catch screens (README priority: used -> free every run -> daily free -> save -> ad loaded -> no-ad free fallback) ----
 const cwEl=document.getElementById("cw"),cbEl=document.getElementById("cb"),$=id=>document.getElementById(id);
@@ -387,13 +435,34 @@ function showShop(){const el=$('shop');if(!el)return;el.classList.add('on');pain
 function hideShop(){const el=$('shop');if(el)el.classList.remove('on');}
 // Title A frost (visual only). Hidden for sim/shot/bot/clip; ?menu=title forces; ?menu=gameover forces catch panel.
 function fitTitle(){const u=Math.min(innerWidth/1080,innerHeight/1920);const tb=$('tb');if(tb)tb.style.setProperty('--tu',u);}
-function showTitle(){const te=$('title');if(!te)return;te.classList.add('on');const n=SAVES.n;let h='';for(let i=0;i<3;i++)h+=`<div class="p ${i<n?'f':'e'}"></div>`;h+=`<span>Saves ${n}/3</span>`;$('tSaves').innerHTML=h;$('tHud').textContent='HUD '+(best|0)+' m';paintWallet();fitTitle();}
+function showTitle(){const te=$('title');if(!te)return;te.classList.add('on');const n=SAVES.n;let h='';for(let i=0;i<3;i++)h+=`<div class="p ${i<n?'f':'e'}"></div>`;h+=`<span>Saves ${n}/3</span>`;$('tSaves').innerHTML=h;$('tSaves').style.display=EVERY?'none':'';const tr=$('tDaily');if(tr)tr.parentNode.style.display=U13?'none':'';$('tHud').textContent='HUD '+(best|0)+' m';paintWallet();fitTitle();}
 function hideTitle(){const te=$('title');if(te)te.classList.remove('on');}
-const TITLE_ON=MENUQ==='title'||(!SIM&&!AUTO&&!SHOT&&!CLIP&&!LAYER&&MENUQ!=='off'&&MENUQ!=='gameover'&&MENUQ!=='shop'&&MENUQ!=='catch');
+const TITLE_ON=MENUQ==='title'||(!SIM&&!AUTO&&!SHOT&&!CLIP&&!LAYER&&MENUQ!=='off'&&MENUQ!=='gameover'&&MENUQ!=='shop'&&MENUQ!=='catch'&&MENUQ!=='settings'&&MENUQ!=='age');
 if(TITLE_ON){showTitle();addEventListener('resize',fitTitle);
  $('tPlay').addEventListener('click',e=>{e.stopPropagation();hideTitle();});
- for(const id of['tDaily','tWeekly','tFriends','tGear']){const b=$(id);if(b)b.addEventListener('click',e=>e.stopPropagation());}
+ for(const id of['tDaily','tWeekly','tFriends']){const b=$(id);if(b)b.addEventListener('click',e=>e.stopPropagation());}
 }
+// ---- Neutral age screen + settings (menus only; nothing here reaches the sim) ----
+const fitMenus=()=>{const u=Math.min(innerWidth/1080,innerHeight/1920);for(const id of['ab','stb']){const e=$(id);if(e)e.style.setProperty('--tu',u);}};addEventListener('resize',fitMenus);
+function showAge(){const sel=$('aYear');sel.innerHTML='<option value="" selected disabled>Year</option>'+yearChoices().map(y=>`<option value="${y}">${y}</option>`).join('');$('aGo').disabled=true;$('age').classList.add('on');hideTitle();fitMenus();}
+$('aYear').addEventListener('change',()=>{$('aGo').disabled=!$('aYear').value;});
+$('aGo').addEventListener('click',e=>{e.stopPropagation();const y=+$('aYear').value;if(!y||MENUQ==='age')return; /* capture view never stores */
+ const lim=AGE.answer(y);if(lim===null)return;$('age').classList.remove('on');if(lim){location.reload();return;} /* reload so limited mode applies everywhere */showTitle();});
+if(TITLE_ON&&!AGE.asked&&!Q.has('u13'))showAge();
+if(MENUQ==='age')showAge();
+const SETK='tobu_settings_v1';let SET={sound:true,music:true,haptics:false};try{SET={...SET,...JSON.parse(localStorage.getItem(SETK)||'{}')};}catch{}
+function paintSettings(){for(const r of document.querySelectorAll('#stb .r[data-k]')){const on=!!SET[r.dataset.k];r.classList.toggle('on',on);r.querySelector('.v').textContent=on?'ON':'OFF';}
+ $('stPriv').style.display=U13?'none':''; /* under-13: no consent form to reopen */}
+function showSettings(){paintSettings();$('stNote').textContent='';$('settings').classList.add('on');fitMenus();}
+function hideSettings(){$('settings').classList.remove('on');if(MENUQ!=='settings')showTitle();}
+for(const r of document.querySelectorAll('#stb .r[data-k]'))r.addEventListener('click',e=>{e.stopPropagation();SET[r.dataset.k]=!SET[r.dataset.k];try{localStorage.setItem(SETK,JSON.stringify(SET));}catch{}paintSettings();});
+const stub=t=>e=>{e.stopPropagation();$('stNote').textContent=t;};
+$('stPriv').addEventListener('click',stub('Ad and data choices arrive with the app build (web has no ads)'));
+$('stRestore').addEventListener('click',stub('Nothing to restore on the web build'));
+$('stPolicy').addEventListener('click',stub('Privacy policy link coming with launch'));
+for(const id of['stBack','stBk'])$(id).addEventListener('click',e=>{e.stopPropagation();hideSettings();});
+$('tGear').addEventListener('click',e=>{e.stopPropagation();hideTitle();showSettings();});
+if(MENUQ==='settings')showSettings();
 
 const tShop=$('tShop');if(tShop)tShop.addEventListener('click',e=>{e.stopPropagation();showShop();});
 const sBack=$('sBack');if(sBack)sBack.addEventListener('click',e=>{e.stopPropagation();hideShop();if(MENUQ!=='shop')showTitle();});
@@ -407,7 +476,7 @@ if(MENUQ==='catch'){ /* force frost Catch offer for capture: Free Catch today, 4
 const stopEv=e=>{e.stopPropagation();};for(const id of['bCatch','bNo','bRetry','bHome']){const b=$(id);b.addEventListener('pointerdown',stopEv);b.addEventListener('pointerup',stopEv);}
 $('bCatch').addEventListener('click',e=>{e.stopPropagation();if(P.mode!=='catch'||performance.now()-catchShown<500)return; /* 0.5 s guard: a climbing tap can't take the Catch */pending=true;});
 $('bNo').addEventListener('click',e=>{e.stopPropagation();declineCatch();});const leave=e=>{e.stopPropagation();if(P.mode==='catch')declineCatch();restart();}; /* Retry / Home on the offer = decline (never costs anything) */$('bRetry').addEventListener('click',leave);$('bHome').addEventListener('click',leave);
-function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
+function render(){if(P.caught&&catchSrc&&!catchDone){catchDone=true;if(!AUTO)SAVES.commit(catchSrc,EVERY);}zoneTint();hE.textContent=(P.maxH|0)+' m';sE.textContent=`best ${best|0}  ·  ${lastZone}${BOARD!=='free'?'  ·  '+BOARD:''}${P.caught?'':'  ·  Catch ready'}${BOARD==='free'&&!EVERY?'  ·  saves '+SAVES.n+'/3':''}${DEBUG?`\n${P.state} wallT ${P.wallT.toFixed(2)} vy ${P.vel.y.toFixed(1)} mist ${(P.pos.y-mistY.v).toFixed(1)} m below`:''}`;
  if(P.mode==='catch'){if(!catchSrc)catchSrc=SAVES.source(EVERY);ov.style.display='none';showCW('catch');}
  else if(P.mode==='dead'){onDeath();ov.style.display='none';showCW('dead');if(P.maxH>best){best=P.maxH;localStorage.setItem('tobu3d_best',best);}}
  else if(MENUQ==='gameover'||MENUQ==='catch'){/* keep forced frost menu */}else{ov.style.display='none';if(cwKey){cwEl.classList.remove('on');cwKey='';}}const hc=$('hCoins');if(hc)hc.textContent=P.coinsRun?(' · '+P.coinsRun+'c'):(P.wings?(' · ✦'):'');mistDraw();lightDraw();scen.update(cam,P.pos.y,P.t,S.fog.color,sky,P.pos);if(scen.fogNear!=null){S.fog.near=scen.fogNear;S.fog.far=scen.fogFar;}
