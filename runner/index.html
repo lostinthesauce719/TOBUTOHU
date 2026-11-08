@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tobu graybox — spring climb</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="view"></canvas>
+    <div id="hud">
+      <div class="box">
+        <span class="lbl">Height</span>
+        <span class="val" id="hud-h">0</span>
+        <span class="sub" id="hud-v">8.0 m/s</span>
+      </div>
+      <div class="box">
+        <span class="lbl">Score</span>
+        <span class="val" id="hud-score">0</span>
+        <span class="sub" id="hud-catch">Catch ready</span>
+      </div>
+    </div>
+    <section id="screen-start" class="screen">
+      <div class="card">
+        <h1>Tobu graybox</h1>
+        <p>Spring climb, 0–120 m. Swipe to change lanes, tap or press Space to jump. Three gray lanes, original hopper, no ads.</p>
+        <div class="actions">
+          <button id="btn-climb" type="button">Climb</button>
+        </div>
+      </div>
+    </section>
+    <section id="screen-catch" class="screen hidden">
+      <div class="card">
+        <h2>Caught</h2>
+        <p>First fall this run. Use Catch to restore your last safe height, or end the run. No timer and no ad.</p>
+        <div class="actions">
+          <button id="btn-catch" type="button">Use Catch</button>
+          <button id="btn-end" class="end" type="button">End run</button>
+        </div>
+      </div>
+    </section>
+    <section id="screen-ready" class="screen hidden">
+      <div class="card">
+        <h2>Ready?</h2>
+        <p>The next stretch is cleared. Resume when you choose.</p>
+        <div class="actions">
+          <button id="btn-ready" type="button">Ready</button>
+        </div>
+      </div>
+    </section>
+    <section id="screen-results" class="screen hidden">
+      <div class="card">
+        <h2>Run over</h2>
+        <p id="results-line">0 m</p>
+        <div class="actions">
+          <button id="btn-again" type="button">Climb again</button>
+          <button id="btn-home" class="ghost" type="button">Home</button>
+        </div>
+        <div id="board">
+          <h3>Clean climbs</h3>
+          <ol id="board-clean"><li class="empty">No climbs yet</li></ol>
+          <h3>Catch-assisted</h3>
+          <ol id="board-assisted"><li class="empty">No climbs yet</li></ol>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="main.mjs"></script>
+</body>
+</html>
