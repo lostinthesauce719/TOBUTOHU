@@ -16,6 +16,10 @@ const COL = {
   warn: 0xd8d6c8,
   vermilion: 0xe34234,
   mist: 0x6b716c,
+  boltIdle: 0x5c625a,
+  boltFull: 0xe6e8dc,
+  puddle: 0x9fb0b6,
+  puddleLocked: 0xbcc9cd,
 };
 
 function worldOnTrack(x, s, lift = 0) {
@@ -144,6 +148,11 @@ export function createRenderer(canvas) {
       slot.g.visible = true;
       const w = obs.x1 - obs.x0;
       const d = obs.s1 - obs.s0;
+      if (obs.type === 'bolt' || obs.type === 'puddle') {
+        drawFlat(slot, obs, sim, w, d);
+        continue;
+      }
+      slot.mark.position.set(0, 0, 0);
       let ht = obs.type === 'root' ? C.ROOT_HEIGHT : obs.type === 'pad' ? 0.12 : C.SOLID_HEIGHT;
       if (obs.type === 'pad' && obs.collapsed) ht = 0.08;
       slot.body.scale.set(w, ht, d);
@@ -160,10 +169,38 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Graybox only. Bolt stripe fills over 1.0 s with vermilion edges, then a pale column for the strike.
+  // Puddle is a pale flat strip that brightens while the swipe lock holds. Purely visual.
+  function drawFlat(slot, obs, sim, w, d) {
+    const a = sim.actor;
+    const sMid = (obs.s0 + obs.s1) / 2;
+    const xMid = (obs.x0 + obs.x1) / 2;
+    if (obs.type === 'bolt') {
+      const ttc = C.ticksBetween(a.s, obs.contactS);
+      const fill = a.s >= obs.contactS ? 1 : Math.max(0, Math.min(1, 1 - ttc / C.BOLT_WARN_TICKS));
+      const striking = a.s >= obs.contactS && a.s <= obs.s1 + C.PLAYER_DEPTH / 2;
+      const ht = striking ? 3.2 : 0.05;
+      slot.body.scale.set(w * (striking ? 0.5 : 1), ht, striking ? d : d * Math.max(fill, 0.02));
+      slot.body.material.color.setHex(fill >= 1 ? COL.boltFull : COL.boltIdle);
+      slot.body.material.color.lerp(new THREE.Color(COL.boltFull), fill);
+      slot.mark.visible = true;
+      slot.mark.scale.set(w * 1.12, 0.5, d * 1.12);
+      poseOnTrack(slot.g, xMid, sMid, ht / 2);
+      slot.mark.position.set(0, -ht / 2 + 0.005, 0);
+      return;
+    }
+    const locked = (a.puddleLock || 0) > 0 && a.lane === obs.lane;
+    slot.body.scale.set(w, 0.03, d);
+    slot.body.material.color.setHex(locked ? COL.puddleLocked : COL.puddle);
+    slot.mark.visible = false;
+    poseOnTrack(slot.g, xMid, sMid, 0.015);
+  }
+
   function syncWarnings(sim) {
     while (warnRoot.children.length) warnRoot.remove(warnRoot.children[0]);
     for (const w of sim.warnings()) {
       const o = w.obs;
+      if (o.type === 'bolt' || o.type === 'puddle') continue; // they carry their own tell
       if (o.type === 'gust') {
         const gem = new THREE.Mesh(
           new THREE.ConeGeometry(0.25, 0.6, 4),

@@ -1,7 +1,7 @@
 import * as C from './config.mjs';
 import { createCourse, createManualCourse } from './generator.mjs';
 import { sweptAgainstList } from './collision.mjs';
-import { createActor, stepActor, stableLane, actorDigest } from './move.mjs';
+import { createActor, stepActor, stableLane, actorDigest, applySurface, shouldJumpRoot } from './move.mjs';
 import { scoreFromHeight } from './scoring.mjs';
 
 export function createSim(opts = {}) {
@@ -20,6 +20,7 @@ export function createSim(opts = {}) {
     catchUsed: false,
     catchOffered: false,
     deathReason: null,
+    deathHazard: null,
     lastSafe: null,
     lastDb: 0,
     lastV: C.speedAtH(actor.h),
@@ -76,8 +77,9 @@ export function createSim(opts = {}) {
     }
   }
 
-  function offerOrEnd(reason) {
+  function offerOrEnd(reason, hazard) {
     state.deathReason = reason;
+    state.deathHazard = hazard || C.HAZARD_CODE[reason] || reason;
     const clearance = (state.lastSafe ? state.lastSafe.h : actor.h) - state.bottom;
     if (state.catchAvailable && clearance >= C.CATCH_CLEARANCE) {
       state.mode = 'catch';
@@ -103,7 +105,7 @@ export function createSim(opts = {}) {
     course.ensureUntil(actor.s + C.CHUNK_LENGTH);
     const { prev, v } = stepActor(actor, recorded);
     state.lastV = v;
-    const db = C.bottomDelta(v);
+    const db = C.bottomDelta(v, actor.h);
     state.bottom += db;
     state.lastDb = db;
     if (actor.h > state.maxH) state.maxH = actor.h;
@@ -118,16 +120,21 @@ export function createSim(opts = {}) {
     const hits = sweptAgainstList(prev, { x: actor.x, s: actor.s, lift: actor.lift }, nearby);
     updatePads(hits);
     updateGusts(hits);
+    const lockedBefore = actor.puddleLock > 0;
+    applySurface(actor, hits);
 
     let fatal = null;
     if (actor.h <= state.bottom) fatal = 'bottom';
     else if (hits.hit) fatal = hits.hit.obs.type === 'pad' ? 'pad' : hits.hit.obs.type;
+    // For the per-hazard death log: a hit while the puddle lock held you counts as a puddle death.
+    let hazard = fatal ? C.HAZARD_CODE[fatal] || fatal : null;
+    if (fatal && fatal !== 'bolt' && fatal !== 'bottom' && lockedBefore) hazard = 'P';
 
     state.inputs[state.tick] = recorded;
     state.tick += 1;
 
     if (fatal) {
-      offerOrEnd(fatal);
+      offerOrEnd(fatal, hazard);
     } else {
       rememberSafe();
     }
@@ -152,6 +159,7 @@ export function createSim(opts = {}) {
     actor.gustTick = 0;
     actor.gustDir = 0;
     actor.pendingGustDir = 0;
+    actor.puddleLock = 0;
     actor.laneTick = 0;
     actor.lift = 0;
     const clearLane = pickClearLane(safe.s, safe.lane);
@@ -167,7 +175,7 @@ export function createSim(opts = {}) {
   }
 
   function pickClearLane(s, preferred) {
-    const obs = course.obstaclesInRange(s - 1, s + 2).filter(o => !o.disabled && o.type === 'solid');
+    const obs = course.obstaclesInRange(s - 1, s + 2).filter(o => !o.disabled && (o.type === 'solid' || o.type === 'bolt'));
     const blocked = new Set();
     for (const o of obs) {
       if (o.s0 <= s + C.PLAYER_DEPTH / 2 && o.s1 >= s - C.PLAYER_DEPTH / 2) blocked.add(o.lane);
@@ -219,6 +227,8 @@ export function createSim(opts = {}) {
       catchUsed: state.catchUsed,
       catchOffered: state.catchOffered,
       deathReason: state.deathReason,
+      deathHazard: state.deathHazard,
+      puddleLock: actor.puddleLock,
       lastDb: state.lastDb,
       lastV: state.lastV,
       recoveries: state.recoveries.slice(),
@@ -253,7 +263,7 @@ export function createSim(opts = {}) {
 
   function warnings(leadTicks = C.WARNING_TICKS) {
     const list = [];
-    const ahead = C.sAfterTicks(actor.s, leadTicks);
+    const ahead = C.sAfterTicks(actor.s, Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS));
     for (const o of course.obstaclesInRange(actor.s - 1, ahead + 4)) {
       if (o.disabled) continue;
       const ttc = C.ticksBetween(actor.s, o.contactS);
@@ -263,7 +273,10 @@ export function createSim(opts = {}) {
           list.push({ obs: o, ticks: remain, kind: 'collapse' });
         }
       }
-      if (ttc > 0 && ttc <= leadTicks) list.push({ obs: o, ticks: ttc, kind: 'approach' });
+      // Bolts fill for 1.0 s and puddles show 1.2 s ahead, so they warn earlier than the default.
+      const lead = o.type === 'bolt' ? Math.max(leadTicks, C.BOLT_WARN_TICKS)
+        : o.type === 'puddle' ? Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS) : leadTicks;
+      if (ttc > 0 && ttc <= lead) list.push({ obs: o, ticks: ttc, kind: 'approach' });
     }
     return list;
   }
@@ -296,7 +309,9 @@ export function perfectBotInput(sim) {
   const cur = snap.laneTick > 0 || snap.gustTick > 0 ? snap.toLane : snap.lane;
   let laneDir = 0;
   if (want !== cur) laneDir = Math.sign(want - cur);
-  return { laneDir, jump: false };
+  const near = sim.course.obstaclesInRange(snap.s, snap.s + 4);
+  const jump = shouldJumpRoot(sim.actor, near);
+  return { laneDir, jump };
 }
 
 export function runPerfectBot(seed, targetH = C.SPRING_HEIGHT, maxTicks = 60 * 200) {

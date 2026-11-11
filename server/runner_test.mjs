@@ -5,8 +5,11 @@ import * as C from '../runner/config.mjs';
 import { createSim, perfectBotInput, runPerfectBot } from '../runner/sim.mjs';
 import {
   createCourse, generateChunk, emptyCtx, makeSolid, makeRoot, makePad, makeGust, createManualCourse,
+  makeBolt, makePuddle, mulberry32,
 } from '../runner/generator.mjs';
-import { validateChunk, validateCourseRules, impossibleLayouts } from '../runner/fairness.mjs';
+import {
+  validateChunk, validateCourseRules, impossibleLayouts, debutOk, puddleReachOk,
+} from '../runner/fairness.mjs';
 import { recognizeGesture } from '../runner/controls.mjs';
 import { createScoreboard, scoreFromHeight } from '../runner/scoring.mjs';
 
@@ -352,4 +355,166 @@ test('warnings lead at least 30 ticks and chunk memory stays bounded', () => {
   }
   const resident = long.course.residentWindow(long.snapshot().s).length;
   assert.ok(resident <= C.KEEP_AHEAD + C.KEEP_BEHIND + 2, `resident ${resident}`);
+});
+
+// ---------------- Summer (120-240 m): storm ----------------
+
+test('summer speed and mist follow the SEASONS table', () => {
+  assert.equal(C.speedAtH(120), 10);
+  assert.ok(Math.abs(C.speedAtH(180) - 10.5) < 1e-12);
+  assert.equal(C.speedAtH(240), 11);
+  assert.equal(C.speedAtH(300), 11);
+  assert.equal(C.mistCapAtH(60), 0.75);
+  assert.equal(C.mistCapAtH(150), 0.80);
+  for (const h of [120, 180, 239]) {
+    const climb = C.speedAtH(h) * C.SIN_PITCH;
+    const share = Math.min(C.mistCapAtH(h), C.BOTTOM_FRACTION * climb) / climb;
+    assert.ok(share >= 0.52 - 1e-9 && share <= 0.58 + 1e-9, `mist share ${share} at ${h}`);
+  }
+  // closed-form travel time matches a fine numeric integration across the 120 m seam
+  const a = C.sAtHeight(100);
+  const b = C.sAtHeight(200);
+  let s = a;
+  let n = 0;
+  while (s < b) { s += C.speedAtH(C.heightAtS(s)) / 60000; n++; }
+  assert.ok(Math.abs(C.travelTime(a, b) - n / 60000) < 1e-3);
+  assert.ok(Math.abs(C.sAfterTime(a, C.travelTime(a, b)) - b) < 1e-6);
+});
+
+test('summer perfect bot: 20 seeds clear 240 m with zero deaths or Catches, about 80 s of summer', () => {
+  const springS = C.travelTime(0, C.sAtHeight(120));
+  const out = [];
+  for (let seed = 1; seed <= 20; seed++) {
+    const r = runPerfectBot(seed, 240, 60 * 400);
+    assert.ok(r.cleared, `seed ${seed} failed at h=${r.h.toFixed(2)} reason=${r.deathReason}`);
+    assert.equal(r.catchUsed, false);
+    out.push(r.seconds);
+  }
+  const summer = out.map((t) => t - springS);
+  console.log(`summer clean time ${Math.min(...summer).toFixed(2)}-${Math.max(...summer).toFixed(2)} s (full run ${Math.min(...out).toFixed(2)} s)`);
+  for (const t of summer) assert.ok(t >= 75 && t <= 90, `summer time ${t}`);
+});
+
+test('summer generator: open lane, bolts apart, puddle reach, debut windows, calm transition', () => {
+  const seen = {};
+  let rows = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const course = createCourse(seed);
+    course.ensureUntil(C.sAtHeight(245));
+    const rules = validateCourseRules(course.generated);
+    assert.ok(rules.ok, `seed ${seed}: ${rules.reason} @${rules.index} ${rules.type}`);
+    let lastBolt = -1e6;
+    let lastPuddle = null;
+    for (const ch of course.generated) {
+      const h0 = C.heightAtS(ch.s0);
+      if (h0 >= 120) seen[ch.type] = (seen[ch.type] || 0) + 1;
+      if (h0 >= 120 && h0 < 135 - 1e-9) assert.equal(ch.type, 'S0', `calm transition chunk ${ch.type} at ${h0}`);
+      assert.ok(debutOk(ch), `debut stacking ${ch.type} at ${h0}`);
+      if (ch.type === 'S6') assert.ok(h0 < 120, 'blossom gust retires in summer');
+      for (const r of ch.rows) {
+        rows++;
+        const open = [0, 1, 2].filter((l) => !(r.blockedLanes || []).includes(l));
+        assert.ok(open.length >= 1, 'open lane');
+        assert.ok(!(r.boltLanes || []).includes(r.designated), 'bolt on the open lane');
+        if ((r.boltLanes || []).length) {
+          assert.ok(C.ticksBetween(lastBolt, r.contactS) + 1e-6 >= C.BOLT_MIN_APART_TICKS, 'bolts 2 s apart');
+          lastBolt = r.contactS;
+        }
+        if (lastPuddle && r.kind !== 'hurdle') {
+          assert.ok(puddleReachOk(lastPuddle.obs, lastPuddle.lane, r), `puddle reach seed ${seed}`);
+          lastPuddle = null;
+        }
+        if (r.puddleLane != null) {
+          const obs = r.obstacles.find((o) => o.type === 'puddle');
+          const len = obs.s1 - obs.s0;
+          assert.ok(len >= C.PUDDLE_MIN - 1e-9 && len <= C.PUDDLE_MAX + 1e-9, `puddle length ${len}`);
+          lastPuddle = { obs, lane: r.puddleLane };
+        }
+      }
+      for (const o of ch.obstacles) {
+        if (o.type === 'bolt') assert.ok(C.heightAtS(o.s0) >= 135 - 1, 'lightning before 135');
+        if (o.type === 'puddle') assert.ok(C.heightAtS(o.s0) >= 150 - 1, 'puddle before 150');
+      }
+    }
+  }
+  for (const t of ['U1', 'U2', 'U3', 'U4', 'U5', 'U6']) assert.ok((seen[t] || 0) > 20, `${t} too rare: ${seen[t]}`);
+  console.log('summer chunk mix (200 seeds):', JSON.stringify(seen), 'rows', rows);
+});
+
+test('summer impossible layouts reject (stacked debut, puddle too close, bolt on open lane)', () => {
+  const s0 = C.sAtHeight(140);
+  const bolt = makeBolt(s0 + 6, 0);
+  const pud = makePuddle(s0 + 20, 1, 6);
+  const stacked = {
+    type: 'U6', s0, s1: s0 + C.CHUNK_LENGTH, obstacles: [bolt, pud], rows: [],
+  };
+  assert.equal(debutOk(stacked), false);
+  assert.equal(validateChunk({ ...stacked, rows: [{ type: 'U6', contactS: bolt.contactS, designated: 1, blockedLanes: [0], permanentlyOpen: [1, 2] }] }, { lastDesignated: 1 }).ok, false);
+
+  const late = C.sAtHeight(200);
+  const p = makePuddle(late + 5, 1, 8);
+  const exitS = p.s1 + C.PLAYER_DEPTH / 2;
+  const tooSoon = { contactS: C.sAfterTicks(exitS, C.PUDDLE_LOCK_TICKS + C.SWIPE_TICKS - 4), designated: 0, blockedLanes: [1, 2] };
+  const roomy = { contactS: C.sAfterTicks(exitS, C.PUDDLE_LOCK_TICKS + 50), designated: 0, blockedLanes: [1, 2] };
+  assert.equal(puddleReachOk(p, 1, tooSoon), false);
+  assert.equal(puddleReachOk(p, 1, roomy), true);
+
+  const b2 = makeBolt(late + 8, 1);
+  const onOpen = {
+    type: 'U2', s0: late, s1: late + C.CHUNK_LENGTH, obstacles: [b2],
+    rows: [{ type: 'U2', s: b2.s, contactS: b2.contactS, designated: 1, openLanes: [0, 2], blockedLanes: [1], permanentlyOpen: [0, 1, 2], boltLanes: [1] }],
+  };
+  assert.equal(validateChunk(onOpen, { lastDesignated: 1, lastContactS: -1e6 }).ok, false);
+});
+
+test('puddle: swipes locked on it and 0.4 s after, jump still works; lightning cannot be jumped', () => {
+  const pud = makePuddle(10, 1, 8);
+  const sim = createSim({ course: createManualCourse([pud]), seed: 1 });
+  while (sim.snapshot().s < 12) sim.tick({});
+  assert.ok(sim.snapshot().puddleLock > 0);
+  sim.tick({ laneDir: 1 });
+  for (let i = 0; i < 12; i++) sim.tick({});
+  assert.equal(sim.snapshot().lane, 1, 'swipe on a puddle is ignored');
+  sim.tick({ jump: true });
+  assert.ok(sim.snapshot().jumpTick > 0, 'jump allowed on a puddle');
+  while (sim.snapshot().s < pud.s1 + C.PLAYER_DEPTH / 2 + 0.01) sim.tick({});
+  // still locked right after stepping off
+  sim.tick({ laneDir: 1 });
+  for (let i = 0; i < 12; i++) sim.tick({});
+  assert.equal(sim.snapshot().lane, 1, 'lock holds after leaving');
+  for (let i = 0; i < C.PUDDLE_LOCK_TICKS; i++) sim.tick({});
+  assert.equal(sim.snapshot().puddleLock, 0);
+  sim.tick({ laneDir: 1 });
+  while (sim.snapshot().laneTick > 0) sim.tick({});
+  assert.equal(sim.snapshot().lane, 2, 'swipe works once the lock ends');
+  assert.equal(sim.mode, 'play', 'a puddle alone is not deadly');
+
+  const bolt = makeBolt(16, 1);
+  const zap = createSim({ course: createManualCourse([bolt]), seed: 1 });
+  while (C.ticksBetween(zap.snapshot().s, bolt.contactS) > 14) zap.tick({});
+  zap.tick({ jump: true });
+  while (zap.mode === 'play' && zap.state.tick < 400) zap.tick({});
+  assert.equal(zap.state.deathReason, 'bolt');
+  assert.equal(zap.state.deathHazard, 'L');
+});
+
+test('summer deaths by hazard: no hazard causes more than 25% of deaths (sloppy bot)', () => {
+  const counts = {};
+  let total = 0;
+  let reached = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const sim = createSim({ seed, s: C.sAtHeight(120), h: 120, bottom: 108 });
+    const rng = mulberry32(seed * 7919);
+    let freeze = 0;
+    while (sim.mode === 'play' && sim.snapshot().h < 240) {
+      let inp = perfectBotInput(sim);
+      if (freeze > 0) { freeze--; inp = { laneDir: 0, jump: false }; } else if (rng() < 0.012) freeze = 8 + Math.floor(rng() * 14);
+      sim.tick(inp);
+    }
+    if (sim.mode !== 'play') { counts[sim.state.deathHazard] = (counts[sim.state.deathHazard] || 0) + 1; total++; } else reached++;
+  }
+  const share = (k) => (counts[k] || 0) / Math.max(total, 1);
+  console.log(`summer deaths (300 sloppy runs): ${JSON.stringify(counts)} of ${total}; reached 240 m: ${reached}; L ${(100 * share('L')).toFixed(1)}%, P ${(100 * share('P')).toFixed(1)}%`);
+  assert.ok(total > 50, 'sloppy bot should die sometimes');
+  for (const k of ['L', 'P']) assert.ok(share(k) <= 0.25, `hazard ${k} causes ${(100 * share(k)).toFixed(1)}% of summer deaths`);
 });

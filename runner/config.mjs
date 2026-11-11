@@ -1,6 +1,9 @@
-// Versioned graybox tuning. Source of truth: /workspace/tobu-runner-spec/graybox-spring.md
-export const TUNING_VERSION = 'graybox-spring-1';
-export const GENERATOR_VERSION = 'graybox-spring-1';
+// Versioned graybox tuning. Sources: /workspace/tobu-runner-spec/graybox-spring.md and
+// /workspace/tobu_runner/SEASON_LANE_COURSES.md (summer, KAMI sign-off 2026-11-10).
+export const TUNING_VERSION = 'graybox-summer-1';
+export const GENERATOR_VERSION = 'graybox-summer-1';
+// Seed salt stays on the spring value so spring layouts for a seed are unchanged.
+export const COURSE_SALT = 'graybox-spring-1';
 export const SKILL_TIER = 'graybox';
 export const CATCH_RULE_VERSION = 'graybox-spring-1';
 
@@ -28,6 +31,18 @@ export const PLAYER_DEPTH = 0.8;
 export const V0 = 8;
 export const V_RANGE = 2;
 export const SPRING_HEIGHT = 120;
+export const SUMMER_HEIGHT = 240;
+export const SEASON_CALM_M = 15;
+// Speed is piecewise linear in height. Past the last segment it stays flat.
+export const SPEED_SEGMENTS = Object.freeze([
+  Object.freeze({ h0: 0, h1: 120, v0: 8, v1: 10 }),
+  Object.freeze({ h0: 120, h1: 240, v0: 10, v1: 11 }),
+]);
+// Mist (rising bottom) rate cap by season, m/s.
+export const MIST_CAPS = Object.freeze([
+  Object.freeze({ minH: 0, cap: 0.75 }),
+  Object.freeze({ minH: 120, cap: 0.80 }),
+]);
 
 export const BOTTOM_START = -12;
 export const BOTTOM_RATE_CAP = 0.75;
@@ -56,6 +71,19 @@ export const REACTION_DELAY = 15;
 export const KEEP_AHEAD = 3;
 export const KEEP_BEHIND = 1;
 
+// Summer hazards
+export const BOLT_WARN_TICKS = 60;        // stripe fills over 1.0 s
+export const BOLT_STRIKE_S = 0.30;        // kills for 0.30 s of travel
+export const BOLT_MIN_APART_TICKS = 120;  // strikes at least 2.0 s apart
+export const PUDDLE_MIN = 6;
+export const PUDDLE_MAX = 10;
+export const PUDDLE_LOCK_TICKS = 24;      // 0.4 s swipe lock
+export const PUDDLE_VISIBLE_TICKS = 72;   // visible >= 1.2 s ahead
+export const SWIPE_TICKS = LANE_CHANGE_TICKS; // 0.18 s
+export const DEBUT_WINDOW_M = 30;
+export const HAZARD_DEBUT = Object.freeze({ bolt: 135, puddle: 150 });
+export const HAZARD_CODE = Object.freeze({ bolt: 'L', puddle: 'P', gust: 'G', pad: 'pad', solid: 'stone', root: 'root', bottom: 'bottom' });
+
 export const CATCH_CLEARANCE = 6;
 export const CATCH_RECOVERY_M = 12;
 
@@ -74,20 +102,47 @@ export const RENDER_AHEAD = 12;
 
 export const EARLIEST = Object.freeze({
   S0: 0, S1: 0, S2: 15, S3: 20, S4: 40, S5: 50, S6: 60, S7: 75,
+  U1: 120, U2: 135, U3: 150, U4: 170, U5: 190, U6: 210,
 });
-export const HARD_TYPES = Object.freeze(['S5', 'S6', 'S7']);
+export const HARD_TYPES = Object.freeze(['S5', 'S6', 'S7', 'U4', 'U5', 'U6']);
+// Hazard kinds each chunk type introduces (stones and roots are not hazards).
+export const CHUNK_HAZARDS = Object.freeze({
+  S5: ['pad'], S6: ['gust'], S7: [], U2: ['bolt'], U3: ['puddle'], U4: ['bolt'], U5: ['puddle'], U6: ['bolt', 'puddle'],
+});
 
 export const BANDS = Object.freeze([
   { minH: 0, maxH: 30, gapTicks: 60, weights: Object.freeze({ S0: 30, S1: 50, S2: 15, S3: 5 }) },
   { minH: 30, maxH: 60, gapTicks: 54, weights: Object.freeze({ S1: 30, S2: 30, S3: 20, S4: 15, S5: 5 }) },
   { minH: 60, maxH: 90, gapTicks: 48, weights: Object.freeze({ S2: 25, S3: 15, S4: 20, S5: 15, S6: 15, S7: 10 }) },
-  { minH: 90, maxH: Infinity, gapTicks: 42, weights: Object.freeze({ S2: 20, S4: 20, S5: 20, S6: 20, S7: 20 }) },
+  { minH: 90, maxH: 120, gapTicks: 42, weights: Object.freeze({ S2: 20, S4: 20, S5: 20, S6: 20, S7: 20 }) },
+  // Summer. 120-135 is the calm transition (S0 only). Spring S1-S5 keep 15% total; S6 retires.
+  { minH: 120, maxH: 135, gapTicks: 42, calm: true, weights: Object.freeze({ S0: 100 }) },
+  { minH: 135, maxH: 170, gapTicks: 51, weights: Object.freeze({ U1: 34, U2: 30, U3: 21, S1: 3, S2: 3, S3: 3, S4: 3, S5: 3 }) },
+  { minH: 170, maxH: 205, gapTicks: 47, weights: Object.freeze({ U1: 17, U2: 21, U3: 17, U4: 17, U5: 13, S1: 3, S2: 3, S3: 3, S4: 3, S5: 3 }) },
+  { minH: 205, maxH: 240, gapTicks: 43, weights: Object.freeze({ U2: 13, U3: 13, U4: 21, U5: 17, U6: 21, S1: 3, S2: 3, S3: 3, S4: 3, S5: 3 }) },
+  // Autumn and winter are not built yet: calm track past 240 m.
+  { minH: 240, maxH: Infinity, gapTicks: 43, calm: true, weights: Object.freeze({ S0: 100 }) },
 ]);
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+function segFor(h) {
+  if (h < SPEED_SEGMENTS[0].h0) return null;
+  for (const g of SPEED_SEGMENTS) if (h < g.h1) return g;
+  return null;
+}
+
 export function speedAtH(h) {
-  return V0 + V_RANGE * clamp(h / SPRING_HEIGHT, 0, 1);
+  if (h <= SPEED_SEGMENTS[0].h0) return SPEED_SEGMENTS[0].v0;
+  const g = segFor(h);
+  if (!g) return SPEED_SEGMENTS[SPEED_SEGMENTS.length - 1].v1;
+  return g.v0 + (g.v1 - g.v0) * (h - g.h0) / (g.h1 - g.h0);
+}
+
+export function mistCapAtH(h) {
+  let cap = MIST_CAPS[0].cap;
+  for (const m of MIST_CAPS) if (h >= m.minH) cap = m.cap;
+  return cap;
 }
 
 export function heightAtS(s) { return s * SIN_PITCH; }
@@ -95,8 +150,8 @@ export function sAtHeight(h) { return h / SIN_PITCH; }
 
 export function laneX(lane) { return LANES_X[lane]; }
 
-export function bottomDelta(v) {
-  return Math.min(BOTTOM_RATE_CAP, BOTTOM_FRACTION * v * SIN_PITCH) / TICK_HZ;
+export function bottomDelta(v, h = 0) {
+  return Math.min(mistCapAtH(h), BOTTOM_FRACTION * v * SIN_PITCH) / TICK_HZ;
 }
 
 export function jumpLift(u) {
@@ -110,28 +165,51 @@ export function bandFor(h) {
   return BANDS[BANDS.length - 1];
 }
 
+// Breakpoints (in s) where the speed law changes.
+function breaksS() {
+  return [SPEED_SEGMENTS[0].h0 / SIN_PITCH, ...SPEED_SEGMENTS.map(g => g.h1 / SIN_PITCH)];
+}
+
+// Time to travel s0 -> s1 within one linear-speed piece (v = a + b*h).
+function segV(g, h) { return g.v0 + (g.v1 - g.v0) * (h - g.h0) / (g.h1 - g.h0); }
+
+function pieceTime(s0, s1) {
+  const g = segFor(heightAtS((s0 + s1) / 2));
+  if (!g || g.v1 === g.v0) return (s1 - s0) / Math.max(speedAtH(heightAtS((s0 + s1) / 2)), 1e-9);
+  const b = (g.v1 - g.v0) / (g.h1 - g.h0);
+  return Math.log(segV(g, heightAtS(s1)) / segV(g, heightAtS(s0))) / (b * SIN_PITCH);
+}
+
 export function travelTime(s0, s1) {
   if (s1 <= s0) return 0;
-  const sSpring = sAtHeight(SPRING_HEIGHT);
-  if (s0 < sSpring && s1 > sSpring) return travelTime(s0, sSpring) + travelTime(sSpring, s1);
-  if (s0 >= sSpring) return (s1 - s0) / (V0 + V_RANGE);
-  const v0 = speedAtH(heightAtS(s0));
-  const v1 = speedAtH(heightAtS(s1));
-  if (v1 <= v0 + 1e-18) return (s1 - s0) / Math.max(v0, 1e-9);
-  return (SPRING_HEIGHT / V_RANGE / SIN_PITCH) * Math.log(v1 / v0);
+  let t = 0;
+  let a = s0;
+  for (const bs of breaksS()) {
+    if (a < bs && s1 > bs) { t += pieceTime(a, bs); a = bs; }
+  }
+  return t + pieceTime(a, s1);
 }
 
 export function ticksBetween(s0, s1) { return travelTime(s0, s1) * TICK_HZ; }
 
 export function sAfterTime(s0, t) {
   if (t <= 0) return s0;
-  const sSpring = sAtHeight(SPRING_HEIGHT);
-  if (s0 >= sSpring) return s0 + (V0 + V_RANGE) * t;
-  const tSpring = travelTime(s0, sSpring);
-  if (t >= tSpring) return sSpring + (V0 + V_RANGE) * (t - tSpring);
-  const v0 = speedAtH(heightAtS(s0));
-  const v = v0 * Math.exp(t * SIN_PITCH * V_RANGE / SPRING_HEIGHT);
-  return (v - V0) * (SPRING_HEIGHT / V_RANGE) / SIN_PITCH;
+  let s = s0;
+  let left = t;
+  for (const bs of breaksS()) {
+    if (s >= bs) continue;
+    const tb = pieceTime(s, bs);
+    if (left >= tb) { left -= tb; s = bs; continue; }
+    const g = segFor(heightAtS((s + bs) / 2));
+    if (!g || g.v1 === g.v0) return s + speedAtH(heightAtS((s + bs) / 2)) * left;
+    const b = (g.v1 - g.v0) / (g.h1 - g.h0);
+    const v0 = segV(g, heightAtS(s));
+    if (b === 0) return s + v0 * left;
+    const v = v0 * Math.exp(left * SIN_PITCH * b);
+    const h = g.h0 + (v - g.v0) / b;
+    return h / SIN_PITCH;
+  }
+  return s + speedAtH(heightAtS(s)) * left;
 }
 
 export function sAfterTicks(s0, ticks) { return sAfterTime(s0, ticks / TICK_HZ); }

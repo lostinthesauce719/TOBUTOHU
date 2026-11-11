@@ -1,6 +1,7 @@
 import {
   DT, JUMP_TICKS, JUMP_BUFFER_TICKS, LANE_CHANGE_TICKS, QUEUE_EXPIRE_TICKS,
-  GUST_PUSH_TICKS, INITIAL_LANE, jumpLift, laneX, speedAtH, heightAtS,
+  GUST_PUSH_TICKS, INITIAL_LANE, PUDDLE_LOCK_TICKS, jumpLift, laneX, speedAtH, heightAtS,
+  ticksBetween,
 } from './config.mjs';
 
 export function lerp(a, b, t) { return a + (b - a) * t; }
@@ -25,6 +26,7 @@ export function createActor(opts = {}) {
     pendingGustDir: 0,
     lift: 0,
     jumping: false,
+    puddleLock: 0,
   };
 }
 
@@ -34,6 +36,7 @@ export function copyActor(p) {
     laneTick: p.laneTick, jumpTick: p.jumpTick, jumpBuffer: p.jumpBuffer,
     queuedDir: p.queuedDir, queuedAge: p.queuedAge, gustTick: p.gustTick,
     gustDir: p.gustDir, pendingGustDir: p.pendingGustDir, lift: p.lift,
+    puddleLock: p.puddleLock,
   };
 }
 
@@ -103,7 +106,9 @@ export function stepActor(p, input = {}) {
   }
 
   if (input.jump) tryJump(p);
-  if (input.laneDir) tryLaneCommand(p, input.laneDir);
+  // Puddle: swipes are ignored while on it and for 0.4 s after leaving (jumps still work).
+  if (input.laneDir && !(p.puddleLock > 0)) tryLaneCommand(p, input.laneDir);
+  if (p.puddleLock > 0) p.puddleLock -= 1;
 
   if (p._startJump) {
     p._startJump = false;
@@ -167,9 +172,32 @@ export function stepActor(p, input = {}) {
   return { prev, v };
 }
 
+// Called after collision each tick: standing on a puddle refreshes the swipe lock.
+export function applySurface(p, report) {
+  if (report.puddles && report.puddles.length) {
+    p.puddleLock = PUDDLE_LOCK_TICKS;
+    p.queuedDir = 0;
+    p.queuedAge = 0;
+  }
+}
+
+// Bot helper: jump a root that sits in the lane we are holding.
+export function shouldJumpRoot(p, obstacles, onlyHurdles = false) {
+  if (p.jumping || p.jumpTick > 0) return false;
+  const lane = stableLane(p);
+  for (const o of obstacles) {
+    if (o.disabled || o.type !== 'root' || o.lane !== lane) continue;
+    if (onlyHurdles && !o.hurdle) continue;
+    const t = ticksBetween(p.s, o.contactS);
+    if (t > 0 && t <= 14) return true;
+  }
+  return false;
+}
+
 export function actorDigest(p) {
   return [
     p.s.toFixed(9), p.h.toFixed(9), p.x.toFixed(9), p.lane, p.toLane,
     p.laneTick, p.jumpTick, p.queuedDir, p.queuedAge, p.gustTick, p.lift.toFixed(9),
+    p.puddleLock || 0,
   ].join(',');
 }

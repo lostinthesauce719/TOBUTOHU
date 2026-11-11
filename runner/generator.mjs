@@ -21,7 +21,7 @@ export function hashString(str) {
   return h >>> 0;
 }
 
-export function chunkSeed(seed, chunkIndex, attempt, version = C.GENERATOR_VERSION) {
+export function chunkSeed(seed, chunkIndex, attempt, version = C.COURSE_SALT) {
   const v = hashString(String(version));
   return (
     Math.imul(seed | 0, 0x9E3779B1) ^
@@ -116,6 +116,46 @@ export function makeGust(s, lane, dir, extras = {}) {
   };
 }
 
+export function makeBolt(startS, lane, extras = {}) {
+  const x = C.laneX(lane);
+  const hw = C.SOLID_WIDTH / 2;
+  const len = C.speedAtH(C.heightAtS(startS)) * C.BOLT_STRIKE_S;
+  return {
+    type: 'bolt',
+    lane,
+    lanes: [lane],
+    s: startS + len / 2,
+    depth: len,
+    height: Infinity,
+    x0: x - hw, x1: x + hw,
+    s0: startS, s1: startS + len,
+    contactS: startS - C.PLAYER_DEPTH / 2,
+    warnTicks: C.BOLT_WARN_TICKS,
+    disabled: false,
+    ...extras,
+  };
+}
+
+export function makePuddle(startS, lane, length, extras = {}) {
+  const x = C.laneX(lane);
+  const hw = C.SOLID_WIDTH / 2;
+  return {
+    type: 'puddle',
+    lane,
+    lanes: [lane],
+    s: startS + length / 2,
+    depth: length,
+    height: 0,
+    x0: x - hw, x1: x + hw,
+    s0: startS, s1: startS + length,
+    contactS: startS - C.PLAYER_DEPTH / 2,
+    // The swipe lock ends this far along the track (0.4 s after stepping off).
+    lockEndS: C.sAfterTicks(startS + length + C.PLAYER_DEPTH / 2, C.PUDDLE_LOCK_TICKS),
+    disabled: false,
+    ...extras,
+  };
+}
+
 function pickWeighted(rng, weights) {
   const entries = Object.entries(weights).filter(([, w]) => w > 0);
   const total = entries.reduce((s, [, w]) => s + w, 0);
@@ -129,13 +169,13 @@ function pickWeighted(rng, weights) {
 }
 
 export function eligibleWeights(h, hardStreak) {
-  if (h >= C.SPRING_HEIGHT) return { S0: 100 };
   const band = C.bandFor(h);
+  if (band.calm) return { S0: 100 };
   const out = {};
   for (const [type, w] of Object.entries(band.weights)) {
     if (h + 1e-9 >= C.EARLIEST[type]) out[type] = w;
   }
-  if ((hardStreak || 0) >= C.HARD_STREAK_LIMIT) return { S0: 50, S1: 50 };
+  if ((hardStreak || 0) >= C.HARD_STREAK_LIMIT) return h >= C.SPRING_HEIGHT ? { S0: 50, U1: 50 } : { S0: 50, S1: 50 };
   return out;
 }
 
@@ -147,9 +187,9 @@ function pickAdjacent(rng, from, allowed = [0, 1, 2]) {
   return opts[Math.floor(rng() * opts.length)];
 }
 
-export function placeContacts(n, chunkS0, lastContactS, gapTicks, rng) {
+export function placeContacts(n, chunkS0, lastContactS, gapTicks, rng, minFirstS = -1e9) {
   const sEnd = chunkS0 + C.CHUNK_LENGTH;
-  let c = Math.max(C.sAfterTicks(lastContactS, gapTicks), chunkS0 + 5) + rng() * 2;
+  let c = Math.max(C.sAfterTicks(lastContactS, gapTicks), chunkS0 + 5, minFirstS) + rng() * 2;
   const contacts = [];
   for (let i = 0; i < n; i++) {
     if (i > 0) c = C.sAfterTicks(c, gapTicks) + rng() * 1.5;
@@ -177,6 +217,9 @@ function makeRow(fields) {
     padLanes: fields.padLanes || [],
     gustLane: fields.gustLane,
     gustDir: fields.gustDir,
+    boltLanes: fields.boltLanes || [],
+    puddleLane: fields.puddleLane ?? null,
+    spacingS: fields.spacingS ?? null,
   };
 }
 
@@ -352,6 +395,155 @@ function buildS7(rng, chunkS0, ctx, band) {
   return { type: 'S7', rows: [row1, row2], obstacles: [...roots, ...walls], designated: des2 };
 }
 
+// ---------- Summer (120-240 m): storm ----------
+
+function relabel(built, type) {
+  if (!built) return null;
+  built.type = type;
+  for (const r of built.rows) r.type = type;
+  for (const o of built.obstacles) o.rowType = type;
+  return built;
+}
+
+function boltFloorS(ctx) {
+  return ctx.lastBoltS > -1e5 ? C.sAfterTicks(ctx.lastBoltS, C.BOLT_MIN_APART_TICKS) + C.PLAYER_DEPTH / 2 : -1e9;
+}
+
+// One bolt in a non-designated lane; the other two lanes are open.
+function boltRow(rng, c, prevDes, type) {
+  const des = pickAdjacent(rng, prevDes);
+  const others = otherLanes(des);
+  const lane = others[Math.floor(rng() * others.length)];
+  const bolt = makeBolt(c + C.PLAYER_DEPTH / 2, lane, { rowType: type });
+  const open = [0, 1, 2].filter(l => l !== lane);
+  return makeRow({
+    type, s: bolt.s, depth: bolt.depth, contactS: bolt.contactS, designated: des,
+    openLanes: open, blockedLanes: [lane], permanentlyOpen: open,
+    obstacles: [bolt], boltLanes: [lane], kind: 'bolt',
+  });
+}
+
+// Puddle in the designated lane; stones beside its entry in the other two lanes.
+function puddleRow(rng, c, prevDes, type, length) {
+  const des = pickAdjacent(rng, prevDes);
+  const startS = c + C.PLAYER_DEPTH / 2;
+  const puddle = makePuddle(startS, des, length, { rowType: type });
+  const blocked = otherLanes(des);
+  const stones = blocked.map(l => makeSolid(startS + C.SOLID_DEPTH / 2, l, { rowType: type }));
+  const row = makeRow({
+    type, s: puddle.s, depth: puddle.depth, contactS: puddle.contactS, designated: des,
+    openLanes: [des], blockedLanes: blocked, permanentlyOpen: [des],
+    obstacles: [puddle, ...stones], puddleLane: des, spacingS: puddle.lockEndS, kind: 'puddle',
+  });
+  row.puddle = puddle;
+  return row;
+}
+
+function rowsToChunk(type, rows) {
+  const obstacles = [];
+  for (const r of rows) obstacles.push(...r.obstacles);
+  return { type, rows, obstacles, designated: rows[rows.length - 1].designated };
+}
+
+function buildU1(rng, chunkS0, ctx, band) {
+  return relabel(rng() < 0.55 ? buildS1(rng, chunkS0, ctx, band) : buildS2(rng, chunkS0, ctx, band), 'U1');
+}
+
+function buildU2(rng, chunkS0, ctx, band) {
+  const n = 1 + (rng() < 0.4 ? 1 : 0);
+  const gap = Math.max(band.gapTicks, C.BOLT_MIN_APART_TICKS);
+  const contacts = placeContacts(n, chunkS0, ctx.lastContactS, band.gapTicks, rng, boltFloorS(ctx));
+  if (!contacts.length) return null;
+  const rows = [];
+  let des = ctx.lastDesignated;
+  for (let i = 0; i < contacts.length; i++) {
+    let c = contacts[i];
+    if (i > 0) c = Math.max(c, C.sAfterTicks(rows[i - 1].contactS, gap));
+    if (c + 4 > chunkS0 + C.CHUNK_LENGTH - 4) break;
+    const row = boltRow(rng, c, des, 'U2');
+    rows.push(row);
+    des = row.designated;
+  }
+  return rowsToChunk('U2', rows);
+}
+
+function buildU3(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const length = C.PUDDLE_MIN + rng() * (C.PUDDLE_MAX - C.PUDDLE_MIN);
+  if (contacts[0] + length + 2 > chunkS0 + C.CHUNK_LENGTH - 2) return null;
+  return rowsToChunk('U3', [puddleRow(rng, contacts[0], ctx.lastDesignated, 'U3', length)]);
+}
+
+// Lightning on one of the two open lanes of a one-stone row; the third lane is open.
+function buildU4(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng, boltFloorS(ctx));
+  if (!contacts.length) return null;
+  const c = contacts[0];
+  const des = pickAdjacent(rng, ctx.lastDesignated);
+  const others = otherLanes(des);
+  const boltLane = others[Math.floor(rng() * others.length)];
+  const stoneLane = others.find(l => l !== boltLane);
+  const bolt = makeBolt(c + C.PLAYER_DEPTH / 2, boltLane, { rowType: 'U4' });
+  const stone = makeSolid(c + C.PLAYER_DEPTH / 2 + C.SOLID_DEPTH / 2, stoneLane, { rowType: 'U4' });
+  const row = makeRow({
+    type: 'U4', s: bolt.s, depth: bolt.depth, contactS: bolt.contactS, designated: des,
+    openLanes: [des], blockedLanes: [boltLane, stoneLane], permanentlyOpen: [des],
+    obstacles: [bolt, stone], boltLanes: [boltLane], kind: 'bolt',
+  });
+  return rowsToChunk('U4', [row]);
+}
+
+// Puddle, then a root hurdle on the puddle near its end (jump allowed on a puddle).
+function buildU5(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const c = contacts[0];
+  const gap = Math.max(band.gapTicks, C.MIN_DECISION_GAP);
+  const rootContact = C.sAfterTicks(c, gap) + rng() * 0.5;
+  const rootS = rootContact + C.ROOT_DEPTH / 2 + C.PLAYER_DEPTH / 2;
+  const startS = c + C.PLAYER_DEPTH / 2;
+  const length = rootS + C.ROOT_DEPTH / 2 + 0.3 - startS;
+  if (length < C.PUDDLE_MIN || length > C.PUDDLE_MAX) return null;
+  if (startS + length + 2 > chunkS0 + C.CHUNK_LENGTH - 2) return null;
+  const row1 = puddleRow(rng, c, ctx.lastDesignated, 'U5', length);
+  const lane = row1.designated;
+  const root = makeRoot(rootS, lane, { rowType: 'U5', hurdle: true });
+  const row2 = makeRow({
+    type: 'U5', s: rootS, depth: C.ROOT_DEPTH, designated: lane,
+    openLanes: [0, 1, 2], blockedLanes: [], permanentlyOpen: [lane], rootedLanes: [lane],
+    obstacles: [root], kind: 'hurdle', spacingS: row1.spacingS,
+  });
+  row1.spacingS = null;
+  return rowsToChunk('U5', [row1, row2]);
+}
+
+// Alternating lightning and puddle rows, never both on the same row.
+function buildU6(rng, chunkS0, ctx, band) {
+  const sEnd = chunkS0 + C.CHUNK_LENGTH - 4;
+  const gap = Math.max(band.gapTicks, C.MIN_DECISION_GAP);
+  let kind = rng() < 0.5 ? 'bolt' : 'puddle';
+  let last = ctx.lastContactS;
+  let lastBolt = ctx.lastBoltS;
+  let des = ctx.lastDesignated;
+  const rows = [];
+  for (let i = 0; i < 3; i++) {
+    let c = Math.max(C.sAfterTicks(last, gap), chunkS0 + 5) + rng() * 1.5;
+    if (kind === 'bolt' && lastBolt > -1e5) c = Math.max(c, C.sAfterTicks(lastBolt, C.BOLT_MIN_APART_TICKS) + 0.01);
+    const length = C.PUDDLE_MIN + rng() * 2;
+    const endS = kind === 'bolt' ? c + 4 : c + length + 2;
+    if (endS > sEnd) break;
+    const row = kind === 'bolt' ? boltRow(rng, c, des, 'U6') : puddleRow(rng, c, des, 'U6', length);
+    rows.push(row);
+    des = row.designated;
+    last = row.spacingS ?? row.contactS;
+    if (kind === 'bolt') lastBolt = row.contactS;
+    kind = kind === 'bolt' ? 'puddle' : 'bolt';
+  }
+  if (rows.length < 2) return null;
+  return rowsToChunk('U6', rows);
+}
+
 export function buildTypedChunk(type, rng, chunkS0, ctx) {
   const band = C.bandFor(C.heightAtS(chunkS0));
   if (type === 'S0') return buildS0(ctx);
@@ -362,6 +554,12 @@ export function buildTypedChunk(type, rng, chunkS0, ctx) {
   if (type === 'S5') return buildS5(rng, chunkS0, ctx, band);
   if (type === 'S6') return buildS6(rng, chunkS0, ctx, band);
   if (type === 'S7') return buildS7(rng, chunkS0, ctx, band);
+  if (type === 'U1') return buildU1(rng, chunkS0, ctx, band);
+  if (type === 'U2') return buildU2(rng, chunkS0, ctx, band);
+  if (type === 'U3') return buildU3(rng, chunkS0, ctx, band);
+  if (type === 'U4') return buildU4(rng, chunkS0, ctx, band);
+  if (type === 'U5') return buildU5(rng, chunkS0, ctx, band);
+  if (type === 'U6') return buildU6(rng, chunkS0, ctx, band);
   return null;
 }
 
@@ -372,6 +570,9 @@ export function finalizeChunk(built, index, chunkS0, ctx) {
     o.chunkIndex = index;
   }
   for (const r of built.rows) r.chunkIndex = index;
+  let lastBoltS = ctx.lastBoltS ?? -1e6;
+  for (const r of built.rows) if ((r.boltLanes || []).length) lastBoltS = Math.max(lastBoltS, r.contactS);
+  const lastRow = built.rows[built.rows.length - 1];
   return {
     index,
     type: built.type,
@@ -380,8 +581,9 @@ export function finalizeChunk(built, index, chunkS0, ctx) {
     rows: built.rows,
     obstacles: built.obstacles,
     designated: built.designated ?? ctx.lastDesignated,
-    lastContactS: built.rows.length ? built.rows[built.rows.length - 1].contactS : ctx.lastContactS,
+    lastContactS: lastRow ? (lastRow.spacingS ?? lastRow.contactS) : ctx.lastContactS,
     lastDesignated: built.designated ?? ctx.lastDesignated,
+    lastBoltS,
     fallbackS0: !!built.fallbackS0,
   };
 }
@@ -393,6 +595,7 @@ export function emptyCtx() {
     hardStreak: 0,
     lastType: null,
     admittedLanes: [C.INITIAL_LANE],
+    lastBoltS: -1e6,
   };
 }
 
@@ -404,7 +607,7 @@ export function generateChunk(seed, index, ctx, opts = {}) {
   if (index === 0 && !opts.forceType) {
     return { chunk: finalizeChunk(buildS0(ctx), index, chunkS0, ctx), attempts: 1, forcedS0: false };
   }
-  if (h0 >= C.SPRING_HEIGHT && !opts.forceType) {
+  if (C.bandFor(h0).calm && !opts.forceType) {
     return { chunk: finalizeChunk(buildS0(ctx), index, chunkS0, ctx), attempts: 1, forcedS0: false, calm: true };
   }
 
@@ -433,6 +636,7 @@ export function nextCtx(ctx, chunk) {
     hardStreak: isHard ? (ctx.hardStreak || 0) + 1 : 0,
     lastType: chunk.type,
     admittedLanes: [chunk.lastDesignated],
+    lastBoltS: chunk.lastBoltS ?? ctx.lastBoltS ?? -1e6,
   };
 }
 
