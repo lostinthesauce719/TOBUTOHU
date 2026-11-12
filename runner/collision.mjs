@@ -73,6 +73,7 @@ export function isLethalVolume(obs, lift) {
   if (obs.type === 'bolt') return true; // a strike can't be jumped
   if (obs.type === 'pad') return !!obs.collapsed;
   if (obs.type === 'root') return !liftClears(lift, obs.height);
+  if (obs.type === 'branch') return !liftClears(lift, obs.height); // low log jumpable, high branch not
   if (obs.type === 'solid') return !liftClears(lift, obs.height);
   return false;
 }

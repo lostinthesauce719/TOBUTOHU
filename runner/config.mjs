@@ -1,7 +1,7 @@
 // Versioned graybox tuning. Sources: /workspace/tobu-runner-spec/graybox-spring.md and
-// /workspace/tobu_runner/SEASON_LANE_COURSES.md (summer, KAMI sign-off 2026-11-10).
-export const TUNING_VERSION = 'graybox-summer-1';
-export const GENERATOR_VERSION = 'graybox-summer-1';
+// /workspace/tobu_runner/SEASON_LANE_COURSES.md (summer + autumn, KAMI sign-off 2026-11-10).
+export const TUNING_VERSION = 'graybox-autumn-1';
+export const GENERATOR_VERSION = 'graybox-autumn-1';
 // Seed salt stays on the spring value so spring layouts for a seed are unchanged.
 export const COURSE_SALT = 'graybox-spring-1';
 export const SKILL_TIER = 'graybox';
@@ -32,16 +32,19 @@ export const V0 = 8;
 export const V_RANGE = 2;
 export const SPRING_HEIGHT = 120;
 export const SUMMER_HEIGHT = 240;
+export const AUTUMN_HEIGHT = 360;
 export const SEASON_CALM_M = 15;
 // Speed is piecewise linear in height. Past the last segment it stays flat.
 export const SPEED_SEGMENTS = Object.freeze([
   Object.freeze({ h0: 0, h1: 120, v0: 8, v1: 10 }),
   Object.freeze({ h0: 120, h1: 240, v0: 10, v1: 11 }),
+  Object.freeze({ h0: 240, h1: 360, v0: 11, v1: 12 }),
 ]);
 // Mist (rising bottom) rate cap by season, m/s.
 export const MIST_CAPS = Object.freeze([
   Object.freeze({ minH: 0, cap: 0.75 }),
   Object.freeze({ minH: 120, cap: 0.80 }),
+  Object.freeze({ minH: 240, cap: 0.90 }),
 ]);
 
 export const BOTTOM_START = -12;
@@ -81,8 +84,19 @@ export const PUDDLE_LOCK_TICKS = 24;      // 0.4 s swipe lock
 export const PUDDLE_VISIBLE_TICKS = 72;   // visible >= 1.2 s ahead
 export const SWIPE_TICKS = LANE_CHANGE_TICKS; // 0.18 s
 export const DEBUT_WINDOW_M = 30;
-export const HAZARD_DEBUT = Object.freeze({ bolt: 135, puddle: 150 });
-export const HAZARD_CODE = Object.freeze({ bolt: 'L', puddle: 'P', gust: 'G', pad: 'pad', solid: 'stone', root: 'root', bottom: 'bottom' });
+export const HAZARD_DEBUT = Object.freeze({ bolt: 135, puddle: 150, leafgust: 255, branch: 265 });
+export const HAZARD_CODE = Object.freeze({ bolt: 'L', puddle: 'P', gust: 'G', branch: 'B', pad: 'pad', solid: 'stone', root: 'root', bottom: 'bottom' });
+
+// Autumn hazards
+export const LEAF_GUST_GAP_TICKS = 72;    // second shove 1.2 s after the first
+export const GUST_WARN_TICKS = 48;        // 0.8 s leaf streak + ghost lane marker (KAMI: raise to 60 if testers get shoved into hits)
+export const GUST_CLEAR_AFTER_TICKS = 60; // shove destination stays clear >= 1.0 s after the shove ends
+export const BRANCH_SHADOW_TICKS = 54;    // shadow grows for 0.9 s
+export const BRANCH_LANDED_LEAD_TICKS = 30; // and the branch is down >= 0.5 s before you reach it
+export const BRANCH_STAGGER_TICKS = 60;   // canopy branches >= 1.0 s apart
+export const BRANCH_DEPTH = 0.7;
+export const LOG_HEIGHT = 0.6;            // low log: jump it
+export const HIGH_BRANCH_HEIGHT = 2.5;    // high branch: dodge it
 
 export const CATCH_CLEARANCE = 6;
 export const CATCH_RECOVERY_M = 12;
@@ -103,11 +117,13 @@ export const RENDER_AHEAD = 12;
 export const EARLIEST = Object.freeze({
   S0: 0, S1: 0, S2: 15, S3: 20, S4: 40, S5: 50, S6: 60, S7: 75,
   U1: 120, U2: 135, U3: 150, U4: 170, U5: 190, U6: 210,
+  A1: 240, A2: 255, A3: 265, A4: 280, A5: 300, A6: 320,
 });
-export const HARD_TYPES = Object.freeze(['S5', 'S6', 'S7', 'U4', 'U5', 'U6']);
+export const HARD_TYPES = Object.freeze(['S5', 'S6', 'S7', 'U4', 'U5', 'U6', 'A5', 'A6']);
 // Hazard kinds each chunk type introduces (stones and roots are not hazards).
 export const CHUNK_HAZARDS = Object.freeze({
   S5: ['pad'], S6: ['gust'], S7: [], U2: ['bolt'], U3: ['puddle'], U4: ['bolt'], U5: ['puddle'], U6: ['bolt', 'puddle'],
+  A2: ['leafgust'], A3: ['branch'], A4: ['branch'], A5: ['leafgust'], A6: ['branch'],
 });
 
 export const BANDS = Object.freeze([
@@ -120,8 +136,13 @@ export const BANDS = Object.freeze([
   { minH: 135, maxH: 170, gapTicks: 51, weights: Object.freeze({ U1: 34, U2: 30, U3: 21, S1: 3, S2: 3, S3: 3, S4: 3, S5: 3 }) },
   { minH: 170, maxH: 205, gapTicks: 47, weights: Object.freeze({ U1: 17, U2: 21, U3: 17, U4: 17, U5: 13, S1: 3, S2: 3, S3: 3, S4: 3, S5: 3 }) },
   { minH: 205, maxH: 240, gapTicks: 43, weights: Object.freeze({ U2: 13, U3: 13, U4: 21, U5: 17, U6: 21, S1: 3, S2: 3, S3: 3, S4: 3, S5: 3 }) },
-  // Autumn and winter are not built yet: calm track past 240 m.
-  { minH: 240, maxH: Infinity, gapTicks: 43, calm: true, weights: Object.freeze({ S0: 100 }) },
+  // Autumn. 240-255 is the calm transition. Row gaps 0.75 / 0.70 / 0.66 s.
+  { minH: 240, maxH: 255, gapTicks: 43, calm: true, weights: Object.freeze({ S0: 100 }) },
+  { minH: 255, maxH: 290, gapTicks: 45, weights: Object.freeze({ A1: 35, A2: 30, A3: 20, A4: 15 }) },
+  { minH: 290, maxH: 325, gapTicks: 42, weights: Object.freeze({ A1: 15, A2: 20, A3: 15, A4: 20, A5: 20, A6: 10 }) },
+  { minH: 325, maxH: 360, gapTicks: 40, weights: Object.freeze({ A2: 15, A3: 15, A4: 15, A5: 25, A6: 20, U2: 10 }) },
+  // Winter is not built yet: calm track past 360 m.
+  { minH: 360, maxH: Infinity, gapTicks: 40, calm: true, weights: Object.freeze({ S0: 100 }) },
 ]);
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }

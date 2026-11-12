@@ -1,12 +1,13 @@
 import * as C from './config.mjs';
 import { sweptAgainstList } from './collision.mjs';
-import { createActor, stepActor, stableLane, applySurface, shouldJumpRoot } from './move.mjs';
+import { createActor, stepActor, stableLane, applySurface, shouldJumpRoot, applyGusts } from './move.mjs';
 
 // Hazard kinds present in a chunk (stones and roots are not hazards).
 export function chunkHazards(chunk) {
   const kinds = new Set();
   for (const o of chunk.obstacles || []) {
-    if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'pad' || o.type === 'gust') kinds.add(o.type);
+    if (o.type === 'gust') kinds.add(o.leaf ? 'leafgust' : 'gust');
+    else if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'pad' || o.type === 'branch') kinds.add(o.type);
   }
   return kinds;
 }
@@ -37,6 +38,26 @@ export function puddleReachOk(puddle, lane, next) {
   }
   if (next.designated !== lane) return t + 1e-6 >= C.PUDDLE_LOCK_TICKS + C.SWIPE_TICKS;
   return true;
+}
+
+// A gust never shoves you into a blocked cell or off the track: the destination lane has no
+// lethal cell from the gust until 1.0 s after the shove ends, and a branch never sits on the
+// gust lane itself in that window either.
+export function gustClearOk(chunk) {
+  const obstacles = chunk.obstacles || [];
+  for (const g of obstacles) {
+    if (g.type !== 'gust' || !g.leaf) continue;
+    const dest = g.lane + g.dir;
+    if (dest < 0 || dest > 2) return { ok: false, reason: 'gust-off-track' };
+    const from = g.s0 - C.PLAYER_DEPTH;
+    const to = C.sAfterTicks(g.contactS, C.GUST_PUSH_TICKS + C.GUST_CLEAR_AFTER_TICKS) + C.PLAYER_DEPTH;
+    for (const o of obstacles) {
+      if (o === g || o.type === 'gust' || o.type === 'puddle') continue;
+      if (o.lane !== dest && o.lane !== g.lane) continue;
+      if (o.s1 > from && o.s0 < to) return { ok: false, reason: 'gust-into-blocked' };
+    }
+  }
+  return { ok: true };
 }
 
 export function physicallyOpenLanes(row) {
@@ -109,6 +130,9 @@ export function validateChunk(chunk, ctx = {}) {
     prevRow = row;
   }
 
+  const gc = gustClearOk(chunk);
+  if (!gc.ok) return gc;
+
   const path = traceDesignated(chunk, { lastDesignated: lastDes, lastContactS: lastContact }, lastDes);
   if (!path.ok) return { ok: false, reason: `unreachable:${path.reason}` };
 
@@ -145,6 +169,7 @@ export function traceDesignated(chunk, ctx, entryLane) {
     const { prev } = stepActor(p, { laneDir, jump });
     const report = sweptAgainstList(prev, { x: p.x, s: p.s, lift: p.lift }, obstacles);
     applySurface(p, report);
+    applyGusts(p, report.gusts);
     if (report.hit) return { ok: false, reason: `hit-${report.hit.obs.type}@${p.s.toFixed(2)}` };
     if (p.s >= (chunk.s1 ?? (chunk.s0 + C.CHUNK_LENGTH))) {
       return { ok: true, exitLane: stableLane(p), ticks: t + 1 };

@@ -20,6 +20,10 @@ const COL = {
   boltFull: 0xe6e8dc,
   puddle: 0x9fb0b6,
   puddleLocked: 0xbcc9cd,
+  branchShadow: 0x2c302c,
+  log: 0x6f7366,
+  highBranch: 0x858a7c,
+  gustGhost: 0xcfd2c6,
 };
 
 function worldOnTrack(x, s, lift = 0) {
@@ -152,6 +156,10 @@ export function createRenderer(canvas) {
         drawFlat(slot, obs, sim, w, d);
         continue;
       }
+      if (obs.type === 'branch') {
+        drawBranch(slot, obs, sim, w, d);
+        continue;
+      }
       slot.mark.position.set(0, 0, 0);
       let ht = obs.type === 'root' ? C.ROOT_HEIGHT : obs.type === 'pad' ? 0.12 : C.SOLID_HEIGHT;
       if (obs.type === 'pad' && obs.collapsed) ht = 0.08;
@@ -196,11 +204,36 @@ export function createRenderer(canvas) {
     poseOnTrack(slot.g, xMid, sMid, 0.015);
   }
 
+  // Graybox only. A falling branch shows a growing shadow for 0.9 s, then drops in and stays:
+  // a low log (jump it) or a tall branch (dodge it). The sim cell never changes; this is the tell.
+  function drawBranch(slot, obs, sim, w, d) {
+    const a = sim.actor;
+    const sMid = (obs.s0 + obs.s1) / 2;
+    const xMid = (obs.x0 + obs.x1) / 2;
+    const ttc = a.s >= obs.contactS ? 0 : C.ticksBetween(a.s, obs.contactS);
+    const untilLand = ttc - C.BRANCH_LANDED_LEAD_TICKS;
+    if (untilLand > 0) {
+      const grow = Math.max(0.05, Math.min(1, 1 - untilLand / C.BRANCH_SHADOW_TICKS));
+      slot.body.scale.set(w * grow, 0.02, d * (1 + grow));
+      slot.body.material.color.setHex(COL.branchShadow);
+      slot.mark.visible = false;
+      poseOnTrack(slot.g, xMid, sMid, 0.012);
+      return;
+    }
+    const ht = obs.height;
+    slot.body.scale.set(w, ht, d);
+    slot.body.material.color.setHex(obs.low ? COL.log : COL.highBranch);
+    slot.mark.visible = true;
+    slot.mark.scale.set(w, 1, d);
+    poseOnTrack(slot.g, xMid, sMid, ht / 2);
+    slot.mark.position.set(0, ht / 2 + 0.02, 0);
+  }
+
   function syncWarnings(sim) {
     while (warnRoot.children.length) warnRoot.remove(warnRoot.children[0]);
     for (const w of sim.warnings()) {
       const o = w.obs;
-      if (o.type === 'bolt' || o.type === 'puddle') continue; // they carry their own tell
+      if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'branch') continue; // they carry their own tell
       if (o.type === 'gust') {
         const gem = new THREE.Mesh(
           new THREE.ConeGeometry(0.25, 0.6, 4),
@@ -209,6 +242,15 @@ export function createRenderer(canvas) {
         gem.rotation.z = o.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
         poseOnTrack(gem, C.laneX(o.lane), o.s, 1.2);
         warnRoot.add(gem);
+        if (o.leaf) {
+          // ghost lane marker: where the shove will put you
+          const ghost = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 0.02, 3),
+            new THREE.MeshBasicMaterial({ color: COL.gustGhost, transparent: true, opacity: 0.35, depthWrite: false }),
+          );
+          poseOnTrack(ghost, C.laneX(o.lane + o.dir), o.s + 1.5, 0.03);
+          warnRoot.add(ghost);
+        }
         continue;
       }
       const chev = new THREE.Mesh(

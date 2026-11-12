@@ -1,7 +1,7 @@
 import * as C from './config.mjs';
 import { createCourse, createManualCourse } from './generator.mjs';
 import { sweptAgainstList } from './collision.mjs';
-import { createActor, stepActor, stableLane, actorDigest, applySurface, shouldJumpRoot } from './move.mjs';
+import { createActor, stepActor, stableLane, actorDigest, applySurface, shouldJumpRoot, applyGusts } from './move.mjs';
 import { scoreFromHeight } from './scoring.mjs';
 
 export function createSim(opts = {}) {
@@ -22,6 +22,7 @@ export function createSim(opts = {}) {
     deathReason: null,
     deathHazard: null,
     lastSafe: null,
+    lastGustTick: -1e9,
     lastDb: 0,
     lastV: C.speedAtH(actor.h),
     recoveries: [],
@@ -66,15 +67,8 @@ export function createSim(opts = {}) {
   }
 
   function updateGusts(hits) {
-    if (actor.gustTick > 0 || actor.pendingGustDir) return;
-    for (const g of hits.gusts || []) {
-      const committed = actor.laneTick > 0 ? actor.toLane : actor.lane;
-      if (g.lane !== committed && g.lane !== actor.lane) continue;
-      const dest = g.lane + g.dir;
-      if (dest < 0 || dest > 2) continue;
-      actor.pendingGustDir = g.dir;
-      return;
-    }
+    const g = applyGusts(actor, hits.gusts);
+    if (g) state.lastGustTick = state.tick;
   }
 
   function offerOrEnd(reason, hazard) {
@@ -129,6 +123,8 @@ export function createSim(opts = {}) {
     // For the per-hazard death log: a hit while the puddle lock held you counts as a puddle death.
     let hazard = fatal ? C.HAZARD_CODE[fatal] || fatal : null;
     if (fatal && fatal !== 'bolt' && fatal !== 'bottom' && lockedBefore) hazard = 'P';
+    // A hit within 0.5 s of a leaf-gust shove counts as a gust death.
+    if (fatal && fatal !== 'bottom' && hazard !== 'P' && state.tick - state.lastGustTick <= 30 + C.GUST_PUSH_TICKS) hazard = 'G';
 
     state.inputs[state.tick] = recorded;
     state.tick += 1;
@@ -175,7 +171,7 @@ export function createSim(opts = {}) {
   }
 
   function pickClearLane(s, preferred) {
-    const obs = course.obstaclesInRange(s - 1, s + 2).filter(o => !o.disabled && (o.type === 'solid' || o.type === 'bolt'));
+    const obs = course.obstaclesInRange(s - 1, s + 2).filter(o => !o.disabled && (o.type === 'solid' || o.type === 'bolt' || o.type === 'branch'));
     const blocked = new Set();
     for (const o of obs) {
       if (o.s0 <= s + C.PLAYER_DEPTH / 2 && o.s1 >= s - C.PLAYER_DEPTH / 2) blocked.add(o.lane);
@@ -263,7 +259,7 @@ export function createSim(opts = {}) {
 
   function warnings(leadTicks = C.WARNING_TICKS) {
     const list = [];
-    const ahead = C.sAfterTicks(actor.s, Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS));
+    const ahead = C.sAfterTicks(actor.s, Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS, C.BRANCH_SHADOW_TICKS + C.BRANCH_LANDED_LEAD_TICKS));
     for (const o of course.obstaclesInRange(actor.s - 1, ahead + 4)) {
       if (o.disabled) continue;
       const ttc = C.ticksBetween(actor.s, o.contactS);
@@ -275,7 +271,9 @@ export function createSim(opts = {}) {
       }
       // Bolts fill for 1.0 s and puddles show 1.2 s ahead, so they warn earlier than the default.
       const lead = o.type === 'bolt' ? Math.max(leadTicks, C.BOLT_WARN_TICKS)
-        : o.type === 'puddle' ? Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS) : leadTicks;
+        : o.type === 'puddle' ? Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS)
+        : o.type === 'branch' ? Math.max(leadTicks, o.warnTicks)
+        : o.type === 'gust' ? Math.max(leadTicks, C.GUST_WARN_TICKS) : leadTicks;
       if (ttc > 0 && ttc <= lead) list.push({ obs: o, ticks: ttc, kind: 'approach' });
     }
     return list;

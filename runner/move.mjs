@@ -181,12 +181,28 @@ export function applySurface(p, report) {
   }
 }
 
+// A gust in the lane you hold (or are committed to) shoves you one lane in its direction.
+// Shared by the sim and the fairness trace so both see the same shove.
+export function applyGusts(p, gusts) {
+  if (p.gustTick > 0 || p.pendingGustDir) return null;
+  for (const g of gusts || []) {
+    const committed = p.laneTick > 0 ? p.toLane : p.lane;
+    if (g.lane !== committed && g.lane !== p.lane) continue;
+    const dest = g.lane + g.dir;
+    if (dest < 0 || dest > 2) continue;
+    p.pendingGustDir = g.dir;
+    return g;
+  }
+  return null;
+}
+
 // Bot helper: jump a root that sits in the lane we are holding.
 export function shouldJumpRoot(p, obstacles, onlyHurdles = false) {
   if (p.jumping || p.jumpTick > 0) return false;
   const lane = stableLane(p);
   for (const o of obstacles) {
-    if (o.disabled || o.type !== 'root' || o.lane !== lane) continue;
+    const jumpable = o.type === 'root' || (o.type === 'branch' && o.low);
+    if (o.disabled || !jumpable || o.lane !== lane) continue;
     if (onlyHurdles && !o.hurdle) continue;
     const t = ticksBetween(p.s, o.contactS);
     if (t > 0 && t <= 14) return true;

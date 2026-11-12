@@ -156,6 +156,29 @@ export function makePuddle(startS, lane, length, extras = {}) {
   };
 }
 
+// Falling branch: a shadow grows for 0.9 s, then it lands and stays as a low log (jump it)
+// or a high branch (dodge it). In the sim it is a static cell; the fall is only the tell.
+export function makeBranch(s, lane, low, extras = {}) {
+  const x = C.laneX(lane);
+  const hw = C.SOLID_WIDTH / 2;
+  const hd = C.BRANCH_DEPTH / 2;
+  return {
+    type: 'branch',
+    low: !!low,
+    lane,
+    lanes: [lane],
+    s,
+    depth: C.BRANCH_DEPTH,
+    height: low ? C.LOG_HEIGHT : C.HIGH_BRANCH_HEIGHT,
+    x0: x - hw, x1: x + hw,
+    s0: s - hd, s1: s + hd,
+    contactS: C.contactS(s, C.BRANCH_DEPTH),
+    warnTicks: C.BRANCH_SHADOW_TICKS + C.BRANCH_LANDED_LEAD_TICKS,
+    disabled: false,
+    ...extras,
+  };
+}
+
 function pickWeighted(rng, weights) {
   const entries = Object.entries(weights).filter(([, w]) => w > 0);
   const total = entries.reduce((s, [, w]) => s + w, 0);
@@ -175,7 +198,10 @@ export function eligibleWeights(h, hardStreak) {
   for (const [type, w] of Object.entries(band.weights)) {
     if (h + 1e-9 >= C.EARLIEST[type]) out[type] = w;
   }
-  if ((hardStreak || 0) >= C.HARD_STREAK_LIMIT) return h >= C.SPRING_HEIGHT ? { S0: 50, U1: 50 } : { S0: 50, S1: 50 };
+  if ((hardStreak || 0) >= C.HARD_STREAK_LIMIT) {
+    if (h >= C.SUMMER_HEIGHT) return { S0: 50, A1: 50 };
+    return h >= C.SPRING_HEIGHT ? { S0: 50, U1: 50 } : { S0: 50, S1: 50 };
+  }
   return out;
 }
 
@@ -220,6 +246,7 @@ function makeRow(fields) {
     boltLanes: fields.boltLanes || [],
     puddleLane: fields.puddleLane ?? null,
     spacingS: fields.spacingS ?? null,
+    branchLanes: fields.branchLanes || [],
   };
 }
 
@@ -544,6 +571,137 @@ function buildU6(rng, chunkS0, ctx, band) {
   return rowsToChunk('U6', rows);
 }
 
+
+// ---------- Autumn (240-360 m): leaf wind ----------
+
+function buildA1(rng, chunkS0, ctx, band) {
+  return relabel(rng() < 0.55 ? buildS1(rng, chunkS0, ctx, band) : buildS2(rng, chunkS0, ctx, band), 'A1');
+}
+
+// A leaf-gust pair in the centre lane: a shove one lane left, then one lane right 1.2 s later.
+// The centre lane is the only lane that can be shoved both ways without leaving the track, so
+// the generator always puts the pair there ("moves the gust" rather than shove off the edge).
+// All three lanes stay open; the shove destinations are clear cells.
+function gustPairRows(rng, c, type) {
+  const first = rng() < 0.5 ? -1 : 1;
+  const g1 = makeGust(c + C.GUST_DEPTH / 2 + C.PLAYER_DEPTH / 2, 1, first, { rowType: type, leaf: true });
+  const c2 = C.sAfterTicks(g1.contactS, C.LEAF_GUST_GAP_TICKS);
+  const g2 = makeGust(c2 + C.GUST_DEPTH / 2 + C.PLAYER_DEPTH / 2, 1, -first, { rowType: type, leaf: true, pairOf: 2 });
+  g1.pairOf = 1;
+  const all = [0, 1, 2];
+  const row1 = makeRow({
+    type, s: g1.s, depth: C.GUST_DEPTH, contactS: g1.contactS, designated: 1,
+    openLanes: all, blockedLanes: [], permanentlyOpen: all,
+    obstacles: [g1], gustLane: 1, gustDir: first, kind: 'gust',
+  });
+  const row2 = makeRow({
+    type, s: g2.s, depth: C.GUST_DEPTH, contactS: g2.contactS, designated: 1,
+    openLanes: all, blockedLanes: [], permanentlyOpen: all,
+    obstacles: [g2], gustLane: 1, gustDir: -first, kind: 'gust',
+    // the next row waits until the second shove has finished
+    spacingS: C.sAfterTicks(g2.contactS, C.GUST_PUSH_TICKS),
+  });
+  return [row1, row2];
+}
+
+function buildA2(rng, chunkS0, ctx, band) {
+  if (Math.abs(ctx.lastDesignated - 1) > 1) return null;
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const rows = gustPairRows(rng, contacts[0], 'A2');
+  if (rows[1].spacingS > chunkS0 + C.CHUNK_LENGTH - 4) return null;
+  return rowsToChunk('A2', rows);
+}
+
+function branchRow(rng, c, prevDes, type, mode) {
+  const des = pickAdjacent(rng, prevDes);
+  const s = c + C.BRANCH_DEPTH / 2 + C.PLAYER_DEPTH / 2;
+  if (mode === 'log') {
+    // Low log: half the time it lands in your lane (jump it), otherwise beside you.
+    const onPath = rng() < 0.5;
+    const lane = onPath ? des : otherLanes(des)[Math.floor(rng() * 2)];
+    const log = makeBranch(s, lane, true, { rowType: type, hurdle: onPath });
+    return makeRow({
+      type, s, depth: C.BRANCH_DEPTH, designated: des,
+      openLanes: [0, 1, 2], blockedLanes: [], permanentlyOpen: onPath ? [des] : [0, 1, 2].filter(l => l !== lane),
+      rootedLanes: [lane], obstacles: [log], kind: onPath ? 'hurdle-log' : 'log', branchLanes: [lane],
+    });
+  }
+  const others = otherLanes(des);
+  const lane = others[Math.floor(rng() * others.length)];
+  const br = makeBranch(s, lane, false, { rowType: type });
+  const open = [0, 1, 2].filter(l => l !== lane);
+  return makeRow({
+    type, s, depth: C.BRANCH_DEPTH, designated: des,
+    openLanes: open, blockedLanes: [lane], permanentlyOpen: open,
+    obstacles: [br], kind: 'branch', branchLanes: [lane],
+  });
+}
+
+function buildA3(rng, chunkS0, ctx, band) {
+  const n = 1 + (rng() < 0.4 ? 1 : 0);
+  const contacts = placeContacts(n, chunkS0, ctx.lastContactS, Math.max(band.gapTicks, C.MIN_DECISION_GAP), rng);
+  if (!contacts.length) return null;
+  const rows = [];
+  let des = ctx.lastDesignated;
+  for (const c of contacts) {
+    const row = branchRow(rng, c, des, 'A3', 'log');
+    rows.push(row);
+    des = row.designated;
+  }
+  return rowsToChunk('A3', rows);
+}
+
+function buildA4(rng, chunkS0, ctx, band) {
+  const n = 1 + (rng() < 0.35 ? 1 : 0);
+  const contacts = placeContacts(n, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const rows = [];
+  let des = ctx.lastDesignated;
+  for (const c of contacts) {
+    const row = branchRow(rng, c, des, 'A4', 'high');
+    rows.push(row);
+    des = row.designated;
+  }
+  return rowsToChunk('A4', rows);
+}
+
+// Gust pair, then a two-stone row at least 1.0 s after the second shove ends.
+function buildA5(rng, chunkS0, ctx, band) {
+  if (Math.abs(ctx.lastDesignated - 1) > 1) return null;
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const [r1, r2] = gustPairRows(rng, contacts[0], 'A5');
+  const wallC = C.sAfterTicks(r2.spacingS, Math.max(C.GUST_CLEAR_AFTER_TICKS, band.gapTicks, C.MIN_DECISION_GAP)) + rng() * 1.0;
+  const wallS = wallC + C.SOLID_DEPTH / 2 + C.PLAYER_DEPTH / 2;
+  if (r2.spacingS > chunkS0 + C.CHUNK_LENGTH - 4) return null;
+  if (wallS + 2 > chunkS0 + C.CHUNK_LENGTH - 2) return null;
+  const des = pickAdjacent(rng, 1);
+  const blocked = otherLanes(des);
+  const walls = blocked.map(l => makeSolid(wallS, l, { rowType: 'A5' }));
+  const r3 = makeRow({
+    type: 'A5', s: wallS, depth: C.SOLID_DEPTH, designated: des,
+    openLanes: [des], blockedLanes: blocked, permanentlyOpen: [des], obstacles: walls, kind: 'wall',
+  });
+  return rowsToChunk('A5', [r1, r2, r3]);
+}
+
+// Canopy: two branches in different lanes, staggered >= 1.0 s apart.
+function buildA6(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const r1 = branchRow(rng, contacts[0], ctx.lastDesignated, 'A6', rng() < 0.5 ? 'high' : 'log');
+  const c2 = C.sAfterTicks(r1.contactS, Math.max(C.BRANCH_STAGGER_TICKS, band.gapTicks)) + rng() * 1.2;
+  if (c2 + 3 > chunkS0 + C.CHUNK_LENGTH - 3) return null;
+  let r2 = null;
+  for (let k = 0; k < 4 && !r2; k++) {
+    const cand = branchRow(rng, c2, r1.designated, 'A6', 'high');
+    if (cand.branchLanes[0] !== r1.branchLanes[0]) r2 = cand;
+  }
+  if (!r2) return null;
+  return rowsToChunk('A6', [r1, r2]);
+}
+
 export function buildTypedChunk(type, rng, chunkS0, ctx) {
   const band = C.bandFor(C.heightAtS(chunkS0));
   if (type === 'S0') return buildS0(ctx);
@@ -560,6 +718,12 @@ export function buildTypedChunk(type, rng, chunkS0, ctx) {
   if (type === 'U4') return buildU4(rng, chunkS0, ctx, band);
   if (type === 'U5') return buildU5(rng, chunkS0, ctx, band);
   if (type === 'U6') return buildU6(rng, chunkS0, ctx, band);
+  if (type === 'A1') return buildA1(rng, chunkS0, ctx, band);
+  if (type === 'A2') return buildA2(rng, chunkS0, ctx, band);
+  if (type === 'A3') return buildA3(rng, chunkS0, ctx, band);
+  if (type === 'A4') return buildA4(rng, chunkS0, ctx, band);
+  if (type === 'A5') return buildA5(rng, chunkS0, ctx, band);
+  if (type === 'A6') return buildA6(rng, chunkS0, ctx, band);
   return null;
 }
 

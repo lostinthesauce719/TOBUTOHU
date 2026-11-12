@@ -5,10 +5,10 @@ import * as C from '../runner/config.mjs';
 import { createSim, perfectBotInput, runPerfectBot } from '../runner/sim.mjs';
 import {
   createCourse, generateChunk, emptyCtx, makeSolid, makeRoot, makePad, makeGust, createManualCourse,
-  makeBolt, makePuddle, mulberry32,
+  makeBolt, makePuddle, mulberry32, makeBranch,
 } from '../runner/generator.mjs';
 import {
-  validateChunk, validateCourseRules, impossibleLayouts, debutOk, puddleReachOk,
+  validateChunk, validateCourseRules, impossibleLayouts, debutOk, puddleReachOk, gustClearOk,
 } from '../runner/fairness.mjs';
 import { recognizeGesture } from '../runner/controls.mjs';
 import { createScoreboard, scoreFromHeight } from '../runner/scoring.mjs';
@@ -363,7 +363,7 @@ test('summer speed and mist follow the SEASONS table', () => {
   assert.equal(C.speedAtH(120), 10);
   assert.ok(Math.abs(C.speedAtH(180) - 10.5) < 1e-12);
   assert.equal(C.speedAtH(240), 11);
-  assert.equal(C.speedAtH(300), 11);
+  assert.equal(C.speedAtH(300), 11.5);
   assert.equal(C.mistCapAtH(60), 0.75);
   assert.equal(C.mistCapAtH(150), 0.80);
   for (const h of [120, 180, 239]) {
@@ -517,4 +517,175 @@ test('summer deaths by hazard: no hazard causes more than 25% of deaths (sloppy 
   console.log(`summer deaths (300 sloppy runs): ${JSON.stringify(counts)} of ${total}; reached 240 m: ${reached}; L ${(100 * share('L')).toFixed(1)}%, P ${(100 * share('P')).toFixed(1)}%`);
   assert.ok(total > 50, 'sloppy bot should die sometimes');
   for (const k of ['L', 'P']) assert.ok(share(k) <= 0.25, `hazard ${k} causes ${(100 * share(k)).toFixed(1)}% of summer deaths`);
+});
+
+// ---------------- Autumn (240-360 m): leaf wind ----------------
+
+test('autumn speed and mist follow the SEASONS table', () => {
+  assert.equal(C.speedAtH(240), 11);
+  assert.equal(C.speedAtH(360), 12);
+  assert.equal(C.speedAtH(500), 12);
+  assert.equal(C.mistCapAtH(300), 0.90);
+  for (const h of [240, 300, 359]) {
+    const climb = C.speedAtH(h) * C.SIN_PITCH;
+    const share = Math.min(C.mistCapAtH(h), C.BOTTOM_FRACTION * climb) / climb;
+    assert.ok(share >= 0.535 && share <= 0.59 + 1e-9, `mist share ${share} at ${h}`);
+  }
+  const a = C.sAtHeight(220);
+  const b = C.sAtHeight(380);
+  let s = a;
+  let n = 0;
+  while (s < b) { s += C.speedAtH(C.heightAtS(s)) / 60000; n++; }
+  assert.ok(Math.abs(C.travelTime(a, b) - n / 60000) < 1e-3);
+});
+
+test('autumn perfect bot: 20 seeds clear 360 m with zero deaths or Catches', () => {
+  const before = C.travelTime(0, C.sAtHeight(240));
+  const out = [];
+  for (let seed = 1; seed <= 20; seed++) {
+    const r = runPerfectBot(seed, 360, 60 * 600);
+    assert.ok(r.cleared, `seed ${seed} failed at h=${r.h.toFixed(2)} reason=${r.deathReason}`);
+    assert.equal(r.catchUsed, false);
+    out.push(r.seconds - before);
+  }
+  console.log(`autumn clean time ${Math.min(...out).toFixed(2)}-${Math.max(...out).toFixed(2)} s`);
+  for (const t of out) assert.ok(t >= 70 && t <= 90, `autumn time ${t}`);
+});
+
+test('autumn generator: open lane, gust pairs, branches, debut windows, calm transition', () => {
+  const seen = {};
+  let fallbacks = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const course = createCourse(seed);
+    course.ensureUntil(C.sAtHeight(365));
+    const rules = validateCourseRules(course.generated);
+    assert.ok(rules.ok, `seed ${seed}: ${rules.reason} @${rules.index} ${rules.type}`);
+    for (const ch of course.generated) {
+      const h0 = C.heightAtS(ch.s0);
+      if (h0 < 240) continue;
+      seen[ch.type] = (seen[ch.type] || 0) + 1;
+      if (ch.fallbackS0) fallbacks++;
+      if (h0 < 255 - 1e-9) assert.equal(ch.type, 'S0', `calm transition chunk ${ch.type} at ${h0}`);
+      if (h0 >= 360) assert.equal(ch.type, 'S0', 'winter not built: calm past 360 m');
+      assert.ok(debutOk(ch), `debut stacking ${ch.type} at ${h0}`);
+      assert.ok(gustClearOk(ch).ok, `gust shove into a blocked cell, seed ${seed}`);
+      const gusts = ch.obstacles.filter((o) => o.type === 'gust' && o.leaf);
+      assert.equal(gusts.length % 2, 0, 'leaf gusts come in pairs');
+      for (let i = 0; i + 1 < gusts.length; i += 2) {
+        assert.equal(gusts[0 + i].dir, -gusts[i + 1].dir, 'pair shoves one way then back');
+        assert.ok(Math.abs(C.ticksBetween(gusts[i].contactS, gusts[i + 1].contactS) - C.LEAF_GUST_GAP_TICKS) < 1e-6, 'second shove 1.2 s later');
+        assert.ok(C.heightAtS(gusts[i].s0) >= 255 - 1, 'gust before 255');
+      }
+      for (const r of ch.rows) {
+        const open = [0, 1, 2].filter((l) => !(r.blockedLanes || []).includes(l));
+        assert.ok(open.length >= 1, 'open lane');
+        assert.ok(open.includes(r.designated));
+        for (const l of r.branchLanes || []) if ((r.blockedLanes || []).includes(l)) assert.notEqual(l, r.designated, 'branch on the only open lane');
+      }
+      const branches = ch.obstacles.filter((o) => o.type === 'branch');
+      for (const b of branches) assert.ok(C.heightAtS(b.s0) >= 265 - 1, 'branch before 265');
+      if (ch.type === 'A6') {
+        assert.equal(branches.length, 2);
+        assert.notEqual(branches[0].lane, branches[1].lane, 'canopy branches in different lanes');
+        assert.ok(C.ticksBetween(branches[0].contactS, branches[1].contactS) + 1e-6 >= C.BRANCH_STAGGER_TICKS, 'canopy >= 1.0 s apart');
+      }
+      if (ch.type === 'A5') {
+        const g2 = gusts[1];
+        const wall = ch.obstacles.find((o) => o.type === 'solid');
+        assert.ok(C.ticksBetween(g2.contactS, wall.contactS) + 1e-6 >= C.GUST_PUSH_TICKS + C.GUST_CLEAR_AFTER_TICKS, 'wall >= 1.0 s after the second shove');
+      }
+    }
+  }
+  for (const t of ['A1', 'A2', 'A3', 'A4', 'A5', 'A6']) assert.ok((seen[t] || 0) > 20, `${t} too rare: ${seen[t]}`);
+  console.log('autumn chunk mix (200 seeds):', JSON.stringify(seen), 'fallbacks', fallbacks);
+});
+
+test('autumn impossible layouts reject (gust into a blocked cell, stacked debut, branch on the only open lane)', () => {
+  const s0 = C.sAtHeight(300);
+  const g = makeGust(s0 + 8, 1, -1, { leaf: true });
+  const stone = makeSolid(C.sAfterTicks(g.contactS, 20), 0);
+  const into = { type: 'A5', s0, s1: s0 + C.CHUNK_LENGTH, obstacles: [g, stone], rows: [] };
+  assert.equal(gustClearOk(into).ok, false);
+  const offTrack = { type: 'A2', s0, s1: s0 + C.CHUNK_LENGTH, obstacles: [makeGust(s0 + 8, 0, -1, { leaf: true })], rows: [] };
+  assert.equal(gustClearOk(offTrack).ok, false);
+
+  const d0 = C.sAtHeight(270);
+  const stacked = { type: 'A5', s0: d0, s1: d0 + C.CHUNK_LENGTH, obstacles: [makeGust(d0 + 6, 1, 1, { leaf: true }), makeBranch(d0 + 25, 0, false)], rows: [] };
+  assert.equal(debutOk(stacked), false);
+
+  const br = makeBranch(s0 + 10, 1, false);
+  const onOpen = {
+    type: 'A4', s0, s1: s0 + C.CHUNK_LENGTH, obstacles: [br],
+    rows: [{ type: 'A4', s: br.s, contactS: br.contactS, designated: 1, openLanes: [0, 2], blockedLanes: [1], permanentlyOpen: [0, 2], branchLanes: [1] }],
+  };
+  assert.equal(validateChunk(onOpen, { lastDesignated: 1, lastContactS: -1e6 }).ok, false);
+});
+
+test('branches and leaf gusts: log is jumpable, high branch is not, gust shoves you over', () => {
+  const log = makeBranch(16, 1, true);
+  const hop = createSim({ course: createManualCourse([log]), seed: 1 });
+  while (C.ticksBetween(hop.snapshot().s, log.contactS) > 12) hop.tick({});
+  hop.tick({ jump: true });
+  while (hop.snapshot().s < log.s1 + 1) hop.tick({});
+  assert.equal(hop.mode, 'play', 'a jumped log is cleared');
+
+  const stay = createSim({ course: createManualCourse([makeBranch(16, 1, true)]), seed: 1 });
+  while (stay.mode === 'play' && stay.state.tick < 300) stay.tick({});
+  assert.equal(stay.state.deathReason, 'branch');
+  assert.equal(stay.state.deathHazard, 'B');
+
+  const high = makeBranch(16, 1, false);
+  const bonk = createSim({ course: createManualCourse([high]), seed: 1 });
+  while (C.ticksBetween(bonk.snapshot().s, high.contactS) > 12) bonk.tick({});
+  bonk.tick({ jump: true });
+  while (bonk.mode === 'play' && bonk.state.tick < 300) bonk.tick({});
+  assert.equal(bonk.state.deathReason, 'branch', 'a high branch cannot be jumped');
+
+  const g = makeGust(14, 1, -1, { leaf: true });
+  const g2 = makeGust(C.sAfterTicks(g.contactS, C.LEAF_GUST_GAP_TICKS) + C.GUST_DEPTH / 2 + C.PLAYER_DEPTH / 2, 0, 1, { leaf: true });
+  const wind = createSim({ course: createManualCourse([g, g2]), seed: 1 });
+  while (wind.snapshot().s < g.s1 + 4) wind.tick({});
+  assert.equal(wind.snapshot().lane, 0, 'first shove moves you one lane left');
+  while (wind.snapshot().s < g2.s1 + 4) wind.tick({});
+  assert.equal(wind.snapshot().lane, 1, 'second shove moves you back right');
+  assert.equal(wind.mode, 'play', 'a gust alone is not deadly');
+
+  // Warnings: branch tell starts >= 0.9 s + 0.5 s out; gust tell >= 0.8 s out.
+  const b = makeBranch(40, 2, false);
+  const look = createSim({ course: createManualCourse([b, makeGust(40, 0, 1, { leaf: true })]), seed: 1 });
+  let firstB = null;
+  let firstG = null;
+  while (look.snapshot().s < 38) {
+    for (const w of look.warnings()) {
+      if (w.obs.type === 'branch' && firstB == null) firstB = w.ticks;
+      if (w.obs.type === 'gust' && firstG == null) firstG = w.ticks;
+    }
+    look.tick({});
+  }
+  assert.ok(firstB >= C.BRANCH_SHADOW_TICKS + C.BRANCH_LANDED_LEAD_TICKS - 1, `branch tell ${firstB}`);
+  assert.ok(firstG >= C.GUST_WARN_TICKS - 1, `gust tell ${firstG}`);
+});
+
+test('autumn deaths by hazard: logged per hazard with the 25% flag (sloppy bot)', () => {
+  const counts = {};
+  let total = 0;
+  let reached = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const sim = createSim({ seed, s: C.sAtHeight(240), h: 240, bottom: 228 });
+    const rng = mulberry32(seed * 7919);
+    let freeze = 0;
+    while (sim.mode === 'play' && sim.snapshot().h < 360) {
+      let inp = perfectBotInput(sim);
+      if (freeze > 0) { freeze--; inp = { laneDir: 0, jump: false }; } else if (rng() < 0.012) freeze = 8 + Math.floor(rng() * 14);
+      sim.tick(inp);
+    }
+    if (sim.mode !== 'play') { counts[sim.state.deathHazard] = (counts[sim.state.deathHazard] || 0) + 1; total++; } else reached++;
+  }
+  const share = (k) => (counts[k] || 0) / Math.max(total, 1);
+  const flags = ['G', 'B'].filter((k) => share(k) > 0.25);
+  console.log(`autumn deaths (300 sloppy runs): ${JSON.stringify(counts)} of ${total}; reached 360 m: ${reached}; G ${(100 * share('G')).toFixed(1)}%, B ${(100 * share('B')).toFixed(1)}%; FLAGGED: ${flags.join(',') || 'none'}`);
+  assert.ok(total > 50, 'sloppy bot should die sometimes');
+  // The gust shove must never be what kills you (it only moves you into clear cells).
+  assert.ok(share('G') <= 0.25, `gust causes ${(100 * share('G')).toFixed(1)}% of autumn deaths`);
+  // Branch share is reported as a flag for SEASONS/KAMI per the spec, not hidden or tuned away here.
 });
