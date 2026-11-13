@@ -115,6 +115,8 @@ export function createSim(opts = {}) {
     updatePads(hits);
     updateGusts(hits);
     const lockedBefore = actor.puddleLock > 0;
+    // On ice now, or left it less than 0.30 s ago: a hit counts as an ice death.
+    const iceBefore = actor.iceEndS != null || (actor.offIceTick > 0 && actor.offIceTick <= C.ICE_SWIPE_TICKS);
     applySurface(actor, hits);
 
     let fatal = null;
@@ -123,8 +125,9 @@ export function createSim(opts = {}) {
     // For the per-hazard death log: a hit while the puddle lock held you counts as a puddle death.
     let hazard = fatal ? C.HAZARD_CODE[fatal] || fatal : null;
     if (fatal && fatal !== 'bolt' && fatal !== 'bottom' && lockedBefore) hazard = 'P';
+    if (fatal && fatal !== 'bolt' && fatal !== 'bottom' && hazard !== 'P' && iceBefore) hazard = 'I';
     // A hit within 0.5 s of a leaf-gust shove counts as a gust death.
-    if (fatal && fatal !== 'bottom' && hazard !== 'P' && state.tick - state.lastGustTick <= 30 + C.GUST_PUSH_TICKS) hazard = 'G';
+    if (fatal && fatal !== 'bottom' && hazard !== 'P' && hazard !== 'I' && state.tick - state.lastGustTick <= 30 + C.GUST_PUSH_TICKS) hazard = 'G';
 
     state.inputs[state.tick] = recorded;
     state.tick += 1;
@@ -156,6 +159,9 @@ export function createSim(opts = {}) {
     actor.gustDir = 0;
     actor.pendingGustDir = 0;
     actor.puddleLock = 0;
+    actor.iceEndS = null;
+    actor.offIceTick = 0;
+    actor.laneDur = C.LANE_CHANGE_TICKS;
     actor.laneTick = 0;
     actor.lift = 0;
     const clearLane = pickClearLane(safe.s, safe.lane);
@@ -171,7 +177,7 @@ export function createSim(opts = {}) {
   }
 
   function pickClearLane(s, preferred) {
-    const obs = course.obstaclesInRange(s - 1, s + 2).filter(o => !o.disabled && (o.type === 'solid' || o.type === 'bolt' || o.type === 'branch'));
+    const obs = course.obstaclesInRange(s - 1, s + 2).filter(o => !o.disabled && (o.type === 'solid' || o.type === 'bolt' || o.type === 'branch' || o.type === 'drift'));
     const blocked = new Set();
     for (const o of obs) {
       if (o.s0 <= s + C.PLAYER_DEPTH / 2 && o.s1 >= s - C.PLAYER_DEPTH / 2) blocked.add(o.lane);
@@ -259,7 +265,7 @@ export function createSim(opts = {}) {
 
   function warnings(leadTicks = C.WARNING_TICKS) {
     const list = [];
-    const ahead = C.sAfterTicks(actor.s, Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS, C.BRANCH_SHADOW_TICKS + C.BRANCH_LANDED_LEAD_TICKS));
+    const ahead = C.sAfterTicks(actor.s, Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS, C.BRANCH_SHADOW_TICKS + C.BRANCH_LANDED_LEAD_TICKS, C.ICE_VISIBLE_TICKS));
     for (const o of course.obstaclesInRange(actor.s - 1, ahead + 4)) {
       if (o.disabled) continue;
       const ttc = C.ticksBetween(actor.s, o.contactS);
@@ -273,6 +279,8 @@ export function createSim(opts = {}) {
       const lead = o.type === 'bolt' ? Math.max(leadTicks, C.BOLT_WARN_TICKS)
         : o.type === 'puddle' ? Math.max(leadTicks, C.PUDDLE_VISIBLE_TICKS)
         : o.type === 'branch' ? Math.max(leadTicks, o.warnTicks)
+        : o.type === 'ice' ? Math.max(leadTicks, C.ICE_VISIBLE_TICKS)
+        : o.type === 'drift' ? Math.max(leadTicks, C.DRIFT_VISIBLE_TICKS)
         : o.type === 'gust' ? Math.max(leadTicks, C.GUST_WARN_TICKS) : leadTicks;
       if (ttc > 0 && ttc <= lead) list.push({ obs: o, ticks: ttc, kind: 'approach' });
     }
@@ -302,7 +310,8 @@ export function createSim(opts = {}) {
 export function perfectBotInput(sim) {
   const snap = sim.snapshot();
   if (snap.mode !== 'play') return { laneDir: 0, jump: false };
-  const look = C.sAfterTicks(snap.s, C.LANE_CHANGE_TICKS);
+  // On ice a swipe takes longer, so look further ahead.
+  const look = C.sAfterTicks(snap.s, sim.actor.iceEndS != null ? C.ICE_SWIPE_TICKS : C.LANE_CHANGE_TICKS);
   const want = sim.course.designatedLaneAt(look);
   const cur = snap.laneTick > 0 || snap.gustTick > 0 ? snap.toLane : snap.lane;
   let laneDir = 0;

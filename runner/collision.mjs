@@ -69,11 +69,12 @@ export function liftClears(lift, height) {
 // Obstacles that occupy volume: solid, root (if lift too low), collapsed pad.
 export function isLethalVolume(obs, lift) {
   if (obs.disabled) return false;
-  if (obs.type === 'gust' || obs.type === 'puddle') return false;
+  if (obs.type === 'gust' || obs.type === 'puddle' || obs.type === 'ice') return false;
   if (obs.type === 'bolt') return true; // a strike can't be jumped
   if (obs.type === 'pad') return !!obs.collapsed;
   if (obs.type === 'root') return !liftClears(lift, obs.height);
   if (obs.type === 'branch') return !liftClears(lift, obs.height); // low log jumpable, high branch not
+  if (obs.type === 'drift') return !liftClears(lift, obs.height); // low drift jumpable, tall drift not
   if (obs.type === 'solid') return !liftClears(lift, obs.height);
   return false;
 }
@@ -87,6 +88,7 @@ export function sweptAgainstList(prev, curr, obstacles) {
   const pads = [];
   const gusts = [];
   const puddles = [];
+  const ices = [];
   for (const obs of obstacles) {
     if (obs.disabled) continue;
     const t = sweptPlayerHit(prev.x, prev.s, curr.x, curr.s, obs);
@@ -99,6 +101,10 @@ export function sweptAgainstList(prev, curr, obstacles) {
     }
     if (obs.type === 'puddle') {
       puddles.push(obs);
+      continue;
+    }
+    if (obs.type === 'ice') {
+      ices.push(obs);
       continue;
     }
     if (isPadSurface(obs)) {
@@ -115,5 +121,6 @@ export function sweptAgainstList(prev, curr, obstacles) {
     pads: pads.map(p => p.obs),
     gusts: gusts.map(g => g.obs),
     puddles,
+    ices,
   };
 }

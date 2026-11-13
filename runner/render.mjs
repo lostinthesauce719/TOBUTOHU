@@ -24,6 +24,9 @@ const COL = {
   log: 0x6f7366,
   highBranch: 0x858a7c,
   gustGhost: 0xcfd2c6,
+  ice: 0xb8d4e3,
+  drift: 0xe8ebe6,
+  driftBand: 0x3a3f3b,
 };
 
 function worldOnTrack(x, s, lift = 0) {
@@ -150,6 +153,8 @@ export function createRenderer(canvas) {
         continue;
       }
       slot.g.visible = true;
+      slot.mark.material.color.setHex(COL.vermilion);
+      slot.mark.scale.set(1, 1, 1);
       const w = obs.x1 - obs.x0;
       const d = obs.s1 - obs.s0;
       if (obs.type === 'bolt' || obs.type === 'puddle') {
@@ -158,6 +163,10 @@ export function createRenderer(canvas) {
       }
       if (obs.type === 'branch') {
         drawBranch(slot, obs, sim, w, d);
+        continue;
+      }
+      if (obs.type === 'ice' || obs.type === 'drift') {
+        drawWinter(slot, obs, w, d);
         continue;
       }
       slot.mark.position.set(0, 0, 0);
@@ -229,11 +238,33 @@ export function createRenderer(canvas) {
     slot.mark.position.set(0, ht / 2 + 0.02, 0);
   }
 
+  // Graybox only. Ice is a pale-blue flat strip. Drifts are white mounds; a tall drift carries a dark
+  // lane-edge band so low and tall read differently. Purely visual.
+  function drawWinter(slot, obs, w, d) {
+    const sMid = (obs.s0 + obs.s1) / 2;
+    const xMid = (obs.x0 + obs.x1) / 2;
+    if (obs.type === 'ice') {
+      slot.body.scale.set(w, 0.03, d);
+      slot.body.material.color.setHex(COL.ice);
+      slot.mark.visible = false;
+      poseOnTrack(slot.g, xMid, sMid, 0.015);
+      return;
+    }
+    const ht = obs.height;
+    slot.body.scale.set(w, ht, d);
+    slot.body.material.color.setHex(COL.drift);
+    slot.mark.visible = true;
+    slot.mark.material.color.setHex(obs.low ? COL.vermilion : COL.driftBand);
+    slot.mark.scale.set(w * (obs.low ? 1 : 1.08), obs.low ? 1 : 3, d * (obs.low ? 1 : 1.08));
+    poseOnTrack(slot.g, xMid, sMid, ht / 2);
+    slot.mark.position.set(0, obs.low ? ht / 2 + 0.02 : -ht / 2 + 0.1, 0);
+  }
+
   function syncWarnings(sim) {
     while (warnRoot.children.length) warnRoot.remove(warnRoot.children[0]);
     for (const w of sim.warnings()) {
       const o = w.obs;
-      if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'branch') continue; // they carry their own tell
+      if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'branch' || o.type === 'ice') continue; // they carry their own tell
       if (o.type === 'gust') {
         const gem = new THREE.Mesh(
           new THREE.ConeGeometry(0.25, 0.6, 4),

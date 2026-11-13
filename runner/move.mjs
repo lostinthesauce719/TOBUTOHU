@@ -1,8 +1,10 @@
 import {
   DT, JUMP_TICKS, JUMP_BUFFER_TICKS, LANE_CHANGE_TICKS, QUEUE_EXPIRE_TICKS,
-  GUST_PUSH_TICKS, INITIAL_LANE, PUDDLE_LOCK_TICKS, jumpLift, laneX, speedAtH, heightAtS,
-  ticksBetween,
+  GUST_PUSH_TICKS, INITIAL_LANE, PUDDLE_LOCK_TICKS, ICE_SWIPE_TICKS, ICE_NO_JUMP_TICKS, jumpLift, laneX, speedAtH, heightAtS,
+  ticksBetween, PLAYER_DEPTH,
 } from './config.mjs';
+
+const C_HALF_DEPTH = PLAYER_DEPTH / 2;
 
 export function lerp(a, b, t) { return a + (b - a) * t; }
 
@@ -27,6 +29,9 @@ export function createActor(opts = {}) {
     lift: 0,
     jumping: false,
     puddleLock: 0,
+    laneDur: LANE_CHANGE_TICKS,
+    iceEndS: null,
+    offIceTick: 0,
   };
 }
 
@@ -36,7 +41,7 @@ export function copyActor(p) {
     laneTick: p.laneTick, jumpTick: p.jumpTick, jumpBuffer: p.jumpBuffer,
     queuedDir: p.queuedDir, queuedAge: p.queuedAge, gustTick: p.gustTick,
     gustDir: p.gustDir, pendingGustDir: p.pendingGustDir, lift: p.lift,
-    puddleLock: p.puddleLock,
+    puddleLock: p.puddleLock, laneDur: p.laneDur, iceEndS: p.iceEndS, offIceTick: p.offIceTick,
   };
 }
 
@@ -52,7 +57,14 @@ function beginLaneChange(p, dir) {
   p.fromLane = p.lane;
   p.toLane = dest;
   p.laneTick = 0;
+  // Ice: a swipe started on ice takes 0.30 s instead of 0.18 s.
+  p.laneDur = p.iceEndS != null ? ICE_SWIPE_TICKS : LANE_CHANGE_TICKS;
   return true;
+}
+
+// On ice and within the last 0.2 s before leaving it: jumps are ignored.
+export function iceNoJump(p) {
+  return p.iceEndS != null && ticksBetween(p.s, p.iceEndS) <= ICE_NO_JUMP_TICKS;
 }
 
 export function tryLaneCommand(p, dir) {
@@ -105,7 +117,7 @@ export function stepActor(p, input = {}) {
     p.pendingGustDir = 0;
   }
 
-  if (input.jump) tryJump(p);
+  if (input.jump && !iceNoJump(p)) tryJump(p);
   // Puddle: swipes are ignored while on it and for 0.4 s after leaving (jumps still work).
   if (input.laneDir && !(p.puddleLock > 0)) tryLaneCommand(p, input.laneDir);
   if (p.puddleLock > 0) p.puddleLock -= 1;
@@ -138,8 +150,9 @@ export function stepActor(p, input = {}) {
     }
   } else if (p.laneTick > 0 || p.toLane !== p.lane) {
     p.laneTick += 1;
-    p.x = lerp(laneX(p.fromLane), laneX(p.toLane), p.laneTick / LANE_CHANGE_TICKS);
-    if (p.laneTick >= LANE_CHANGE_TICKS) {
+    const dur = p.laneDur || LANE_CHANGE_TICKS;
+    p.x = lerp(laneX(p.fromLane), laneX(p.toLane), p.laneTick / dur);
+    if (p.laneTick >= dur) {
       p.lane = p.toLane;
       p.x = laneX(p.lane);
       p.fromLane = p.lane;
@@ -156,6 +169,7 @@ export function stepActor(p, input = {}) {
       p.jumpTick = 0;
       p.lift = 0;
       p.jumping = false;
+      if (p.jumpBuffer && iceNoJump(p)) p.jumpBuffer = 0;
       if (p.jumpBuffer) {
         p.jumpBuffer = 0;
         p.jumping = true;
@@ -179,6 +193,16 @@ export function applySurface(p, report) {
     p.queuedDir = 0;
     p.queuedAge = 0;
   }
+  // Ice: remember where the strip you are standing on ends (null when off ice).
+  let end = null;
+  for (const ice of report.ices || []) {
+    const e = ice.s1 + C_HALF_DEPTH;
+    if (end == null || e > end) end = e;
+  }
+  if (end != null) p.offIceTick = 0;
+  else if (p.iceEndS != null) p.offIceTick = 1;
+  else if (p.offIceTick > 0 && p.offIceTick < 1000) p.offIceTick += 1;
+  p.iceEndS = end;
 }
 
 // A gust in the lane you hold (or are committed to) shoves you one lane in its direction.
@@ -201,7 +225,7 @@ export function shouldJumpRoot(p, obstacles, onlyHurdles = false) {
   if (p.jumping || p.jumpTick > 0) return false;
   const lane = stableLane(p);
   for (const o of obstacles) {
-    const jumpable = o.type === 'root' || (o.type === 'branch' && o.low);
+    const jumpable = o.type === 'root' || ((o.type === 'branch' || o.type === 'drift') && o.low);
     if (o.disabled || !jumpable || o.lane !== lane) continue;
     if (onlyHurdles && !o.hurdle) continue;
     const t = ticksBetween(p.s, o.contactS);
@@ -214,6 +238,6 @@ export function actorDigest(p) {
   return [
     p.s.toFixed(9), p.h.toFixed(9), p.x.toFixed(9), p.lane, p.toLane,
     p.laneTick, p.jumpTick, p.queuedDir, p.queuedAge, p.gustTick, p.lift.toFixed(9),
-    p.puddleLock || 0,
+    p.puddleLock || 0, p.laneDur || 0, p.iceEndS == null ? '-' : p.iceEndS.toFixed(9),
   ].join(',');
 }

@@ -1,7 +1,7 @@
 // Versioned graybox tuning. Sources: /workspace/tobu-runner-spec/graybox-spring.md and
-// /workspace/tobu_runner/SEASON_LANE_COURSES.md (summer + autumn, KAMI sign-off 2026-11-10).
-export const TUNING_VERSION = 'graybox-autumn-1';
-export const GENERATOR_VERSION = 'graybox-autumn-1';
+// /workspace/tobu_runner/SEASON_LANE_COURSES.md (summer + autumn + winter, KAMI sign-off 2026-11-10).
+export const TUNING_VERSION = 'graybox-winter-1';
+export const GENERATOR_VERSION = 'graybox-winter-1';
 // Seed salt stays on the spring value so spring layouts for a seed are unchanged.
 export const COURSE_SALT = 'graybox-spring-1';
 export const SKILL_TIER = 'graybox';
@@ -33,18 +33,22 @@ export const V_RANGE = 2;
 export const SPRING_HEIGHT = 120;
 export const SUMMER_HEIGHT = 240;
 export const AUTUMN_HEIGHT = 360;
+export const WINTER_HEIGHT = 480;      // speed and mist go flat here
+export const WINTER_FLAT_HEIGHT = 600; // and the chunk mix and row gap stop ramping here
 export const SEASON_CALM_M = 15;
 // Speed is piecewise linear in height. Past the last segment it stays flat.
 export const SPEED_SEGMENTS = Object.freeze([
   Object.freeze({ h0: 0, h1: 120, v0: 8, v1: 10 }),
   Object.freeze({ h0: 120, h1: 240, v0: 10, v1: 11 }),
   Object.freeze({ h0: 240, h1: 360, v0: 11, v1: 12 }),
+  Object.freeze({ h0: 360, h1: 480, v0: 12, v1: 13 }),
 ]);
 // Mist (rising bottom) rate cap by season, m/s.
 export const MIST_CAPS = Object.freeze([
   Object.freeze({ minH: 0, cap: 0.75 }),
   Object.freeze({ minH: 120, cap: 0.80 }),
   Object.freeze({ minH: 240, cap: 0.90 }),
+  Object.freeze({ minH: 360, cap: 1.00 }),
 ]);
 
 export const BOTTOM_START = -12;
@@ -84,8 +88,8 @@ export const PUDDLE_LOCK_TICKS = 24;      // 0.4 s swipe lock
 export const PUDDLE_VISIBLE_TICKS = 72;   // visible >= 1.2 s ahead
 export const SWIPE_TICKS = LANE_CHANGE_TICKS; // 0.18 s
 export const DEBUT_WINDOW_M = 30;
-export const HAZARD_DEBUT = Object.freeze({ bolt: 135, puddle: 150, leafgust: 255, branch: 265 });
-export const HAZARD_CODE = Object.freeze({ bolt: 'L', puddle: 'P', gust: 'G', branch: 'B', pad: 'pad', solid: 'stone', root: 'root', bottom: 'bottom' });
+export const HAZARD_DEBUT = Object.freeze({ bolt: 135, puddle: 150, leafgust: 255, branch: 265, drift: 375, ice: 385 });
+export const HAZARD_CODE = Object.freeze({ bolt: 'L', puddle: 'P', gust: 'G', branch: 'B', drift: 'D', ice: 'I', pad: 'pad', solid: 'stone', root: 'root', bottom: 'bottom' });
 
 // Autumn hazards
 export const LEAF_GUST_GAP_TICKS = 72;    // second shove 1.2 s after the first
@@ -97,6 +101,20 @@ export const BRANCH_STAGGER_TICKS = 60;   // canopy branches >= 1.0 s apart
 export const BRANCH_DEPTH = 0.7;
 export const LOG_HEIGHT = 0.6;            // low log: jump it
 export const HIGH_BRANCH_HEIGHT = 2.5;    // high branch: dodge it
+
+// Winter hazards
+export const ICE_SWIPE_TICKS = 18;        // a swipe on ice takes 0.30 s instead of 0.18 s
+export const ICE_NO_JUMP_TICKS = 12;      // no jump in the last 0.2 s before leaving the ice
+export const ICE_VISIBLE_TICKS = 72;      // ice strip visible >= 1.2 s ahead
+export const ICE_MIN = 8;
+export const ICE_MAX = 12;
+export const DRIFT_VISIBLE_TICKS = 60;    // drifts visible >= 1.0 s ahead
+export const DRIFT_DEPTH = 0.8;
+export const LOW_DRIFT_HEIGHT = 0.6;      // low drift: jump it
+export const TALL_DRIFT_HEIGHT = 2.5;     // tall drift (dark lane-edge band): dodge it
+export const DRIFT_STAGGER_TICKS = 60;    // whiteout drifts >= 1.0 s apart
+export const ICE_TO_DRIFT_TICKS = 72;     // W5: drift 1.2 s after the ice starts
+export const ICE_JUMP_CLEAR_TICKS = 30;   // a low drift in an ice lane sits >= 0.5 s past the ice end
 
 export const CATCH_CLEARANCE = 6;
 export const CATCH_RECOVERY_M = 12;
@@ -118,12 +136,14 @@ export const EARLIEST = Object.freeze({
   S0: 0, S1: 0, S2: 15, S3: 20, S4: 40, S5: 50, S6: 60, S7: 75,
   U1: 120, U2: 135, U3: 150, U4: 170, U5: 190, U6: 210,
   A1: 240, A2: 255, A3: 265, A4: 280, A5: 300, A6: 320,
+  W1: 360, W2: 375, W3: 385, W4: 400, W5: 425, W6: 450,
 });
-export const HARD_TYPES = Object.freeze(['S5', 'S6', 'S7', 'U4', 'U5', 'U6', 'A5', 'A6']);
+export const HARD_TYPES = Object.freeze(['S5', 'S6', 'S7', 'U4', 'U5', 'U6', 'A5', 'A6', 'W5', 'W6']);
 // Hazard kinds each chunk type introduces (stones and roots are not hazards).
 export const CHUNK_HAZARDS = Object.freeze({
   S5: ['pad'], S6: ['gust'], S7: [], U2: ['bolt'], U3: ['puddle'], U4: ['bolt'], U5: ['puddle'], U6: ['bolt', 'puddle'],
   A2: ['leafgust'], A3: ['branch'], A4: ['branch'], A5: ['leafgust'], A6: ['branch'],
+  W2: ['drift'], W3: ['ice'], W4: ['drift'], W5: ['ice', 'drift'], W6: ['drift'],
 });
 
 export const BANDS = Object.freeze([
@@ -141,8 +161,13 @@ export const BANDS = Object.freeze([
   { minH: 255, maxH: 290, gapTicks: 45, weights: Object.freeze({ A1: 35, A2: 30, A3: 20, A4: 15 }) },
   { minH: 290, maxH: 325, gapTicks: 42, weights: Object.freeze({ A1: 15, A2: 20, A3: 15, A4: 20, A5: 20, A6: 10 }) },
   { minH: 325, maxH: 360, gapTicks: 40, weights: Object.freeze({ A2: 15, A3: 15, A4: 15, A5: 25, A6: 20, U2: 10 }) },
-  // Winter is not built yet: calm track past 360 m.
-  { minH: 360, maxH: Infinity, gapTicks: 40, calm: true, weights: Object.freeze({ S0: 100 }) },
+  // Winter. 360-375 is the calm transition. Row gaps 0.70 / 0.66 / 0.63 / 0.60 s (floor).
+  { minH: 360, maxH: 375, gapTicks: 40, calm: true, weights: Object.freeze({ S0: 100 }) },
+  { minH: 375, maxH: 420, gapTicks: 42, weights: Object.freeze({ W1: 35, W2: 30, W3: 20, W4: 15 }) },
+  { minH: 420, maxH: 480, gapTicks: 40, weights: Object.freeze({ W1: 15, W2: 15, W3: 20, W4: 20, W5: 20, W6: 10 }) },
+  { minH: 480, maxH: 600, gapTicks: 38, weights: Object.freeze({ W3: 15, W4: 15, W5: 25, W6: 20, U2: 4, U4: 4, U5: 4, A2: 4, A4: 4, A5: 3, A6: 2 }) },
+  // From 600 m nothing ramps: speed, mist and row gap are flat and the mix stays the same.
+  { minH: 600, maxH: Infinity, gapTicks: 36, weights: Object.freeze({ W5: 20, W6: 20, U4: 15, A5: 15, A6: 15, W3: 15 }) },
 ]);
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }

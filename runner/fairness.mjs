@@ -7,7 +7,7 @@ export function chunkHazards(chunk) {
   const kinds = new Set();
   for (const o of chunk.obstacles || []) {
     if (o.type === 'gust') kinds.add(o.leaf ? 'leafgust' : 'gust');
-    else if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'pad' || o.type === 'branch') kinds.add(o.type);
+    else if (o.type === 'bolt' || o.type === 'puddle' || o.type === 'pad' || o.type === 'branch' || o.type === 'drift' || o.type === 'ice') kinds.add(o.type);
   }
   return kinds;
 }
@@ -60,6 +60,29 @@ export function gustClearOk(chunk) {
   return { ok: true };
 }
 
+// Ice reach: leaving the ice lane for the next open lane is checked with the 0.30 s ice swipe
+// (plus reaction time). A low drift in an ice lane sits >= 0.5 s past the ice end, so the
+// last-0.2 s no-jump rule never takes away the jump.
+export function iceReachOk(ice, lane, next) {
+  if (!ice || !next) return true;
+  if (next.designated === lane && !(next.blockedLanes || []).includes(lane)) return true;
+  const t = C.ticksBetween(ice.contactS, next.contactS);
+  return t + 1e-6 >= C.ICE_SWIPE_TICKS + C.REACTION_DELAY;
+}
+
+export function iceDriftOk(chunk) {
+  const obstacles = chunk.obstacles || [];
+  for (const ice of obstacles) {
+    if (ice.type !== 'ice') continue;
+    for (const d of obstacles) {
+      if (d.type !== 'drift' || d.lane !== ice.lane) continue;
+      if (d.s0 < ice.s1 + 0.5) return { ok: false, reason: 'drift-on-ice' };
+      if (d.low && C.ticksBetween(ice.exitS, d.contactS) + 1e-6 < C.ICE_JUMP_CLEAR_TICKS) return { ok: false, reason: 'low-drift-at-ice-end' };
+    }
+  }
+  return { ok: true };
+}
+
 export function physicallyOpenLanes(row) {
   if (row.permanentlyOpen && row.permanentlyOpen.length) return row.permanentlyOpen.slice();
   const blocked = new Set(row.blockedLanes || []);
@@ -87,6 +110,7 @@ export function validateChunk(chunk, ctx = {}) {
   let prevRow = null;
   let lastBolt = ctx.lastBoltS ?? -1e6;
   let pendingPuddle = ctx.lastPuddle || null;
+  let pendingIce = ctx.lastIce || null;
 
   for (const row of chunk.rows || []) {
     const open = physicallyOpenLanes(row);
@@ -124,6 +148,13 @@ export function validateChunk(chunk, ctx = {}) {
       const obs = (row.obstacles || []).find(o => o.type === 'puddle');
       pendingPuddle = { obs, lane: row.puddleLane };
     }
+    if (pendingIce && row.iceLane == null) {
+      if (!iceReachOk(pendingIce.obs, pendingIce.lane, row)) return { ok: false, reason: 'ice-reach' };
+      pendingIce = null;
+    }
+    if (row.iceLane != null) {
+      pendingIce = { obs: (row.obstacles || []).find(o => o.type === 'ice'), lane: row.iceLane };
+    }
 
     prevDes = row.designated;
     prevContact = row.spacingS ?? row.contactS;
@@ -132,6 +163,8 @@ export function validateChunk(chunk, ctx = {}) {
 
   const gc = gustClearOk(chunk);
   if (!gc.ok) return gc;
+  const id = iceDriftOk(chunk);
+  if (!id.ok) return id;
 
   const path = traceDesignated(chunk, { lastDesignated: lastDes, lastContactS: lastContact }, lastDes);
   if (!path.ok) return { ok: false, reason: `unreachable:${path.reason}` };
@@ -160,7 +193,7 @@ export function traceDesignated(chunk, ctx, entryLane) {
   for (let t = 0; t < limit; t++) {
     let laneDir = 0;
     if (t >= C.REACTION_DELAY) {
-      const look = C.sAfterTicks(p.s, C.LANE_CHANGE_TICKS);
+      const look = C.sAfterTicks(p.s, p.iceEndS != null ? C.ICE_SWIPE_TICKS : C.LANE_CHANGE_TICKS);
       const want = designatedAt(rows, look, fallback);
       const cur = p.laneTick > 0 || p.gustTick > 0 ? p.toLane : p.lane;
       if (want !== cur) laneDir = Math.sign(want - cur);
@@ -185,12 +218,18 @@ export function validateCourseRules(chunks) {
     hardStreak: 0,
     lastBoltS: -1e6,
     lastPuddle: null,
+    lastIce: null,
   };
   for (const ch of chunks) {
     const v = validateChunk(ch, ctx);
     if (!v.ok) return { ok: false, reason: v.reason, index: ch.index, type: ch.type };
     const isHard = C.HARD_TYPES.includes(ch.type) && !ch.fallbackS0;
     let lastPuddle = ctx.lastPuddle;
+    let lastIce = ctx.lastIce;
+    if (ch.rows && ch.rows.length) {
+      lastIce = null;
+      for (const r of ch.rows) lastIce = r.iceLane != null ? { obs: r.obstacles.find(o => o.type === 'ice'), lane: r.iceLane } : null;
+    }
     if (ch.rows && ch.rows.length) {
       lastPuddle = null;
       for (const r of ch.rows) {
@@ -204,6 +243,7 @@ export function validateCourseRules(chunks) {
       hardStreak: isHard ? ctx.hardStreak + 1 : 0,
       lastBoltS: ch.lastBoltS ?? ctx.lastBoltS,
       lastPuddle,
+      lastIce,
     };
     if (ctx.hardStreak > C.HARD_STREAK_LIMIT) {
       return { ok: false, reason: 'max-two-hard', index: ch.index, type: ch.type };

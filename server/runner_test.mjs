@@ -5,10 +5,11 @@ import * as C from '../runner/config.mjs';
 import { createSim, perfectBotInput, runPerfectBot } from '../runner/sim.mjs';
 import {
   createCourse, generateChunk, emptyCtx, makeSolid, makeRoot, makePad, makeGust, createManualCourse,
-  makeBolt, makePuddle, mulberry32, makeBranch,
+  makeBolt, makePuddle, mulberry32, makeBranch, makeIce, makeDrift,
 } from '../runner/generator.mjs';
 import {
   validateChunk, validateCourseRules, impossibleLayouts, debutOk, puddleReachOk, gustClearOk,
+  iceReachOk, iceDriftOk,
 } from '../runner/fairness.mjs';
 import { recognizeGesture } from '../runner/controls.mjs';
 import { createScoreboard, scoreFromHeight } from '../runner/scoring.mjs';
@@ -524,7 +525,7 @@ test('summer deaths by hazard: no hazard causes more than 25% of deaths (sloppy 
 test('autumn speed and mist follow the SEASONS table', () => {
   assert.equal(C.speedAtH(240), 11);
   assert.equal(C.speedAtH(360), 12);
-  assert.equal(C.speedAtH(500), 12);
+  assert.equal(C.speedAtH(500), 13);
   assert.equal(C.mistCapAtH(300), 0.90);
   for (const h of [240, 300, 359]) {
     const climb = C.speedAtH(h) * C.SIN_PITCH;
@@ -566,7 +567,7 @@ test('autumn generator: open lane, gust pairs, branches, debut windows, calm tra
       seen[ch.type] = (seen[ch.type] || 0) + 1;
       if (ch.fallbackS0) fallbacks++;
       if (h0 < 255 - 1e-9) assert.equal(ch.type, 'S0', `calm transition chunk ${ch.type} at ${h0}`);
-      if (h0 >= 360) assert.equal(ch.type, 'S0', 'winter not built: calm past 360 m');
+      if (h0 >= 360 && h0 < 375 - 1e-9) assert.equal(ch.type, 'S0', 'winter calm transition 360-375 m');
       assert.ok(debutOk(ch), `debut stacking ${ch.type} at ${h0}`);
       assert.ok(gustClearOk(ch).ok, `gust shove into a blocked cell, seed ${seed}`);
       const gusts = ch.obstacles.filter((o) => o.type === 'gust' && o.leaf);
@@ -688,4 +689,178 @@ test('autumn deaths by hazard: logged per hazard with the 25% flag (sloppy bot)'
   // The gust shove must never be what kills you (it only moves you into clear cells).
   assert.ok(share('G') <= 0.25, `gust causes ${(100 * share('G')).toFixed(1)}% of autumn deaths`);
   // Branch share is reported as a flag for SEASONS/KAMI per the spec, not hidden or tuned away here.
+});
+
+// ---------------- Winter (360 m+): snow and ice ----------------
+
+test('winter speed and mist follow the SEASONS table and go flat', () => {
+  assert.equal(C.speedAtH(360), 12);
+  assert.equal(C.speedAtH(480), 13);
+  assert.equal(C.speedAtH(900), 13);
+  assert.equal(C.mistCapAtH(400), 1.0);
+  assert.equal(C.mistCapAtH(2000), 1.0);
+  for (const h of [360, 420, 479, 480, 800]) {
+    const climb = C.speedAtH(h) * C.SIN_PITCH;
+    const share = Math.min(C.mistCapAtH(h), C.BOTTOM_FRACTION * climb) / climb;
+    assert.ok(share >= 0.545 && share <= 0.60 + 1e-9, `mist share ${share} at ${h}`);
+  }
+  assert.equal(C.bandFor(650).gapTicks, 36, 'row gap floor 0.60 s');
+  assert.deepEqual(C.bandFor(650).weights, C.bandFor(5000).weights, 'nothing ramps after 600 m');
+});
+
+test('winter perfect bot: 20 seeds, no deaths 120 m to 1,000 m; 5 seeds reach the 20-minute cap', () => {
+  const before = C.travelTime(0, C.sAtHeight(360));
+  const toWinterEnd = C.travelTime(0, C.sAtHeight(480));
+  for (let seed = 1; seed <= 20; seed++) {
+    const r = runPerfectBot(seed, 1000, 60 * 1200);
+    assert.ok(r.cleared, `seed ${seed} failed at h=${r.h.toFixed(2)} reason=${r.deathReason}`);
+    assert.equal(r.catchUsed, false);
+  }
+  const winter = toWinterEnd - before;
+  console.log(`winter clean time 360-480 m: ${winter.toFixed(2)} s`);
+  assert.ok(winter >= 60 && winter <= 90, `winter time ${winter}`);
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const r = runPerfectBot(seed, 1e9, 60 * 60 * 20);
+    assert.equal(r.mode, 'play', `seed ${seed} died at h=${r.h.toFixed(1)} reason=${r.deathReason}`);
+    assert.equal(r.ticks, 60 * 60 * 20, 'reached the 20-minute cap');
+    if (seed === 1) console.log(`20-minute cap height: ${r.maxH.toFixed(1)} m`);
+  }
+});
+
+test('winter generator: open lane, ice reach, drifts, debut windows, calm transition', () => {
+  const seen = {};
+  let fallbacks = 0;
+  for (let seed = 1; seed <= 120; seed++) {
+    const course = createCourse(seed);
+    course.ensureUntil(C.sAtHeight(660));
+    const rules = validateCourseRules(course.generated);
+    assert.ok(rules.ok, `seed ${seed}: ${rules.reason} @${rules.index} ${rules.type}`);
+    for (const ch of course.generated) {
+      const h0 = C.heightAtS(ch.s0);
+      if (h0 < 360) continue;
+      seen[ch.type] = (seen[ch.type] || 0) + 1;
+      if (ch.fallbackS0) fallbacks++;
+      if (h0 < 375 - 1e-9) assert.equal(ch.type, 'S0', `calm transition chunk ${ch.type} at ${h0}`);
+      assert.ok(debutOk(ch), `debut stacking ${ch.type} at ${h0}`);
+      assert.ok(iceDriftOk(ch).ok, `drift too close to ice, seed ${seed}`);
+      for (const o of ch.obstacles) {
+        if (o.type === 'drift') assert.ok(C.heightAtS(o.s0) >= 375 - 1, 'drift before 375');
+        if (o.type === 'ice') assert.ok(C.heightAtS(o.s0) >= 385 - 1, 'ice before 385');
+      }
+      for (const r of ch.rows) {
+        const open = [0, 1, 2].filter((l) => !(r.blockedLanes || []).includes(l));
+        assert.ok(open.length >= 1 && open.includes(r.designated), 'open lane');
+        for (const l of r.driftLanes || []) if ((r.blockedLanes || []).includes(l)) assert.notEqual(l, r.designated, 'drift on the only open lane');
+      }
+      const drifts = ch.obstacles.filter((o) => o.type === 'drift');
+      if (ch.type === 'W6') {
+        assert.equal(drifts.length, 2);
+        assert.notEqual(drifts[0].lane, drifts[1].lane, 'whiteout drifts in different lanes');
+        assert.ok(C.ticksBetween(drifts[0].contactS, drifts[1].contactS) + 1e-6 >= C.DRIFT_STAGGER_TICKS, 'whiteout >= 1.0 s apart');
+        for (const d of drifts) assert.equal(d.low, false);
+      }
+      if (ch.type === 'W5') {
+        const ice = ch.obstacles.find((o) => o.type === 'ice');
+        assert.equal(drifts[0].lane, ice.lane, 'ice leads to the drift');
+        assert.ok(Math.abs(C.ticksBetween(ice.contactS, drifts[0].contactS) - C.ICE_TO_DRIFT_TICKS) < 1e-6, 'drift 1.2 s after the ice starts');
+      }
+    }
+  }
+  for (const t of ['W1', 'W2', 'W3', 'W4', 'W5', 'W6']) assert.ok((seen[t] || 0) > 20, `${t} too rare: ${seen[t]}`);
+  console.log('winter chunk mix (120 seeds, 360-660 m):', JSON.stringify(seen), 'fallbacks', fallbacks);
+});
+
+test('winter impossible layouts reject (ice reach, low drift at ice end, stacked debut, drift on open lane)', () => {
+  const s0 = C.sAtHeight(430);
+  const ice = makeIce(s0 + 6, 1, 10);
+  const tooSoon = { contactS: C.sAfterTicks(ice.contactS, 20), designated: 0, blockedLanes: [1, 2] };
+  assert.equal(iceReachOk(ice, 1, tooSoon), false, '0.30 s swipe does not fit');
+  assert.equal(iceReachOk(ice, 1, { ...tooSoon, contactS: C.sAfterTicks(ice.contactS, 40) }), true);
+  const low = makeDrift(ice.s1 + 1.2, 1, true);
+  assert.equal(iceDriftOk({ obstacles: [ice, low] }).ok, false, 'low drift right after ice end');
+  const d0 = C.sAtHeight(390);
+  const stacked = { type: 'W5', s0: d0, s1: d0 + C.CHUNK_LENGTH, obstacles: [makeIce(d0 + 6, 1, 8), makeDrift(d0 + 30, 0, false)], rows: [] };
+  assert.equal(debutOk(stacked), false);
+  const dr = makeDrift(s0 + 10, 1, false);
+  const onOpen = {
+    type: 'W4', s0, s1: s0 + C.CHUNK_LENGTH, obstacles: [dr],
+    rows: [{ type: 'W4', s: dr.s, contactS: dr.contactS, designated: 1, openLanes: [0, 2], blockedLanes: [1], permanentlyOpen: [0, 2], driftLanes: [1] }],
+  };
+  assert.equal(validateChunk(onOpen, { lastDesignated: 1, lastContactS: -1e6 }).ok, false);
+});
+
+test('ice and drifts: slow swipe, no jump at the end, low drift jumpable, tall drift is not', () => {
+  const ice = makeIce(10, 1, 12);
+  const slow = createSim({ course: createManualCourse([ice]), seed: 1 });
+  while (slow.snapshot().s < ice.s0 + 2) slow.tick({});
+  slow.tick({ laneDir: -1 });
+  let n = 1;
+  while (slow.snapshot().laneTick > 0) { slow.tick({}); n++; }
+  assert.equal(n, C.ICE_SWIPE_TICKS, 'a swipe on ice takes 0.30 s');
+  const dry = createSim({ course: createManualCourse([]), seed: 1 });
+  dry.tick({}); dry.tick({ laneDir: -1 });
+  let m = 1;
+  while (dry.snapshot().laneTick > 0) { dry.tick({}); m++; }
+  assert.equal(m, C.LANE_CHANGE_TICKS, 'off ice it is still 0.18 s');
+
+  const ice2 = makeIce(10, 1, 12);
+  const nj = createSim({ course: createManualCourse([ice2]), seed: 1 });
+  while (C.ticksBetween(nj.snapshot().s, ice2.exitS) > 8) nj.tick({});
+  nj.tick({ jump: true });
+  nj.tick({});
+  assert.equal(nj.snapshot().jumpTick, 0, 'no jump in the last 0.2 s on ice');
+  const ice3 = makeIce(10, 1, 12);
+  const ok = createSim({ course: createManualCourse([ice3]), seed: 1 });
+  while (ok.snapshot().s < ice3.s0 + 2) ok.tick({});
+  ok.tick({ jump: true }); ok.tick({});
+  assert.ok(ok.snapshot().jumpTick > 0, 'jumping earlier on the ice still works');
+
+  const low = makeDrift(16, 1, true);
+  const hop = createSim({ course: createManualCourse([low]), seed: 1 });
+  while (C.ticksBetween(hop.snapshot().s, low.contactS) > 12) hop.tick({});
+  hop.tick({ jump: true });
+  while (hop.snapshot().s < low.s1 + 1) hop.tick({});
+  assert.equal(hop.mode, 'play', 'a jumped low drift is cleared');
+  const tall = makeDrift(16, 1, false);
+  const bonk = createSim({ course: createManualCourse([tall]), seed: 1 });
+  while (C.ticksBetween(bonk.snapshot().s, tall.contactS) > 12) bonk.tick({});
+  bonk.tick({ jump: true });
+  while (bonk.mode === 'play' && bonk.state.tick < 300) bonk.tick({});
+  assert.equal(bonk.state.deathReason, 'drift', 'a tall drift cannot be jumped');
+  assert.equal(bonk.state.deathHazard, 'D');
+
+  const look = createSim({ course: createManualCourse([makeIce(40, 0, 10), makeDrift(40, 2, false)]), seed: 1 });
+  let firstI = null;
+  let firstD = null;
+  while (look.snapshot().s < 38) {
+    for (const w of look.warnings()) {
+      if (w.obs.type === 'ice' && firstI == null) firstI = w.ticks;
+      if (w.obs.type === 'drift' && firstD == null) firstD = w.ticks;
+    }
+    look.tick({});
+  }
+  assert.ok(firstI >= C.ICE_VISIBLE_TICKS - 1, `ice tell ${firstI}`);
+  assert.ok(firstD >= C.DRIFT_VISIBLE_TICKS - 1, `drift tell ${firstD}`);
+});
+
+test('winter deaths by hazard: logged per hazard with the 25% flag (sloppy bot)', () => {
+  const counts = {};
+  let total = 0;
+  let reached = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const sim = createSim({ seed, s: C.sAtHeight(360), h: 360, bottom: 348 });
+    const rng = mulberry32(seed * 7919);
+    let freeze = 0;
+    while (sim.mode === 'play' && sim.snapshot().h < 480) {
+      let inp = perfectBotInput(sim);
+      if (freeze > 0) { freeze--; inp = { laneDir: 0, jump: false }; } else if (rng() < 0.012) freeze = 8 + Math.floor(rng() * 14);
+      sim.tick(inp);
+    }
+    if (sim.mode !== 'play') { counts[sim.state.deathHazard] = (counts[sim.state.deathHazard] || 0) + 1; total++; } else reached++;
+  }
+  const share = (k) => (counts[k] || 0) / Math.max(total, 1);
+  const flags = ['I', 'D'].filter((k) => share(k) > 0.25);
+  console.log(`winter deaths (300 sloppy runs): ${JSON.stringify(counts)} of ${total}; reached 480 m: ${reached}; I ${(100 * share('I')).toFixed(1)}%, D ${(100 * share('D')).toFixed(1)}%; FLAGGED: ${flags.join(',') || 'none'}`);
+  assert.ok(total > 50, 'sloppy bot should die sometimes');
+  // Per the spec this is reported as a flag for SEASONS/KAMI, not hidden or tuned away here.
 });

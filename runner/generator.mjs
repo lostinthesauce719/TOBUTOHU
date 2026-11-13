@@ -179,6 +179,48 @@ export function makeBranch(s, lane, low, extras = {}) {
   };
 }
 
+// Ice drift: a pale-blue lane strip. Not deadly; on it a swipe takes 0.30 s and you can't
+// jump in the last 0.2 s before leaving it.
+export function makeIce(startS, lane, length, extras = {}) {
+  const x = C.laneX(lane);
+  const hw = C.SOLID_WIDTH / 2;
+  return {
+    type: 'ice',
+    lane,
+    lanes: [lane],
+    s: startS + length / 2,
+    depth: length,
+    height: 0,
+    x0: x - hw, x1: x + hw,
+    s0: startS, s1: startS + length,
+    contactS: startS - C.PLAYER_DEPTH / 2,
+    exitS: startS + length + C.PLAYER_DEPTH / 2,
+    disabled: false,
+    ...extras,
+  };
+}
+
+// Snow drift: a white mound in one lane. Low drifts are jumped, tall drifts (dark lane-edge band) dodged.
+export function makeDrift(s, lane, low, extras = {}) {
+  const x = C.laneX(lane);
+  const hw = C.SOLID_WIDTH / 2;
+  const hd = C.DRIFT_DEPTH / 2;
+  return {
+    type: 'drift',
+    low: !!low,
+    lane,
+    lanes: [lane],
+    s,
+    depth: C.DRIFT_DEPTH,
+    height: low ? C.LOW_DRIFT_HEIGHT : C.TALL_DRIFT_HEIGHT,
+    x0: x - hw, x1: x + hw,
+    s0: s - hd, s1: s + hd,
+    contactS: C.contactS(s, C.DRIFT_DEPTH),
+    disabled: false,
+    ...extras,
+  };
+}
+
 function pickWeighted(rng, weights) {
   const entries = Object.entries(weights).filter(([, w]) => w > 0);
   const total = entries.reduce((s, [, w]) => s + w, 0);
@@ -199,6 +241,7 @@ export function eligibleWeights(h, hardStreak) {
     if (h + 1e-9 >= C.EARLIEST[type]) out[type] = w;
   }
   if ((hardStreak || 0) >= C.HARD_STREAK_LIMIT) {
+    if (h >= C.AUTUMN_HEIGHT) return { S0: 50, W1: 50 };
     if (h >= C.SUMMER_HEIGHT) return { S0: 50, A1: 50 };
     return h >= C.SPRING_HEIGHT ? { S0: 50, U1: 50 } : { S0: 50, S1: 50 };
   }
@@ -247,6 +290,8 @@ function makeRow(fields) {
     puddleLane: fields.puddleLane ?? null,
     spacingS: fields.spacingS ?? null,
     branchLanes: fields.branchLanes || [],
+    driftLanes: fields.driftLanes || [],
+    iceLane: fields.iceLane ?? null,
   };
 }
 
@@ -702,6 +747,154 @@ function buildA6(rng, chunkS0, ctx, band) {
   return rowsToChunk('A6', [r1, r2]);
 }
 
+// ---------- Winter (360 m+): snow and ice ----------
+
+function buildW1(rng, chunkS0, ctx, band) {
+  return relabel(rng() < 0.55 ? buildS1(rng, chunkS0, ctx, band) : buildS2(rng, chunkS0, ctx, band), 'W1');
+}
+
+function driftS(c) { return c + C.DRIFT_DEPTH / 2 + C.PLAYER_DEPTH / 2; }
+
+// Low drift in one or two lanes. One lane: half the time on your path (jump it). Two lanes:
+// both lanes beside the open one, like a root row.
+function lowDriftRow(rng, c, prevDes, type) {
+  const des = pickAdjacent(rng, prevDes);
+  const s = driftS(c);
+  if (rng() < 0.6) {
+    const onPath = rng() < 0.5;
+    const lane = onPath ? des : otherLanes(des)[Math.floor(rng() * 2)];
+    const d = makeDrift(s, lane, true, { rowType: type, hurdle: onPath });
+    return makeRow({
+      type, s, depth: C.DRIFT_DEPTH, designated: des,
+      openLanes: [0, 1, 2], blockedLanes: [], permanentlyOpen: onPath ? [des] : [0, 1, 2].filter(l => l !== lane),
+      rootedLanes: [lane], obstacles: [d], kind: onPath ? 'hurdle-drift' : 'low-drift', driftLanes: [lane],
+    });
+  }
+  const lanes = otherLanes(des);
+  const ds = lanes.map(l => makeDrift(s, l, true, { rowType: type }));
+  return makeRow({
+    type, s, depth: C.DRIFT_DEPTH, designated: des,
+    openLanes: [des], blockedLanes: [], permanentlyOpen: [des],
+    rootedLanes: lanes, obstacles: ds, kind: 'low-drift', driftLanes: lanes,
+  });
+}
+
+// Tall drift blocking one non-designated lane.
+function tallDriftRow(rng, c, prevDes, type, avoidLane = null) {
+  const des = pickAdjacent(rng, prevDes);
+  const lanes = otherLanes(des).filter(l => l !== avoidLane);
+  if (!lanes.length) return null;
+  const lane = lanes[Math.floor(rng() * lanes.length)];
+  const s = driftS(c);
+  const d = makeDrift(s, lane, false, { rowType: type });
+  const open = [0, 1, 2].filter(l => l !== lane);
+  return makeRow({
+    type, s, depth: C.DRIFT_DEPTH, designated: des,
+    openLanes: open, blockedLanes: [lane], permanentlyOpen: open,
+    obstacles: [d], kind: 'tall-drift', driftLanes: [lane],
+  });
+}
+
+function buildW2(rng, chunkS0, ctx, band) {
+  const n = 1 + (rng() < 0.4 ? 1 : 0);
+  const contacts = placeContacts(n, chunkS0, ctx.lastContactS, Math.max(band.gapTicks, C.MIN_DECISION_GAP), rng);
+  if (!contacts.length) return null;
+  const rows = [];
+  let des = ctx.lastDesignated;
+  for (const c of contacts) {
+    const row = lowDriftRow(rng, c, des, 'W2');
+    rows.push(row);
+    des = row.designated;
+  }
+  return rowsToChunk('W2', rows);
+}
+
+// Ice in the designated lane, a stone beside its entry in one other lane.
+function iceRow(rng, c, prevDes, type, length) {
+  const des = pickAdjacent(rng, prevDes);
+  const startS = c + C.PLAYER_DEPTH / 2;
+  const ice = makeIce(startS, des, length, { rowType: type });
+  const others = otherLanes(des);
+  const stoneLane = others[Math.floor(rng() * others.length)];
+  const stone = makeSolid(startS + C.SOLID_DEPTH / 2, stoneLane, { rowType: type });
+  const open = [0, 1, 2].filter(l => l !== stoneLane);
+  const row = makeRow({
+    type, s: ice.s, depth: ice.depth, contactS: ice.contactS, designated: des,
+    openLanes: open, blockedLanes: [stoneLane], permanentlyOpen: open,
+    obstacles: [ice, stone], iceLane: des, kind: 'ice',
+  });
+  row.ice = ice;
+  return row;
+}
+
+function buildW3(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const length = C.ICE_MIN + rng() * (C.ICE_MAX - C.ICE_MIN);
+  if (contacts[0] + length + 2 > chunkS0 + C.CHUNK_LENGTH - 2) return null;
+  return rowsToChunk('W3', [iceRow(rng, contacts[0], ctx.lastDesignated, 'W3', length)]);
+}
+
+function buildW4(rng, chunkS0, ctx, band) {
+  const n = 1 + (rng() < 0.35 ? 1 : 0);
+  const contacts = placeContacts(n, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const rows = [];
+  let des = ctx.lastDesignated;
+  for (const c of contacts) {
+    const row = tallDriftRow(rng, c, des, 'W4');
+    if (!row) return null;
+    rows.push(row);
+    des = row.designated;
+  }
+  return rowsToChunk('W4', rows);
+}
+
+// Ice lane leading to a tall drift in that same lane, 1.2 s after the ice starts: swipe off the
+// ice (0.30 s) to dodge it. The ice ends before the drift.
+function buildW5(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const c = contacts[0];
+  const des = pickAdjacent(rng, ctx.lastDesignated);
+  const startS = c + C.PLAYER_DEPTH / 2;
+  const driftC = C.sAfterTicks(c, C.ICE_TO_DRIFT_TICKS);
+  const dS = driftS(driftC);
+  const length = Math.min(C.ICE_MAX, dS - C.DRIFT_DEPTH / 2 - 1.0 - startS);
+  if (length < C.ICE_MIN - 2) return null;
+  if (dS + 3 > chunkS0 + C.CHUNK_LENGTH - 3) return null;
+  const ice = makeIce(startS, des, length, { rowType: 'W5' });
+  const row1 = makeRow({
+    type: 'W5', s: ice.s, depth: ice.depth, contactS: ice.contactS, designated: des,
+    openLanes: [0, 1, 2], blockedLanes: [], permanentlyOpen: [0, 1, 2],
+    obstacles: [ice], iceLane: des, kind: 'ice',
+  });
+  row1.ice = ice;
+  const des2 = pickAdjacent(rng, des, otherLanes(des));
+  const drift = makeDrift(dS, des, false, { rowType: 'W5' });
+  const open = [0, 1, 2].filter(l => l !== des);
+  const row2 = makeRow({
+    type: 'W5', s: dS, depth: C.DRIFT_DEPTH, designated: des2,
+    openLanes: open, blockedLanes: [des], permanentlyOpen: open,
+    obstacles: [drift], kind: 'tall-drift', driftLanes: [des],
+  });
+  return rowsToChunk('W5', [row1, row2]);
+}
+
+// Whiteout: two tall drifts in different lanes, staggered >= 1.0 s apart.
+function buildW6(rng, chunkS0, ctx, band) {
+  const contacts = placeContacts(1, chunkS0, ctx.lastContactS, band.gapTicks, rng);
+  if (!contacts.length) return null;
+  const r1 = tallDriftRow(rng, contacts[0], ctx.lastDesignated, 'W6');
+  if (!r1) return null;
+  const c2 = C.sAfterTicks(r1.contactS, Math.max(C.DRIFT_STAGGER_TICKS, band.gapTicks)) + rng() * 1.2;
+  if (c2 + 3 > chunkS0 + C.CHUNK_LENGTH - 3) return null;
+  let r2 = null;
+  for (let k = 0; k < 4 && !r2; k++) r2 = tallDriftRow(rng, c2, r1.designated, 'W6', r1.driftLanes[0]);
+  if (!r2) return null;
+  return rowsToChunk('W6', [r1, r2]);
+}
+
 export function buildTypedChunk(type, rng, chunkS0, ctx) {
   const band = C.bandFor(C.heightAtS(chunkS0));
   if (type === 'S0') return buildS0(ctx);
@@ -724,6 +917,12 @@ export function buildTypedChunk(type, rng, chunkS0, ctx) {
   if (type === 'A4') return buildA4(rng, chunkS0, ctx, band);
   if (type === 'A5') return buildA5(rng, chunkS0, ctx, band);
   if (type === 'A6') return buildA6(rng, chunkS0, ctx, band);
+  if (type === 'W1') return buildW1(rng, chunkS0, ctx, band);
+  if (type === 'W2') return buildW2(rng, chunkS0, ctx, band);
+  if (type === 'W3') return buildW3(rng, chunkS0, ctx, band);
+  if (type === 'W4') return buildW4(rng, chunkS0, ctx, band);
+  if (type === 'W5') return buildW5(rng, chunkS0, ctx, band);
+  if (type === 'W6') return buildW6(rng, chunkS0, ctx, band);
   return null;
 }
 
