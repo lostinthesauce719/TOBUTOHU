@@ -864,3 +864,17 @@ test('winter deaths by hazard: logged per hazard with the 25% flag (sloppy bot)'
   assert.ok(total > 50, 'sloppy bot should die sometimes');
   // Per the spec this is reported as a flag for SEASONS/KAMI, not hidden or tuned away here.
 });
+
+test('season label is display-only: boundaries match the season heights and the sim never reads it', async () => {
+  assert.equal(C.seasonAtH(0).key, 'spring');
+  assert.equal(C.seasonAtH(119.9).key, 'spring');
+  assert.equal(C.seasonAtH(120).key, 'summer');
+  assert.equal(C.seasonAtH(240).key, 'autumn');
+  assert.equal(C.seasonAtH(360).key, 'winter');
+  assert.equal(C.seasonAtH(5000).key, 'winter');
+  const { readFile } = await import('node:fs/promises');
+  for (const f of ['sim.mjs', 'generator.mjs', 'fairness.mjs', 'move.mjs', 'collision.mjs', 'scoring.mjs']) {
+    const src = await readFile(new URL(`../runner/${f}`, import.meta.url), 'utf8');
+    assert.ok(!src.includes('seasonAtH') && !src.includes('SEASON_NAMES'), `${f} must not read the display season label`);
+  }
+});

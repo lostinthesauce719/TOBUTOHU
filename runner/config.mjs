@@ -170,6 +170,19 @@ export const BANDS = Object.freeze([
   { minH: 600, maxH: Infinity, gapTicks: 36, weights: Object.freeze({ W5: 20, W6: 20, U4: 15, A5: 15, A6: 15, W3: 15 }) },
 ]);
 
+// Display-only season label for the HUD and results. Never read by the sim.
+export const SEASON_NAMES = Object.freeze([
+  Object.freeze({ key: 'spring', name: 'Spring', minH: 0 }),
+  Object.freeze({ key: 'summer', name: 'Summer storm', minH: SPRING_HEIGHT }),
+  Object.freeze({ key: 'autumn', name: 'Autumn wind', minH: SUMMER_HEIGHT }),
+  Object.freeze({ key: 'winter', name: 'Winter', minH: AUTUMN_HEIGHT }),
+]);
+export function seasonAtH(h) {
+  let out = SEASON_NAMES[0];
+  for (const s of SEASON_NAMES) if (h >= s.minH) out = s;
+  return out;
+}
+
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 function segFor(h) {

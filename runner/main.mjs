@@ -9,6 +9,8 @@ const hudH = document.getElementById('hud-h');
 const hudV = document.getElementById('hud-v');
 const hudScore = document.getElementById('hud-score');
 const hudCatch = document.getElementById('hud-catch');
+const hudSeason = document.getElementById('hud-season');
+const banner = document.getElementById('season-banner');
 const screens = {
   start: document.getElementById('screen-start'),
   catch: document.getElementById('screen-catch'),
@@ -28,6 +30,8 @@ let acc = 0;
 let last = performance.now();
 let recorded = false;
 let uiMode = 'start';
+let seasonKey = 'spring';
+let bannerUntil = 0;
 
 function show(name) {
   uiMode = name;
@@ -45,6 +49,9 @@ function startRun() {
   sim = createSim({ seed: parseSeed() });
   recorded = false;
   acc = 0;
+  seasonKey = 'spring';
+  bannerUntil = 0;
+  banner.classList.add('hidden');
   show(null);
   for (const el of Object.values(screens)) el.classList.add('hidden');
   uiMode = 'play';
@@ -56,6 +63,19 @@ function updateHud() {
   hudH.textContent = `${Math.max(0, snap.h).toFixed(1)} m`;
   hudV.textContent = `${snap.v.toFixed(2)} m/s`;
   hudScore.textContent = String(scoreFromHeight(snap.maxH));
+  // Season label is display-only: it reads the sim, never writes to it.
+  const season = C.seasonAtH(Math.max(0, snap.maxH));
+  hudSeason.textContent = season.name;
+  if (season.key !== seasonKey) {
+    seasonKey = season.key;
+    banner.textContent = season.name;
+    banner.classList.remove('hidden');
+    bannerUntil = performance.now() + 2200;
+  }
+  if (bannerUntil && performance.now() > bannerUntil) {
+    banner.classList.add('hidden');
+    bannerUntil = 0;
+  }
   hudCatch.textContent = snap.catchUsed ? 'Catch used' : (snap.catchAvailable ? 'Catch ready' : 'No Catch');
 }
 
@@ -89,7 +109,7 @@ function presentResults() {
   }
   const line = document.getElementById('results-line');
   const kind = snap.catchUsed ? 'Catch-assisted' : 'Clean';
-  line.textContent = `${snap.score} m · ${kind} · seed ${snap.seed}`;
+  line.textContent = `${snap.score} m · ${C.seasonAtH(Math.max(0, snap.maxH)).name} · ${kind} · seed ${snap.seed}`;
   const lists = board.getBoard();
   fillList(document.getElementById('board-clean'), lists.clean);
   fillList(document.getElementById('board-assisted'), lists.assisted);
