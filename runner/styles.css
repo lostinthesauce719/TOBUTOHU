@@ -53,3 +53,5 @@ button.end { background: transparent; color: var(--ink); border-color: var(--dan
   pointer-events: none; transition: opacity 0.4s ease; opacity: 1;
 }
 #season-banner.hidden { opacity: 0; }
+p.best { color: var(--ink); font-weight: 600; margin-top: -6px; }
+p.best:empty, p.best.hidden { display: none; }

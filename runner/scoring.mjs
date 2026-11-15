@@ -32,6 +32,23 @@ export function createScoreboard(storage) {
     store.setItem(STORE_KEY, JSON.stringify(cache));
   }
 
+  function bestOf(key) {
+    let best = null;
+    for (const e of cache[key] || []) {
+      if (!best || e.score > best.score) best = e;
+    }
+    return best;
+  }
+
+  // Highest score first; ties keep the earlier climb first. Display-only.
+  function topRuns(key, n = 10) {
+    return (cache[key] || [])
+      .map((e, i) => ({ e, i }))
+      .sort((a, b) => (b.e.score - a.e.score) || (a.i - b.i))
+      .slice(0, n)
+      .map((x) => x.e);
+  }
+
   function recordRun(run) {
     const entry = {
       score: scoreFromHeight(run.maxH ?? run.score ?? 0),
@@ -45,9 +62,12 @@ export function createScoreboard(storage) {
       at: run.at || 0,
     };
     const key = entry.catchUsed ? 'assisted' : 'clean';
+    const prev = bestOf(key);
     cache[key] = cache[key].concat(entry);
     save();
-    return entry;
+    // A new best only when it strictly beats the previous best on the same board.
+    const isBest = entry.score > 0 && (!prev || entry.score > prev.score);
+    return { ...entry, board: key, isBest, previousBest: prev ? prev.score : null };
   }
 
   function getBoard() {
@@ -62,5 +82,11 @@ export function createScoreboard(storage) {
     save();
   }
 
-  return { recordRun, getBoard, clear, STORE_KEY };
+  function getBests() {
+    const c = bestOf('clean');
+    const a = bestOf('assisted');
+    return { clean: c ? c.score : null, assisted: a ? a.score : null };
+  }
+
+  return { recordRun, getBoard, getBests, topRuns, clear, STORE_KEY };
 }

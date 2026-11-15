@@ -29,6 +29,7 @@ let sim = null;
 let acc = 0;
 let last = performance.now();
 let recorded = false;
+let lastEntry = null;
 let uiMode = 'start';
 let seasonKey = 'spring';
 let bannerUntil = 0;
@@ -88,7 +89,7 @@ function fillList(el, rows) {
     el.appendChild(li);
     return;
   }
-  for (const row of rows.slice(-10).reverse()) {
+  for (const row of rows) {
     const li = document.createElement('li');
     li.textContent = `${row.score} m · seed ${row.seed}`;
     el.appendChild(li);
@@ -99,7 +100,7 @@ function presentResults() {
   if (!sim) return;
   const snap = sim.snapshot();
   if (!recorded) {
-    board.recordRun({
+    lastEntry = board.recordRun({
       maxH: snap.maxH,
       seed: snap.seed,
       catchUsed: snap.catchUsed,
@@ -110,10 +111,30 @@ function presentResults() {
   const line = document.getElementById('results-line');
   const kind = snap.catchUsed ? 'Catch-assisted' : 'Clean';
   line.textContent = `${snap.score} m · ${C.seasonAtH(Math.max(0, snap.maxH)).name} · ${kind} · seed ${snap.seed}`;
-  const lists = board.getBoard();
-  fillList(document.getElementById('board-clean'), lists.clean);
-  fillList(document.getElementById('board-assisted'), lists.assisted);
+  const bestEl = document.getElementById('results-best');
+  if (lastEntry && lastEntry.isBest) {
+    bestEl.textContent = lastEntry.previousBest == null
+      ? 'First ' + (lastEntry.board === 'clean' ? 'clean' : 'Catch-assisted') + ' climb on the board'
+      : 'New ' + (lastEntry.board === 'clean' ? 'clean' : 'Catch-assisted') + ' best (was ' + lastEntry.previousBest + ' m)';
+  } else {
+    const bests = board.getBests();
+    const b = snap.catchUsed ? bests.assisted : bests.clean;
+    bestEl.textContent = b == null ? '' : 'Best ' + (snap.catchUsed ? 'Catch-assisted' : 'clean') + ': ' + b + ' m';
+  }
+  fillList(document.getElementById('board-clean'), board.topRuns('clean', 10));
+  fillList(document.getElementById('board-assisted'), board.topRuns('assisted', 10));
+  updateStartBest();
   show('results');
+}
+
+function updateStartBest() {
+  const el = document.getElementById('start-best');
+  const b = board.getBests();
+  const parts = [];
+  if (b.clean != null) parts.push('Best clean climb: ' + b.clean + ' m');
+  if (b.assisted != null) parts.push('Catch-assisted: ' + b.assisted + ' m');
+  el.textContent = parts.join(' · ');
+  el.classList.toggle('hidden', parts.length === 0);
 }
 
 function syncScreens() {
@@ -138,7 +159,8 @@ function frame(now) {
   if (sim) renderer.draw(sim, 0, wall);
   updateHud();
   syncScreens();
-  requestAnimationFrame(frame);
+  updateStartBest();
+requestAnimationFrame(frame);
 }
 
 function cssPoint(e) {
@@ -178,7 +200,7 @@ window.addEventListener('resize', () => renderer.resize());
 
 document.getElementById('btn-climb').addEventListener('click', startRun);
 document.getElementById('btn-again').addEventListener('click', startRun);
-document.getElementById('btn-home').addEventListener('click', () => show('start'));
+document.getElementById('btn-home').addEventListener('click', () => { updateStartBest(); show('start'); });
 document.getElementById('btn-catch').addEventListener('click', () => { if (sim) sim.useCatch(); });
 document.getElementById('btn-end').addEventListener('click', () => { if (sim) sim.declineCatch(); });
 document.getElementById('btn-ready').addEventListener('click', () => {
@@ -190,4 +212,5 @@ document.getElementById('btn-ready').addEventListener('click', () => {
   }
 });
 
+updateStartBest();
 requestAnimationFrame(frame);

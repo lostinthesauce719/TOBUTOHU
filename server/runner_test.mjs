@@ -878,3 +878,32 @@ test('season label is display-only: boundaries match the season heights and the 
     assert.ok(!src.includes('seasonAtH') && !src.includes('SEASON_NAMES'), `${f} must not read the display season label`);
   }
 });
+
+test('personal bests: sorted boards, strict new-best, clean and assisted kept apart, no network', () => {
+  const calls = [];
+  const prevFetch = globalThis.fetch;
+  globalThis.fetch = (...args) => { calls.push(args); return Promise.resolve({ ok: true }); };
+  const store = { data: {}, getItem(k) { return k in this.data ? this.data[k] : null; }, setItem(k, v) { this.data[k] = String(v); } };
+  const board = createScoreboard(store);
+  assert.deepEqual(board.getBests(), { clean: null, assisted: null });
+  const a = board.recordRun({ maxH: 50.9, seed: 1, catchUsed: false, at: 1 });
+  assert.equal(a.isBest, true); assert.equal(a.previousBest, null); assert.equal(a.score, 50);
+  const b = board.recordRun({ maxH: 50.2, seed: 2, catchUsed: false, at: 2 });
+  assert.equal(b.isBest, false, 'a tie is not a new best');
+  const c = board.recordRun({ maxH: 130.4, seed: 3, catchUsed: true, at: 3 });
+  assert.equal(c.isBest, true); assert.equal(c.board, 'assisted');
+  assert.deepEqual(board.getBests(), { clean: 50, assisted: 130 }, 'assisted never lifts the clean best');
+  const d = board.recordRun({ maxH: 88, seed: 4, catchUsed: false, at: 4 });
+  assert.equal(d.isBest, true); assert.equal(d.previousBest, 50);
+  board.recordRun({ maxH: 12, seed: 5, catchUsed: false, at: 5 });
+  const z = board.recordRun({ maxH: 0.4, seed: 6, catchUsed: false, at: 6 });
+  assert.equal(z.isBest, false);
+  assert.deepEqual(board.topRuns('clean', 10).map((e) => e.seed), [4, 1, 2, 5, 6]);
+  assert.deepEqual(board.topRuns('clean', 2).map((e) => e.score), [88, 50]);
+  // Stored entries are the honest run record only; reload gives the same bests.
+  const again = createScoreboard(store);
+  assert.deepEqual(again.getBests(), { clean: 88, assisted: 130 });
+  for (const e of again.getBoard().clean) assert.ok(!('isBest' in e) && !('board' in e));
+  assert.equal(calls.length, 0);
+  globalThis.fetch = prevFetch;
+});
