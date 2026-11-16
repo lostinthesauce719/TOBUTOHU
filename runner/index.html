@@ -22,6 +22,7 @@
         <span class="sub" id="hud-catch">Catch ready</span>
       </div>
     </div>
+    <button id="btn-pause" class="ghost hidden" type="button" aria-label="Pause">II</button>
     <div id="season-banner" class="hidden" aria-live="polite"></div>
     <section id="screen-start" class="screen">
       <div class="card">
@@ -49,6 +50,17 @@
         <p>The next stretch is cleared. Resume when you choose.</p>
         <div class="actions">
           <button id="btn-ready" type="button">Ready</button>
+        </div>
+      </div>
+    </section>
+    <section id="screen-pause" class="screen hidden">
+      <div class="card">
+        <h2>Paused</h2>
+        <p>The climb is frozen. Nothing moves until you resume, and a short countdown runs first.</p>
+        <p id="pause-count" class="best" aria-live="polite"></p>
+        <div class="actions">
+          <button id="btn-resume" type="button">Resume</button>
+          <button id="btn-quit" class="end" type="button">End run</button>
         </div>
       </div>
     </section>

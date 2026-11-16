@@ -55,3 +55,5 @@ button.end { background: transparent; color: var(--ink); border-color: var(--dan
 #season-banner.hidden { opacity: 0; }
 p.best { color: var(--ink); font-weight: 600; margin-top: -6px; }
 p.best:empty, p.best.hidden { display: none; }
+#btn-pause { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 5; min-width: 44px; min-height: 44px; padding: 6px 12px; font-weight: 700; }
+#btn-pause.hidden, #btn-resume.hidden { display: none; }

@@ -209,6 +209,15 @@ export function createSim(opts = {}) {
     if (state.mode === 'paused') state.mode = 'play';
   }
 
+  // Player chose to end the run from the pause screen. Score is the honest max height so far.
+  function quit() {
+    if (state.mode !== 'paused') return false;
+    state.deathReason = 'quit';
+    state.deathHazard = 'quit';
+    endRun();
+    return true;
+  }
+
   function snapshot() {
     return {
       tick: state.tick,
@@ -294,6 +303,7 @@ export function createSim(opts = {}) {
     ready,
     pause,
     resume,
+    quit,
     snapshot,
     digest,
     replayKey,

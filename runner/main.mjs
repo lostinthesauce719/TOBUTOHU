@@ -3,6 +3,7 @@ import { createSim } from './sim.mjs';
 import { createGestureTracker, createInputQueue } from './controls.mjs';
 import { createRenderer } from './render.mjs';
 import { createScoreboard, scoreFromHeight } from './scoring.mjs';
+import { createPauseController } from './pause.mjs';
 
 const canvas = document.getElementById('view');
 const hudH = document.getElementById('hud-h');
@@ -16,7 +17,10 @@ const screens = {
   catch: document.getElementById('screen-catch'),
   ready: document.getElementById('screen-ready'),
   results: document.getElementById('screen-results'),
+  pause: document.getElementById('screen-pause'),
 };
+const btnPause = document.getElementById('btn-pause');
+const pauseCount = document.getElementById('pause-count');
 
 const params = new URLSearchParams(location.search);
 const requestedSeed = Number(params.get('seed'));
@@ -24,6 +28,7 @@ const gestures = createGestureTracker();
 const inputs = createInputQueue();
 const board = createScoreboard();
 const renderer = createRenderer(canvas);
+const pauser = createPauseController({ getSim: () => sim, inputs, gestures });
 
 let sim = null;
 let acc = 0;
@@ -48,6 +53,7 @@ function parseSeed() {
 
 function startRun() {
   sim = createSim({ seed: parseSeed() });
+  pauser.reset();
   recorded = false;
   acc = 0;
   seasonKey = 'spring';
@@ -139,6 +145,14 @@ function updateStartBest() {
 
 function syncScreens() {
   if (!sim) return;
+  if (sim.mode === 'paused') {
+    if (uiMode !== 'pause') show('pause');
+    return;
+  }
+  if (sim.mode === 'play' && uiMode === 'pause') {
+    for (const el of Object.values(screens)) el.classList.add('hidden');
+    uiMode = 'play';
+  }
   if (sim.mode === 'catch' && uiMode !== 'catch') show('catch');
   else if (sim.mode === 'ready' && uiMode !== 'ready') show('ready');
   else if (sim.mode === 'results' && uiMode !== 'results') presentResults();
@@ -147,6 +161,10 @@ function syncScreens() {
 function frame(now) {
   const wall = Math.min(0.05, (now - last) / 1000);
   last = now;
+  const left = pauser.update(now);
+  pauseCount.textContent = left ? 'Resuming in ' + left : '';
+  document.getElementById('btn-resume').classList.toggle('hidden', pauser.counting());
+  btnPause.classList.toggle('hidden', !(sim && sim.mode === 'play'));
   if (sim && sim.mode === 'play') {
     acc += wall;
     while (acc >= C.DT) {
@@ -193,10 +211,22 @@ canvas.addEventListener('touchstart', (e) => { onDown(e); e.preventDefault(); },
 window.addEventListener('touchmove', (e) => { onMove(e); }, { passive: true });
 window.addEventListener('touchend', onUp);
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (sim && sim.mode === 'play') pauser.pause();
+    else if (sim && sim.mode === 'paused' && !pauser.counting()) pauser.requestResume(performance.now());
+    return;
+  }
   if (uiMode === 'play') inputs.pushKey(e.code);
   if (e.code === 'Space' && uiMode === 'play') e.preventDefault();
 });
 window.addEventListener('resize', () => renderer.resize());
+// Auto-pause when the tab or app goes to the background, so nobody loses a run to a phone call.
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauser.pause(); });
+window.addEventListener('blur', () => pauser.pause());
+window.addEventListener('pagehide', () => pauser.pause());
+btnPause.addEventListener('click', () => pauser.pause());
+document.getElementById('btn-resume').addEventListener('click', () => pauser.requestResume(performance.now()));
+document.getElementById('btn-quit').addEventListener('click', () => { if (sim && sim.mode === 'paused') { pauser.reset(); sim.quit(); } });
 
 document.getElementById('btn-climb').addEventListener('click', startRun);
 document.getElementById('btn-again').addEventListener('click', startRun);

@@ -907,3 +907,59 @@ test('personal bests: sorted boards, strict new-best, clean and assisted kept ap
   assert.equal(calls.length, 0);
   globalThis.fetch = prevFetch;
 });
+
+test('pause: frozen sim, same replay as no pause, inputs during pause are dropped, countdown before resume, quit keeps honest score', async () => {
+  const { createPauseController } = await import('../runner/pause.mjs');
+  const { createInputQueue } = await import('../runner/controls.mjs');
+  const seed = 7;
+  const ref = createSim({ seed });
+  for (let i = 0; i < 900 && ref.mode === 'play'; i++) ref.tick(perfectBotInput(ref));
+  let sim = createSim({ seed });
+  const inputs = createInputQueue();
+  let cancels = 0;
+  const pauser = createPauseController({ getSim: () => sim, inputs, gestures: { cancel() { cancels++; } }, countdownMs: 3000 });
+  assert.equal(pauser.requestResume(0), false, 'cannot resume a running sim');
+  let paused = false;
+  for (let i = 0; i < 900 && sim.mode !== 'results'; ) {
+    if (i === 400 && !paused) {
+      paused = true;
+      assert.equal(pauser.pause(), true);
+      assert.equal(sim.mode, 'paused');
+      const before = sim.digest().replace('|paused|', '|play|');
+      inputs.pushSwipe(1); inputs.pushJump();
+      assert.equal(pauser.requestResume(1000), true);
+      assert.equal(pauser.update(1500), 3);
+      inputs.pushSwipe(-1);
+      assert.equal(pauser.pause(), true, 'pausing during the countdown stops it');
+      assert.equal(pauser.counting(), false);
+      assert.equal(pauser.update(99999), 0);
+      assert.equal(sim.mode, 'paused');
+      pauser.requestResume(5000);
+      assert.equal(pauser.update(7999), 1);
+      assert.equal(sim.mode, 'paused');
+      pauser.update(8000);
+      assert.equal(sim.mode, 'play');
+      assert.equal(sim.digest(), before, 'pausing never changes the sim');
+      assert.deepEqual(inputs.peek(), { laneDir: 0, jump: false }, 'inputs from the pause are thrown away');
+      assert.ok(cancels > 0);
+      continue;
+    }
+    if (sim.mode !== 'play') break;
+    sim.tick(perfectBotInput(sim));
+    i++;
+  }
+  assert.equal(sim.digest(), ref.digest(), 'a paused run replays exactly like an unpaused one');
+  assert.deepEqual(sim.replayKey(), ref.replayKey());
+  // Quit from pause: results with the real max height, not more, not less.
+  pauser.pause();
+  const maxH = sim.state.maxH;
+  assert.equal(sim.quit(), true);
+  assert.equal(sim.mode, 'results');
+  assert.equal(sim.snapshot().score, scoreFromHeight(maxH));
+  assert.equal(sim.snapshot().deathReason, 'quit');
+  // Quit and pause do nothing outside their modes.
+  const fresh = createSim({ seed });
+  assert.equal(fresh.quit(), false);
+  assert.equal(fresh.mode, 'play');
+});
+
