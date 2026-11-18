@@ -57,3 +57,7 @@ p.best { color: var(--ink); font-weight: 600; margin-top: -6px; }
 p.best:empty, p.best.hidden { display: none; }
 #btn-pause { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 5; min-width: 44px; min-height: 44px; padding: 6px 12px; font-weight: 700; }
 #btn-pause.hidden, #btn-resume.hidden { display: none; }
+ul.howto { margin: 0 0 16px; padding-left: 18px; text-align: left; color: var(--muted); line-height: 1.45; font-size: 14px; }
+ul.howto li { margin-bottom: 6px; }
+ul.howto b { color: var(--ink); font-weight: 650; }
+#screen-howto { z-index: 6; cursor: pointer; }

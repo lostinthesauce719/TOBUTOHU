@@ -963,3 +963,63 @@ test('pause: frozen sim, same replay as no pause, inputs during pause are droppe
   assert.equal(fresh.mode, 'play');
 });
 
+
+test('how-to card: first-run flag, storage guards, inputs dropped while open, sim replay unchanged', async () => {
+  const { HOWTO_KEY, shouldShowHowto, markHowtoSeen, howtoKeyAction, createHowtoController } = await import('../runner/howto.mjs');
+  const { createInputQueue } = await import('../runner/controls.mjs');
+  assert.equal(HOWTO_KEY, 'tobuRunnerHowto1');
+  const mem = () => { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), m }; };
+  // Storage: first run shows, after dismiss it doesn't; missing or throwing storage still shows and never throws.
+  const store = mem();
+  assert.equal(shouldShowHowto(store), true);
+  assert.equal(markHowtoSeen(store), true);
+  assert.equal(store.m.get(HOWTO_KEY), '1');
+  assert.equal(shouldShowHowto(store), false);
+  assert.equal(shouldShowHowto(null), true);
+  assert.equal(markHowtoSeen(null), false);
+  const broken = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(shouldShowHowto(broken), true);
+  assert.equal(markHowtoSeen(broken), false);
+  // Keys while open: Enter/Escape dismiss, game keys dropped; closed passes everything.
+  assert.equal(howtoKeyAction('Enter', true), 'dismiss');
+  assert.equal(howtoKeyAction('Escape', true), 'dismiss');
+  for (const k of ['Space', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'KeyP']) assert.equal(howtoKeyAction(k, true), 'drop', k);
+  assert.equal(howtoKeyAction('Space', false), 'pass');
+  // Controller: opens on first run only, gates input, discards queued input on open and close.
+  const s2 = mem();
+  const inputs = createInputQueue();
+  let cancels = 0;
+  const card = createHowtoController({ storage: s2, inputs, gestures: { cancel() { cancels++; } } });
+  assert.equal(card.gate(), 'pass');
+  inputs.pushJump();
+  assert.equal(card.showIfFirstRun(), true);
+  assert.equal(card.isOpen(), true);
+  assert.equal(card.gate(), 'drop');
+  assert.deepEqual(inputs.peek(), { laneDir: 0, jump: false }, 'opening drops queued input');
+  inputs.pushSwipe(1);
+  assert.equal(card.dismiss(), true);
+  assert.equal(card.dismiss(), false, 'second dismiss is a no-op');
+  assert.deepEqual(inputs.peek(), { laneDir: 0, jump: false }, 'closing drops input made while open');
+  assert.ok(cancels >= 2);
+  assert.equal(card.gate(), 'pass');
+  assert.equal(s2.m.get(HOWTO_KEY), '1');
+  const again = createHowtoController({ storage: s2 });
+  assert.equal(again.showIfFirstRun(), false, 'not shown after it was seen');
+  assert.equal(again.show(), true, 'can be reopened from the start screen');
+  assert.equal(again.gate(), 'drop');
+  assert.equal(createHowtoController({ storage: null }).showIfFirstRun(), true, 'no storage: still shown');
+  // The card never touches the sim: same seed + inputs replay identically with the card opened/closed around it.
+  const seed = 11;
+  const ref = createSim({ seed });
+  for (let i = 0; i < 1200 && ref.mode === 'play'; i++) ref.tick(perfectBotInput(ref));
+  const card2 = createHowtoController({ storage: mem(), inputs: createInputQueue() });
+  card2.showIfFirstRun();
+  const sim = createSim({ seed });
+  const q = createInputQueue();
+  q.pushJump(); q.pushSwipe(-1);
+  if (card2.gate() === 'drop') q.consume();
+  card2.dismiss();
+  for (let i = 0; i < 1200 && sim.mode === 'play'; i++) sim.tick(perfectBotInput(sim));
+  assert.equal(sim.digest(), ref.digest());
+  assert.deepEqual(sim.replayKey(), ref.replayKey());
+});

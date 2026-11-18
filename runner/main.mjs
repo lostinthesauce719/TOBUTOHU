@@ -4,6 +4,7 @@ import { createGestureTracker, createInputQueue } from './controls.mjs';
 import { createRenderer } from './render.mjs';
 import { createScoreboard, scoreFromHeight } from './scoring.mjs';
 import { createPauseController } from './pause.mjs';
+import { createHowtoController, howtoKeyAction } from './howto.mjs';
 
 const canvas = document.getElementById('view');
 const hudH = document.getElementById('hud-h');
@@ -18,6 +19,7 @@ const screens = {
   ready: document.getElementById('screen-ready'),
   results: document.getElementById('screen-results'),
   pause: document.getElementById('screen-pause'),
+  howto: document.getElementById('screen-howto'),
 };
 const btnPause = document.getElementById('btn-pause');
 const pauseCount = document.getElementById('pause-count');
@@ -29,6 +31,8 @@ const inputs = createInputQueue();
 const board = createScoreboard();
 const renderer = createRenderer(canvas);
 const pauser = createPauseController({ getSim: () => sim, inputs, gestures });
+// Display-only first-run card; while open, game inputs are dropped.
+const howto = createHowtoController({ inputs, gestures });
 
 let sim = null;
 let acc = 0;
@@ -52,6 +56,7 @@ function parseSeed() {
 }
 
 function startRun() {
+  if (howto.gate() === 'drop') return;
   sim = createSim({ seed: parseSeed() });
   pauser.reset();
   recorded = false;
@@ -144,7 +149,7 @@ function updateStartBest() {
 }
 
 function syncScreens() {
-  if (!sim) return;
+  if (!sim || uiMode === 'howto') return;
   if (sim.mode === 'paused') {
     if (uiMode !== 'pause') show('pause');
     return;
@@ -155,7 +160,7 @@ function syncScreens() {
   }
   if (sim.mode === 'catch' && uiMode !== 'catch') show('catch');
   else if (sim.mode === 'ready' && uiMode !== 'ready') show('ready');
-  else if (sim.mode === 'results' && uiMode !== 'results') presentResults();
+  else if (sim.mode === 'results' && uiMode !== 'results' && uiMode !== 'start') presentResults();
 }
 
 function frame(now) {
@@ -187,18 +192,18 @@ function cssPoint(e) {
 }
 
 function onDown(e) {
-  if (uiMode !== 'play') return;
+  if (howto.gate() === 'drop' || uiMode !== 'play') return;
   const p = cssPoint(e);
   gestures.pointerDown(p.x, p.y, p.time);
 }
 function onMove(e) {
-  if (uiMode !== 'play') return;
+  if (howto.gate() === 'drop' || uiMode !== 'play') return;
   const p = cssPoint(e);
   const g = gestures.pointerMove(p.x, p.y, p.time);
   if (g) inputs.applyGesture(g);
 }
 function onUp(e) {
-  if (uiMode !== 'play') return;
+  if (howto.gate() === 'drop' || uiMode !== 'play') return;
   const p = cssPoint(e);
   const g = gestures.pointerUp(p.x, p.y, p.time);
   if (g) inputs.applyGesture(g);
@@ -211,6 +216,12 @@ canvas.addEventListener('touchstart', (e) => { onDown(e); e.preventDefault(); },
 window.addEventListener('touchmove', (e) => { onMove(e); }, { passive: true });
 window.addEventListener('touchend', onUp);
 window.addEventListener('keydown', (e) => {
+  const hk = howtoKeyAction(e.code, howto.isOpen());
+  if (hk !== 'pass') {
+    e.preventDefault();
+    if (hk === 'dismiss' && !e.repeat) closeHowto();
+    return;
+  }
   if (e.code === 'Escape' || e.code === 'KeyP') {
     if (sim && sim.mode === 'play') pauser.pause();
     else if (sim && sim.mode === 'paused' && !pauser.counting()) pauser.requestResume(performance.now());
@@ -228,7 +239,22 @@ btnPause.addEventListener('click', () => pauser.pause());
 document.getElementById('btn-resume').addEventListener('click', () => pauser.requestResume(performance.now()));
 document.getElementById('btn-quit').addEventListener('click', () => { if (sim && sim.mode === 'paused') { pauser.reset(); sim.quit(); } });
 
+function openHowto() {
+  howto.show();
+  show('howto');
+  document.getElementById('btn-howto-ok').focus();
+}
+function closeHowto() {
+  if (!howto.dismiss()) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  updateStartBest();
+  show('start');
+}
+
 document.getElementById('btn-climb').addEventListener('click', startRun);
+document.getElementById('btn-howto').addEventListener('click', openHowto);
+// "Got it", or a tap anywhere on the card or backdrop, closes it.
+screens.howto.addEventListener('click', (e) => { e.stopPropagation(); closeHowto(); });
 document.getElementById('btn-again').addEventListener('click', startRun);
 document.getElementById('btn-home').addEventListener('click', () => { updateStartBest(); show('start'); });
 document.getElementById('btn-catch').addEventListener('click', () => { if (sim) sim.useCatch(); });
@@ -243,4 +269,5 @@ document.getElementById('btn-ready').addEventListener('click', () => {
 });
 
 updateStartBest();
+if (howto.showIfFirstRun()) openHowto();
 requestAnimationFrame(frame);
